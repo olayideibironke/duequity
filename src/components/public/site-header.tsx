@@ -62,11 +62,12 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-2">
           <Link
-            href="/portal"
+            href="/claimant/sign-in"
             className="hidden rounded-sm px-3 py-2 text-sm font-medium text-ink-300 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400 sm:block"
           >
             Claimant sign in
           </Link>
+
           <ButtonLink
             href="/check"
             variant="primary"
@@ -105,6 +106,7 @@ export function SiteHeader() {
                 const active =
                   pathname === item.href ||
                   pathname.startsWith(`${item.href}/`);
+
                 return (
                   <li key={item.href}>
                     <Link
@@ -135,8 +137,9 @@ export function SiteHeader() {
               >
                 Check a property
               </ButtonLink>
+
               <Link
-                href="/portal"
+                href="/claimant/sign-in"
                 onClick={() => setOpen(false)}
                 className="block rounded-md px-3 py-2.5 text-center text-base font-medium text-ink-300 transition-colors hover:bg-ink-900 hover:text-white"
               >
