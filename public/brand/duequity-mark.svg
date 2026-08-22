@@ -1,0 +1,47 @@
+﻿<svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="256"
+  height="256"
+  viewBox="0 0 64 64"
+  fill="none"
+  role="img"
+  aria-labelledby="title desc"
+>
+  <title id="title">Duequity</title>
+  <desc id="desc">A property boundary divided into sections with the lower-right equity section filled.</desc>
+
+  <rect
+    x="8"
+    y="8"
+    width="48"
+    height="48"
+    rx="3"
+    stroke="#16624A"
+    stroke-width="4"
+  />
+
+  <path
+    d="M32 10V54"
+    stroke="#16624A"
+    stroke-width="3"
+    stroke-linecap="round"
+    opacity="0.58"
+  />
+
+  <path
+    d="M10 32H54"
+    stroke="#16624A"
+    stroke-width="3"
+    stroke-linecap="round"
+    opacity="0.58"
+  />
+
+  <rect
+    x="35"
+    y="35"
+    width="18"
+    height="18"
+    rx="1.5"
+    fill="#1F7A5C"
+  />
+</svg>

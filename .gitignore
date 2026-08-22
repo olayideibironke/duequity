@@ -20,6 +20,18 @@
 # production
 /build
 
+# Duequity local validation data
+#
+# This directory contains local operational persistence used only by the
+# validation build, including commercial approvals, opportunity conversions,
+# claimant onboarding, future document metadata, and local uploaded documents.
+#
+# It must never be committed to source control.
+/.duequity-data/
+
+# Supabase local CLI metadata
+/supabase/.temp/
+
 # misc
 .DS_Store
 *.pem
@@ -30,7 +42,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
 
 # vercel
@@ -39,3 +51,5 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.vercel
+.env*
