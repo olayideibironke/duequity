@@ -176,6 +176,15 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
                 >
                   Return to duequity.com
                 </Link>
+
+                <form action="/auth/sign-out" method="post" className="pt-2">
+                  <button
+                    type="submit"
+                    className="w-full rounded-md border border-ink-700 px-3 py-2.5 text-left text-base font-medium text-ink-300 transition-colors hover:border-ink-600 hover:bg-ink-900 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
+                  >
+                    Sign out
+                  </button>
+                </form>
               </div>
             </div>
           </div>

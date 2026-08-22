@@ -383,6 +383,15 @@ export function ProShell({
               ? "Cleared nationally"
               : `Cleared: ${operator.statesCleared.join(", ")}`}
           </p>
+
+          <form action="/auth/sign-out" method="post" className="mt-3">
+            <button
+              type="submit"
+              className="w-full rounded-md border border-ink-700 px-3 py-2 text-sm font-medium text-ink-300 transition-colors hover:border-ink-600 hover:bg-ink-900 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
+            >
+              Sign out
+            </button>
+          </form>
         </div>
       </div>
 

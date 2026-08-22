@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { IdleSessionGuard } from "@/components/auth/idle-session-guard";
 import { ProShell } from "@/components/pro/pro-shell";
 import { StaffAuthenticationRequired } from "@/components/ui/authentication-required";
 import { USER_ROLE_LABEL } from "@/domain/status";
@@ -89,6 +90,7 @@ export default async function ProLayout({
           workload.complianceBlockedCount,
       }}
     >
+      <IdleSessionGuard />
       {children}
     </ProShell>
   );
