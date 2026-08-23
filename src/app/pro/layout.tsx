@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import { IdleSessionGuard } from "@/components/auth/idle-session-guard";
 import { ProShell } from "@/components/pro/pro-shell";
 import { StaffAuthenticationRequired } from "@/components/ui/authentication-required";
-import { USER_ROLE_LABEL } from "@/domain/status";
 import { resolveOperationsWorkload } from "@/server/operations-workload";
 import { resolveStaffSession } from "@/server/staff-session";
 
@@ -65,9 +64,7 @@ export default async function ProLayout({
           session.user.title,
 
         role:
-          USER_ROLE_LABEL[
-            session.user.role
-          ],
+          session.user.role,
 
         statesCleared:
           session.user.statesCleared,
@@ -91,6 +88,7 @@ export default async function ProLayout({
       }}
     >
       <IdleSessionGuard />
+
       {children}
     </ProShell>
   );

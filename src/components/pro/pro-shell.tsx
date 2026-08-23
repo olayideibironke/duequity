@@ -100,6 +100,23 @@ export function ProShell({
 
   const pathname = usePathname();
 
+  const canManageUsers =
+    operator.role === "administrator" ||
+    operator.role === "super_admin";
+
+  const staffManagementItems: NavItem[] =
+    canManageUsers
+      ? [
+          {
+            href: "/pro/staff",
+
+            label: "Staff Management",
+
+            icon: IconClaimant,
+          },
+        ]
+      : [];
+
   const groups: NavGroup[] = [
     {
       heading: "Pipeline",
@@ -226,6 +243,8 @@ export function ProShell({
 
           icon: IconDashboard,
         },
+
+        ...staffManagementItems,
 
         {
           href: "/pro/compliance",
