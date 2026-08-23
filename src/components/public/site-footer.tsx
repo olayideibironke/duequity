@@ -21,12 +21,9 @@ const COLUMNS = [
     ],
   },
   {
-    heading: "Coverage",
+    heading: "Where We Operate",
     links: [
-      { href: "/states", label: "Where we operate" },
-      { href: "/states/md", label: "Maryland" },
-      { href: "/states/fl", label: "Florida" },
-      { href: "/states/tx", label: "Texas" },
+      { href: "/states", label: "Nationwide" },
     ],
   },
   {
@@ -57,10 +54,21 @@ export function SiteFooter() {
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_auto]">
           <div className="max-w-sm">
             <Logo tone="light" showParent href={null} />
+
             <p className="mt-4 text-sm leading-relaxed text-ink-400">
               Duequity helps former property owners and heirs identify and
               recover surplus funds that may still legally belong to them after
               a foreclosure, tax sale, or similar property sale.
+            </p>
+
+            <p className="mt-4 text-sm text-ink-300">
+              Call{" "}
+              <a
+                href="tel:+18886692551"
+                className="font-semibold text-white underline decoration-ink-600 underline-offset-4 transition-colors hover:decoration-accent-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
+              >
+                1-888-669-2551
+              </a>
             </p>
           </div>
 
@@ -71,6 +79,7 @@ export function SiteFooter() {
             {COLUMNS.map((column) => (
               <div key={column.heading}>
                 <h2 className="eyebrow text-ink-500">{column.heading}</h2>
+
                 <ul className="mt-3 space-y-2">
                   {column.links.map((link) => (
                     <li key={link.href}>
@@ -98,6 +107,7 @@ export function SiteFooter() {
             and is not affiliated with, endorsed by, or acting on behalf of any
             government agency.
           </p>
+
           <p>
             <span className="font-semibold text-ink-200">
               You may be able to claim funds yourself at no cost.
@@ -107,6 +117,7 @@ export function SiteFooter() {
             service fee. Duequity will tell you which agency holds the funds and
             how to reach them, whether or not you choose to work with us.
           </p>
+
           <p>
             <span className="font-semibold text-ink-200">
               Duequity is not a law firm.
@@ -116,6 +127,7 @@ export function SiteFooter() {
             independent attorney whom you engage directly. Duequity does not
             share in attorney fees and receives no compensation for a referral.
           </p>
+
           <p>
             Duequity does not take custody of claimant funds, does not purchase
             surplus claims, and does not guarantee that any claim will be
@@ -130,6 +142,7 @@ export function SiteFooter() {
             Copyright {year} Westforge Holdings Inc. All rights reserved.
             Duequity is a product of Westforge Holdings Inc.
           </p>
+
           <p className="font-mono tracking-tight">Duequity by Westforge</p>
         </div>
       </div>

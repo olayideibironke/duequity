@@ -1,0 +1,426 @@
+import "server-only";
+
+import type {
+  PublicRecordSourceFormat,
+} from "@/server/public-record-source-registry";
+
+/**
+ * PUBLIC RECORD TABLE PROFILES
+ *
+ * A table profile describes how a government source's columns map into
+ * Duequity's normalized public-record model.
+ *
+ * The important distinction:
+ *
+ *   Source registry:
+ *     Where is the official source?
+ *
+ *   Source fetcher:
+ *     How do we retrieve it?
+ *
+ *   Table profile:
+ *     What do its columns mean?
+ *
+ *   Source parser:
+ *     Convert the mapped values into normalized records.
+ *
+ * This keeps common tabular sources configuration driven instead of requiring
+ * a new county-specific parser function for every jurisdiction.
+ */
+
+/* ========================================================================== */
+/* Shared types                                                                */
+/* ========================================================================== */
+
+export type PublicRecordTableDateFormat =
+  | "us_slash_date"
+  | "iso_date";
+
+export type PublicRecordRecordKeyField =
+  | "property_id"
+  | "case_number"
+  | "sale_date";
+
+export interface PublicRecordTableOwnerColumns {
+  /**
+   * Use when the source provides first name separately.
+   */
+  firstName?: number;
+
+  /**
+   * Use when the source provides last name, company, trust, estate or another
+   * owner value separately.
+   */
+  lastNameOrCompany?: number;
+
+  /**
+   * Use when the source publishes one combined owner-name column.
+   */
+  fullName?: number;
+}
+
+export interface PublicRecordTableDateColumns {
+  /**
+   * Primary source date used as the normalized sale date.
+   */
+  saleDate: number;
+
+  /**
+   * Optional fallback date when saleDate is blank.
+   */
+  saleDateFallback?: number;
+
+  /**
+   * Optional independent transfer date.
+   */
+  transferredDate?: number;
+
+  format: PublicRecordTableDateFormat;
+}
+
+export interface PublicRecordStructuredAddressColumns {
+  mode: "structured";
+
+  addressLine1: number;
+
+  city?: number;
+
+  postalCode?: number;
+}
+
+export interface PublicRecordCombinedAddressColumns {
+  /**
+   * Used when one source column contains a complete premise such as:
+   *
+   *   123 MAIN ST WESTMINSTER 21157
+   *
+   * The generic parser can separate ZIP and match a configured city suffix.
+   */
+  mode: "combined_us_premise";
+
+  premise: number;
+
+  /**
+   * Known locality suffixes published by the source.
+   *
+   * These belong in configuration rather than parser code.
+   */
+  knownCities?: readonly string[];
+
+  /**
+   * Safe fallback when a city cannot be extracted from the premise.
+   */
+  fallbackCity?: string;
+}
+
+export type PublicRecordTableAddressColumns =
+  | PublicRecordStructuredAddressColumns
+  | PublicRecordCombinedAddressColumns;
+
+export interface PublicRecordTableMoneyColumns {
+  bid?: number;
+
+  deposit?: number;
+
+  /**
+   * Source-native surplus, excess proceeds, balance owed or equivalent amount.
+   */
+  surplus?: number;
+}
+
+export interface PublicRecordTableAdditionalColumns {
+  propertyId?: number;
+
+  parcelNumber?: number;
+
+  mapNumber?: number;
+
+  gridNumber?: number;
+
+  legalDescription?: number;
+
+  currentOwnerName?: number;
+}
+
+export interface PublicRecordTableCaseNumberRule {
+  /**
+   * Column containing the case number or text from which it can be extracted.
+   */
+  column: number;
+
+  /**
+   * Optional extraction pattern.
+   *
+   * Capture group 1 must contain the resulting case number.
+   *
+   * When omitted, the entire normalized cell is used.
+   */
+  pattern?: RegExp;
+}
+
+export interface PublicRecordTableRowIdentityRule {
+  /**
+   * Column that identifies real data rows and allows header/footer rows to be
+   * ignored.
+   */
+  column: number;
+
+  /**
+   * Optional validation pattern for the identity value.
+   */
+  pattern?: RegExp;
+}
+
+export interface PublicRecordTableProfile {
+  /**
+   * Stable profile identifier.
+   */
+  key: string;
+
+  /**
+   * Must match the parserKey stored by the national source registry.
+   */
+  parserKey: string;
+
+  /**
+   * Transport formats whose raw rows can use this profile.
+   *
+   * HTML, CSV and XLSX can eventually share the same normalized row engine.
+   */
+  supportedSourceFormats: readonly PublicRecordSourceFormat[];
+
+  /**
+   * Ignore source rows shorter than this.
+   */
+  minimumColumns: number;
+
+  /**
+   * Distinguishes actual source records from headers and unrelated rows.
+   */
+  rowIdentity: PublicRecordTableRowIdentityRule;
+
+  owner: PublicRecordTableOwnerColumns;
+
+  dates: PublicRecordTableDateColumns;
+
+  address: PublicRecordTableAddressColumns;
+
+  money?: PublicRecordTableMoneyColumns;
+
+  columns?: PublicRecordTableAdditionalColumns;
+
+  caseNumber?: PublicRecordTableCaseNumberRule;
+
+  /**
+   * Stable source-native fields used to construct recordKey.
+   *
+   * Missing optional fields are represented by an empty token rather than
+   * guessed.
+   */
+  recordKey: readonly PublicRecordRecordKeyField[];
+
+  /**
+   * Whether a source reference should include the property ID and case number
+   * when those values are available.
+   */
+  sourceReference: {
+    propertyId: boolean;
+
+    caseNumber: boolean;
+  };
+}
+
+/* ========================================================================== */
+/* Profiles                                                                    */
+/* ========================================================================== */
+
+/**
+ * Carroll County is the first validated configuration-driven table profile.
+ *
+ * Official source column order:
+ *
+ *  0 No.
+ *  1 Property ID
+ *  2 Map
+ *  3 Blk / Grid
+ *  4 Parcel
+ *  5 First Name
+ *  6 Last Name / Company
+ *  7 Date Sold
+ *  8 Date Transferred
+ *  9 Bid
+ * 10 Deposit
+ * 11 Balance Owed
+ * 12 Liber
+ * 13 Folio
+ * 14 Premise
+ * 15 Legal Description
+ * 16 Current Owner
+ * 17 Current Liber
+ * 18 Current Folio
+ * 19 Comment
+ */
+const CARROLL_TAX_SALE_SURPLUS_PROFILE: PublicRecordTableProfile = {
+  key:
+    "md-carroll-tax-sale-surplus-table-v1",
+
+  parserKey:
+    "md-carroll-tax-sale-surplus-v1",
+
+  supportedSourceFormats: [
+    "html_table",
+  ],
+
+  minimumColumns:
+    20,
+
+  rowIdentity: {
+    column:
+      1,
+
+    pattern:
+      /^[0-9]{2}-/,
+  },
+
+  owner: {
+    firstName:
+      5,
+
+    lastNameOrCompany:
+      6,
+  },
+
+  dates: {
+    saleDate:
+      7,
+
+    saleDateFallback:
+      8,
+
+    transferredDate:
+      8,
+
+    format:
+      "us_slash_date",
+  },
+
+  address: {
+    mode:
+      "combined_us_premise",
+
+    premise:
+      14,
+
+    knownCities: [
+      "WESTMINSTER",
+      "TANEYTOWN",
+      "MANCHESTER",
+      "HAMPSTEAD",
+      "FINKSBURG",
+      "SYKESVILLE",
+      "MOUNT AIRY",
+      "NEW WINDSOR",
+      "UNION BRIDGE",
+      "WOODBINE",
+      "ELDERSBURG",
+      "MARRIOTTSVILLE",
+    ],
+
+    fallbackCity:
+      "Carroll County",
+  },
+
+  money: {
+    bid:
+      9,
+
+    deposit:
+      10,
+
+    surplus:
+      11,
+  },
+
+  columns: {
+    propertyId:
+      1,
+
+    mapNumber:
+      2,
+
+    gridNumber:
+      3,
+
+    parcelNumber:
+      4,
+
+    legalDescription:
+      15,
+
+    currentOwnerName:
+      16,
+  },
+
+  caseNumber: {
+    column:
+      19,
+
+    pattern:
+      /\bCASE\s*:?\s*([A-Z0-9-]+)/i,
+  },
+
+  recordKey: [
+    "property_id",
+    "case_number",
+    "sale_date",
+  ],
+
+  sourceReference: {
+    propertyId:
+      true,
+
+    caseNumber:
+      true,
+  },
+};
+
+/* ========================================================================== */
+/* Profile registry                                                            */
+/* ========================================================================== */
+
+const TABLE_PROFILES: readonly PublicRecordTableProfile[] = [
+  CARROLL_TAX_SALE_SURPLUS_PROFILE,
+];
+
+/**
+ * Return every implemented configuration-driven table profile.
+ */
+export function listPublicRecordTableProfiles(): readonly PublicRecordTableProfile[] {
+  return TABLE_PROFILES;
+}
+
+/**
+ * Resolve the table profile declared by a source parserKey.
+ */
+export function resolvePublicRecordTableProfile(
+  parserKey: string,
+): PublicRecordTableProfile | undefined {
+  return TABLE_PROFILES.find(
+    (profile) =>
+      profile.parserKey ===
+      parserKey,
+  );
+}
+
+/**
+ * True when the parserKey has a configuration-driven table profile.
+ */
+export function publicRecordTableProfileImplemented(
+  parserKey: string,
+): boolean {
+  return Boolean(
+    resolvePublicRecordTableProfile(
+      parserKey,
+    ),
+  );
+}

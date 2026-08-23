@@ -51,12 +51,12 @@ export default async function StaffActivatePage({
           </p>
 
           <h1 className="mt-1.5 text-3xl">
-            Activate your staff account
+            Secure your staff account
           </h1>
 
           <p className="mt-2 text-sm leading-relaxed text-ink-600">
-            Create your password to finish activating your DueQuity staff
-            account.
+            Replace your temporary DueQuity password with a private permanent
+            password before accessing the staff platform.
           </p>
         </div>
 
@@ -64,10 +64,10 @@ export default async function StaffActivatePage({
           <Callout
             tone="critical"
             role="alert"
-            title="Invitation unavailable"
+            title="Activation unavailable"
           >
-            This staff invitation is invalid, expired, or has already been
-            used. Contact your DueQuity administrator for a new invitation.
+            This staff activation is invalid or has already been completed.
+            Contact your DueQuity administrator if you need assistance.
           </Callout>
         ) : null}
 
@@ -77,8 +77,8 @@ export default async function StaffActivatePage({
             role="alert"
             title="Activation session unavailable"
           >
-            Your staff activation session is no longer valid. Open the staff
-            invitation email again or contact your DueQuity administrator.
+            Your staff activation session is no longer valid. Return to staff
+            sign in or contact your DueQuity administrator.
           </Callout>
         ) : null}
 
@@ -89,7 +89,7 @@ export default async function StaffActivatePage({
             title="Account could not be activated"
           >
             We could not complete your staff account activation. Please try
-            again while your invitation session is still active.
+            again while your first-login session is still active.
           </Callout>
         ) : null}
 
@@ -99,8 +99,8 @@ export default async function StaffActivatePage({
             role="alert"
             title="Check your password"
           >
-            Your password must contain at least 12 characters and both password
-            fields must match.
+            Use at least 12 characters with an uppercase letter, lowercase
+            letter, number, and symbol. Both password fields must match.
           </Callout>
         ) : null}
 
@@ -110,9 +110,9 @@ export default async function StaffActivatePage({
             role="status"
             title="Staff account activated"
           >
-            Your DueQuity staff account is active. For security, your activation
-            session has been signed out. You can now sign in with your business
-            email and new password.
+            Your DueQuity staff account is active. For security, the temporary
+            first-login session has been signed out. Sign in again with your
+            business email and new permanent password.
           </Callout>
         ) : null}
 
@@ -130,7 +130,7 @@ export default async function StaffActivatePage({
                     htmlFor="password"
                     className="block text-sm font-medium text-ink-800"
                   >
-                    Create password
+                    Create permanent password
                   </label>
 
                   <input
@@ -144,7 +144,8 @@ export default async function StaffActivatePage({
                   />
 
                   <p className="text-xs leading-relaxed text-ink-500">
-                    Use at least 12 characters.
+                    Minimum 12 characters with uppercase, lowercase, number,
+                    and symbol.
                   </p>
                 </div>
 
@@ -153,7 +154,7 @@ export default async function StaffActivatePage({
                     htmlFor="confirmPassword"
                     className="block text-sm font-medium text-ink-800"
                   >
-                    Confirm password
+                    Confirm permanent password
                   </label>
 
                   <input

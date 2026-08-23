@@ -37,6 +37,12 @@ interface StaffUserRow {
   status: string;
 }
 
+interface SupabaseStaffResolution {
+  authenticatedIdentity: boolean;
+
+  session: StaffSession | null;
+}
+
 /* ========================================================================== */
 /* Validation                                                                 */
 /* ========================================================================== */
@@ -50,10 +56,14 @@ function normalizeStatesCleared(
 
   return values
     .map((value) =>
-      value.trim().toUpperCase(),
+      value
+        .trim()
+        .toUpperCase(),
     )
     .filter((value) =>
-      /^[A-Z]{2}$/.test(value),
+      /^[A-Z]{2}$/.test(
+        value,
+      ),
     ) as StateCode[];
 }
 
@@ -62,13 +72,13 @@ function normalizeStatesCleared(
 /* ========================================================================== */
 
 async function resolveSupabaseStaffSession(): Promise<
-  StaffSession | null
+  SupabaseStaffResolution
 > {
   const auth =
     await getSupabaseServerAuth();
 
   /*
-   * getUser() validates the current access token with Supabase Auth.
+   * getUser() validates the access token with Supabase Auth.
    * Browser-supplied identity values are never trusted directly.
    */
   const {
@@ -76,31 +86,45 @@ async function resolveSupabaseStaffSession(): Promise<
       user: authUser,
     },
     error: authError,
-  } = await auth.auth.getUser();
+  } =
+    await auth.auth.getUser();
 
   if (
     authError ||
     !authUser
   ) {
-    return null;
+    return {
+      authenticatedIdentity:
+        false,
+
+      session:
+        null,
+    };
   }
 
+  /*
+   * From this point forward, a real Supabase identity exists.
+   *
+   * If that identity is not authorized as active DueQuity staff, we must
+   * return null WITHOUT falling through to the local development adapter.
+   */
   const admin =
     getSupabaseAdmin();
 
   const {
     data,
     error,
-  } = await admin
-    .from("staff_users")
-    .select(
-      "id, name, email, role, title, states_cleared, mfa_enrolled, status",
-    )
-    .eq(
-      "id",
-      authUser.id,
-    )
-    .maybeSingle();
+  } =
+    await admin
+      .from("staff_users")
+      .select(
+        "id, name, email, role, title, states_cleared, mfa_enrolled, status",
+      )
+      .eq(
+        "id",
+        authUser.id,
+      )
+      .maybeSingle();
 
   if (error) {
     throw new Error(
@@ -109,21 +133,53 @@ async function resolveSupabaseStaffSession(): Promise<
   }
 
   if (!data) {
-    return null;
+    return {
+      authenticatedIdentity:
+        true,
+
+      session:
+        null,
+    };
   }
 
   const row =
     data as StaffUserRow;
 
+  if (
+    !authUser.email ||
+    row.email
+      .trim()
+      .toLowerCase() !==
+      authUser.email
+        .trim()
+        .toLowerCase()
+  ) {
+    return {
+      authenticatedIdentity:
+        true,
+
+      session:
+        null,
+    };
+  }
+
   /*
    * Authentication alone never creates staff authority.
    *
-   * The Auth identity must also map to an active staff_users record.
+   * invited  -> may complete activation only
+   * active   -> may receive staff permissions
+   * suspended -> receives no staff authority
    */
   if (
     row.status !== "active"
   ) {
-    return null;
+    return {
+      authenticatedIdentity:
+        true,
+
+      session:
+        null,
+    };
   }
 
   if (
@@ -132,7 +188,13 @@ async function resolveSupabaseStaffSession(): Promise<
     ) ||
     row.role === "claimant"
   ) {
-    return null;
+    return {
+      authenticatedIdentity:
+        true,
+
+      session:
+        null,
+    };
   }
 
   const user: StaffUser = {
@@ -150,7 +212,7 @@ async function resolveSupabaseStaffSession(): Promise<
 
     title:
       row.title?.trim() ||
-      "Duequity staff",
+      "DueQuity staff",
 
     statesCleared:
       normalizeStatesCleared(
@@ -165,15 +227,20 @@ async function resolveSupabaseStaffSession(): Promise<
   };
 
   return {
-    user,
+    authenticatedIdentity:
+      true,
 
-    permissions:
-      permissionsFor(
-        user.role,
-      ),
+    session: {
+      user,
 
-    provider:
-      "supabase",
+      permissions:
+        permissionsFor(
+          user.role,
+        ),
+
+      provider:
+        "supabase",
+    },
   };
 }
 
@@ -184,20 +251,25 @@ async function resolveSupabaseStaffSession(): Promise<
 /**
  * Resolve the current staff session.
  *
- * A valid Supabase staff identity always takes precedence.
+ * A real authenticated Supabase identity always takes precedence.
  *
- * During local development, the explicitly enabled local development adapter
- * remains available only as a fallback when no valid Supabase staff session
- * exists.
+ * If a Supabase identity exists but is invited, suspended, missing from
+ * staff_users, mismatched by email, or otherwise unauthorized, access fails
+ * closed and the local development adapter is NOT consulted.
+ *
+ * The development adapter remains available only when there is no
+ * authenticated Supabase identity at all.
  */
 export async function resolveStaffSession(): Promise<
   StaffSession | null
 > {
-  const supabaseSession =
+  const resolution =
     await resolveSupabaseStaffSession();
 
-  if (supabaseSession) {
-    return supabaseSession;
+  if (
+    resolution.authenticatedIdentity
+  ) {
+    return resolution.session;
   }
 
   return tryGetStaffSession();

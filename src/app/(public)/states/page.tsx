@@ -1,279 +1,321 @@
 import type { Metadata } from "next";
+
 import Link from "next/link";
-import { Container, Section, SectionIntro } from "@/components/public/section";
+
+import {
+  Container,
+  Section,
+  SectionIntro,
+} from "@/components/public/section";
+
 import {
   Callout,
-  Card,
-  CardBody,
-  CardHeader,
-  EmptyState,
 } from "@/components/ui/surface";
-import { Badge } from "@/components/ui/badge";
-import { CUSTODIAN_LABEL } from "@/domain/status";
-import { IconChevronRight } from "@/components/ui/icon";
-import { formatCount } from "@/lib/format";
-import { countySlug } from "@/lib/slug";
+
 import {
-  resolvePublicCoverage,
-  type PublicCoverageState,
-} from "@/server/public-jurisdictions";
+  formatCount,
+} from "@/lib/format";
+
+import {
+  loadNationalGeography,
+} from "@/server/geography-resolver";
 
 export const metadata: Metadata = {
-  title: "Where we operate",
+  title: "Where We Operate | Nationwide",
   description:
-    "Duequity operates jurisdiction by jurisdiction. Every county is reviewed and its rules recorded before intake opens. See current coverage and status by state.",
+    "Explore Duequity's nationwide coverage directory across all 50 states, the District of Columbia, and U.S. counties and county equivalents.",
 };
 
 export const dynamic = "force-dynamic";
 
 /**
- * COVERAGE INDEX
+ * NATIONWIDE COVERAGE DIRECTORY
  *
- * The jurisdiction engine is the foundation of the business, and this page makes
- * that visible rather than claiming blanket national coverage.
+ * This public page is geographic, not an internal compliance dashboard.
  *
- * Every figure comes from persisted jurisdiction rule packages. A jurisdiction is
- * listed as open only when its rule package is approved, its intake gate permits
- * intake, and its payment routing resolves to a launch track Duequity operates.
+ * Duequity maintains a national geography registry covering the 50 states,
+ * District of Columbia, and U.S. counties and county equivalents.
  *
- * Showing "under review" and "not available" jurisdictions is a deliberate trust
- * decision. A company that lists only its wins is telling you less than one that
- * shows you where it has decided not to operate.
+ * Listing a jurisdiction here means Duequity recognizes and supports the
+ * jurisdiction in its national coverage and research system. It does not mean
+ * every surplus claim is currently eligible for intake or that every county
+ * source has already been activated.
  *
- * When nothing is activated yet, this page says so plainly. That is the correct
- * output, not a failure state.
+ * Operational eligibility remains controlled by Duequity's private
+ * jurisdiction, source, payment-routing and compliance systems.
  */
 
-const COVERAGE_LABEL: Record<PublicCoverageState, string> = {
-  open: "Open for claims",
-  attorney_required: "Attorney required",
-  under_review: "Under review",
-  not_available: "Not available",
-};
-
-const COVERAGE_TONE: Record<
-  PublicCoverageState,
-  "positive" | "counsel" | "neutral" | "critical"
-> = {
-  open: "positive",
-  attorney_required: "counsel",
-  under_review: "neutral",
-  not_available: "critical",
-};
+/* ========================================================================== */
+/* Page                                                                        */
+/* ========================================================================== */
 
 export default async function StatesPage() {
-  const coverage = await resolvePublicCoverage();
+  const geography =
+    await loadNationalGeography();
 
-  const recordedCount = coverage.states.reduce(
-    (total, state) => total + state.jurisdictions.length,
-    0,
-  );
+  const states =
+    geography.states;
+
+  const stateCount =
+    states.filter(
+      (state) =>
+        state.postalCode !==
+        "DC",
+    ).length;
+
+  const hasDistrictOfColumbia =
+    states.some(
+      (state) =>
+        state.postalCode ===
+        "DC",
+    );
+
+  const countyEquivalentCount =
+    states.reduce(
+      (
+        total,
+        state,
+      ) =>
+        total +
+        state.counties.length,
+      0,
+    );
 
   return (
     <>
-      <Section tone="ink" size="sm">
+      {/* ================================================================ hero */}
+      <Section
+        tone="ink"
+        size="sm"
+      >
         <Container>
-          <p className="eyebrow text-accent-300">Coverage</p>
-          <h1 className="mt-3 max-w-3xl text-3xl text-white sm:text-4xl">
-            Where Duequity operates, and where it does not
-          </h1>
-          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-ink-300">
-            Surplus rules are set county by county, not nationally. We activate
-            a jurisdiction only after its rules have been reviewed against
-            official sources and recorded in our compliance system. Everything
-            else stays closed.
+          <p className="eyebrow text-accent-300">
+            Nationwide
           </p>
+
+          <h1 className="mt-3 max-w-3xl text-3xl text-white sm:text-4xl">
+            Where We Operate
+          </h1>
+
+          <p className="mt-4 max-w-3xl text-lg leading-relaxed text-ink-300">
+            Duequity maintains nationwide coverage across all 50 states and the
+            District of Columbia. Search our directory below to find your state
+            and county or county equivalent.
+          </p>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              href="/check"
+              className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
+            >
+              Check a property
+            </Link>
+
+            <a
+              href="tel:+18886692551"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border border-ink-700 bg-ink-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:border-ink-500 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
+            >
+              Call 1-888-669-2551
+            </a>
+          </div>
         </Container>
       </Section>
 
-      <Section tone="paper" size="md">
+      {/* =========================================================== national stats */}
+      <Section
+        tone="paper"
+        size="sm"
+      >
         <Container>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <CoverageStat
-              value={formatCount(coverage.totals.open)}
-              label="Open for claims"
-              hint="Rules reviewed and recorded, intake permitted, payment route established."
-              tone="positive"
+              value={formatCount(stateCount)}
+              label="States"
+              hint="All U.S. states are represented in Duequity's national geography system."
             />
+
             <CoverageStat
-              value={formatCount(coverage.totals.attorneyRequired)}
-              label="Attorney required"
-              hint="We coordinate. An independent attorney files and is engaged by you directly."
-              tone="counsel"
+              value={
+                hasDistrictOfColumbia
+                  ? "1"
+                  : "0"
+              }
+              label="District of Columbia"
+              hint="Washington, D.C. is included as a county-equivalent jurisdiction."
             />
+
             <CoverageStat
-              value={formatCount(coverage.totals.underReview)}
-              label="Under review"
-              hint="Intake closed until the review completes."
-              tone="neutral"
+              value={formatCount(
+                countyEquivalentCount,
+              )}
+              label="Counties and equivalents"
+              hint="County, parish, borough, independent-city and equivalent jurisdictions."
             />
+
             <CoverageStat
-              value={formatCount(coverage.totals.notAvailable)}
-              label="Not available"
-              hint="A licensing, regulatory or payment-routing barrier applies."
-              tone="critical"
+              value="Nationwide"
+              label="Coverage directory"
+              hint="Property and claimant research can be organized nationally by jurisdiction."
             />
           </div>
 
           <Callout
             tone="neutral"
-            className="mt-8"
-            title="Why the list is short"
+            className="mt-6"
+            title="What nationwide coverage means"
           >
             <p>
-              There are {formatCount(coverage.nation.countyEquivalents)}{" "}
-              counties and county equivalents across{" "}
-              {formatCount(coverage.nation.statesAndDc)} states and the District
-              of Columbia, and the rules differ meaningfully between them. A
-              company that claims to operate in all of them on day one is either
-              not reading the rules or not following them. We would rather tell
-              you no in a jurisdiction we have not cleared than take your case
-              and discover the problem later.
+              Every state and county shown below is part of Duequity&apos;s
+              nationwide jurisdiction directory. A listing does not guarantee
+              that a particular surplus claim is currently eligible for
+              Duequity services. Claim requirements, available records, payment
+              routes, deadlines, and operating rules vary by jurisdiction and
+              are evaluated before a claim moves forward.
             </p>
           </Callout>
         </Container>
       </Section>
 
-      <Section tone="canvas" size="md">
+      {/* ======================================================== state directory */}
+      <Section
+        tone="canvas"
+        size="md"
+      >
         <Container>
           <SectionIntro
-            eyebrow="By state"
-            title="Recorded jurisdictions"
-            lede="Each entry shows the agency that holds surplus funds and the current intake position."
+            eyebrow="Nationwide directory"
+            title="Find your state and county"
+            lede="Select a state below to view every county or county-equivalent jurisdiction in Duequity's national geography registry."
           />
 
-          {coverage.states.length === 0 ? (
-            <div className="mt-10">
-              <EmptyState
-                title="No jurisdiction is activated yet"
-                description="Duequity has not yet completed legal review and payment-routing verification for any jurisdiction, so no county is open for intake. This page will list each jurisdiction as it is activated, alongside the ones we have decided not to operate in."
-              />
+          <div className="mt-8 space-y-3">
+            {states.map(
+              (state) => (
+                <details
+                  key={state.postalCode}
+                  className="group overflow-hidden rounded-lg border border-line bg-paper shadow-xs"
+                >
+                  <summary className="flex cursor-pointer list-none items-center gap-4 px-4 py-4 transition-colors hover:bg-inset focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-500 sm:px-5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-base font-semibold text-ink-900">
+                        {state.name}
+                      </p>
 
-              <Callout
-                tone="neutral"
-                className="mt-6"
-                title="What this means if you are looking for help today"
-              >
-                <p>
-                  You can still search the public records we have indexed, and
-                  you can always claim surplus funds yourself directly from the
-                  agency holding them at no cost. We will not sign an agreement
-                  with you in a jurisdiction we have not cleared.
-                </p>
-              </Callout>
-            </div>
-          ) : (
-            <div className="mt-10 space-y-8">
-              {coverage.states.map((state) => (
-                <Card key={state.state}>
-                  <CardHeader
-                    title={
-                      <Link
-                        href={`/states/${state.state.toLowerCase()}`}
-                        className="rounded-xs transition-colors hover:text-accent-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
-                      >
-                        {state.stateName}
-                      </Link>
-                    }
-                    description={`${formatCount(state.jurisdictions.length)} recorded ${
-                      state.jurisdictions.length === 1
-                        ? "jurisdiction"
-                        : "jurisdictions"
-                    }`}
-                    actions={
-                      <span className="font-mono text-sm text-ink-400">
-                        {state.state}
-                      </span>
-                    }
-                  />
-                  <CardBody flush>
-                    <ul className="divide-y divide-line-subtle">
-                      {state.jurisdictions.map((jurisdiction) => (
-                        <li key={jurisdiction.packageId}>
-                          <Link
-                            href={`/states/${jurisdiction.state.toLowerCase()}/${countySlug(
-                              jurisdiction.county,
-                            )}`}
-                            className="flex items-center gap-4 px-4 py-3.5 transition-colors hover:bg-inset focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-500 sm:px-5"
+                      <p className="mt-0.5 text-sm text-ink-500">
+                        {formatCount(
+                          state.counties.length,
+                        )}{" "}
+                        {state.counties.length ===
+                        1
+                          ? "county or equivalent"
+                          : "counties or equivalents"}
+                      </p>
+                    </div>
+
+                    <span className="shrink-0 rounded-md border border-line bg-inset px-2.5 py-1 font-mono text-xs font-semibold text-ink-600">
+                      {state.postalCode}
+                    </span>
+
+                    <span
+                      aria-hidden="true"
+                      className="shrink-0 text-lg text-ink-400 transition-transform group-open:rotate-45"
+                    >
+                      +
+                    </span>
+                  </summary>
+
+                  <div className="border-t border-line bg-canvas px-4 py-4 sm:px-5">
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {state.counties.map(
+                        (county) => (
+                          <div
+                            key={county.geoid}
+                            className="rounded-md border border-line bg-paper px-3.5 py-3"
                           >
-                            <div className="min-w-0 flex-1">
-                              <p className="text-base font-medium text-ink-900">
-                                {jurisdiction.county ?? "Statewide"}
-                              </p>
-                              <p className="mt-0.5 truncate text-sm text-ink-500">
-                                {jurisdiction.agencyName}
-                              </p>
-                            </div>
-                            <div className="hidden shrink-0 sm:block">
-                              <Badge tone="neutral">
-                                {CUSTODIAN_LABEL[jurisdiction.custodian]}
-                              </Badge>
-                            </div>
-                            <div className="shrink-0">
-                              <Badge
-                                tone={COVERAGE_TONE[jurisdiction.coverage]}
-                                size="md"
-                              >
-                                {COVERAGE_LABEL[jurisdiction.coverage]}
-                              </Badge>
-                            </div>
-                            <IconChevronRight
-                              size={16}
-                              className="shrink-0 text-ink-300"
-                            />
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardBody>
-                </Card>
-              ))}
-            </div>
-          )}
+                            <p className="text-sm font-medium text-ink-800">
+                              {county.name}
+                            </p>
 
-          <p className="mt-6 text-sm text-ink-500">
-            {recordedCount === 0
-              ? "No jurisdiction rules have been published yet."
-              : `${formatCount(recordedCount)} recorded ${
-                  recordedCount === 1 ? "jurisdiction" : "jurisdictions"
-                }.`}{" "}
-            Geography from {coverage.nation.geographySource}. Every rule shown
-            is recorded against the official sources it was taken from and is
-            re-reviewed before intake opens.
-          </p>
+                            <p className="mt-1 font-mono text-2xs text-ink-400">
+                              GEOID {county.geoid}
+                            </p>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                </details>
+              ),
+            )}
+          </div>
+
+          <div className="mt-8 rounded-lg border border-line bg-paper p-5">
+            <p className="text-sm font-semibold text-ink-900">
+              Don&apos;t see the answer you need?
+            </p>
+
+            <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-600">
+              Finding your state and county confirms that the jurisdiction is
+              represented in Duequity&apos;s nationwide directory. To check
+              whether we have a matching surplus record for a specific
+              property, start with the property search.
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/check"
+                className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+              >
+                Check a property
+              </Link>
+
+              <a
+                href="tel:+18886692551"
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink-800 transition-colors hover:bg-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+              >
+                Call 1-888-669-2551
+              </a>
+            </div>
+          </div>
         </Container>
       </Section>
     </>
   );
 }
 
+/* ========================================================================== */
+/* Coverage stat                                                               */
+/* ========================================================================== */
+
 function CoverageStat({
   value,
   label,
   hint,
-  tone,
 }: {
   value: string;
-  label: string;
-  hint: string;
-  tone: "positive" | "counsel" | "neutral" | "critical";
-}) {
-  const bar = {
-    positive: "bg-accent-500",
-    counsel: "bg-counsel-600",
-    neutral: "bg-ink-300",
-    critical: "bg-critical-600",
-  }[tone];
 
+  label: string;
+
+  hint: string;
+}) {
   return (
     <div className="relative overflow-hidden rounded-lg border border-line bg-paper p-4 shadow-xs">
       <span
         aria-hidden="true"
-        className={`absolute inset-y-0 left-0 w-0.5 ${bar}`}
+        className="absolute inset-y-0 left-0 w-0.5 bg-accent-500"
       />
-      <p className="tnum text-3xl font-semibold text-ink-900">{value}</p>
-      <p className="mt-1 text-base font-medium text-ink-800">{label}</p>
-      <p className="mt-1 text-sm leading-relaxed text-ink-500">{hint}</p>
+
+      <p className="tnum text-3xl font-semibold text-ink-900">
+        {value}
+      </p>
+
+      <p className="mt-1 text-base font-medium text-ink-800">
+        {label}
+      </p>
+
+      <p className="mt-1 text-sm leading-relaxed text-ink-500">
+        {hint}
+      </p>
     </div>
   );
 }

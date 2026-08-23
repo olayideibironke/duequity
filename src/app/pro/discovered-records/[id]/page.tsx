@@ -14,6 +14,8 @@ import {
 
 import { TextLink } from "@/components/ui/button";
 
+import { ClaimantLocatorControls } from "@/components/pro/claimant-locator-controls";
+
 import { DiscoveredRecordPromotionControl } from "@/components/pro/discovered-record-promotion-control";
 
 import { DiscoveredRecordReviewControls } from "@/components/pro/discovered-record-review-controls";
@@ -84,6 +86,10 @@ function humanize(value: string): string {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+function webSearchHref(query: string): string {
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
 /* ========================================================================== */
 /* Page                                                                        */
 /* ========================================================================== */
@@ -115,10 +121,17 @@ export default async function DiscoveredRecordDetailPage({
     notFound();
   }
 
-  const canReview =
+  const isPromoted =
+    record.status === "promoted" ||
+    Boolean(record.promotedOpportunityId);
+
+  const canLocate =
     can(session, "opportunity.write") &&
-    clearedForState(session, record.state) &&
-    record.status !== "promoted";
+    clearedForState(session, record.state);
+
+  const canReview =
+    canLocate &&
+    !isPromoted;
 
   const approvedJurisdiction = rulePackages.find(
     (rulePackage) =>
@@ -139,21 +152,69 @@ export default async function DiscoveredRecordDetailPage({
   );
 
   const workflowReady =
+    !isPromoted &&
     record.status === "reviewed" &&
     Boolean(approvedJurisdiction) &&
     enrichmentReadiness.ready;
 
-  const promotionBlockers = [
-    record.status !== "reviewed"
-      ? "The discovered record must complete operational review."
+  const promotionBlockers = isPromoted
+    ? []
+    : [
+        record.status !== "reviewed"
+          ? "The discovered record must complete operational review."
+          : undefined,
+
+        !approvedJurisdiction
+          ? "No approved Duequity jurisdiction rule is available for this county."
+          : undefined,
+
+        ...enrichmentReadiness.missing,
+      ].filter((value): value is string => Boolean(value));
+
+  const ownerLocationResearchUrl =
+    webSearchHref(
+      [
+        `"${record.formerOwnerName}"`,
+        `"${record.county}"`,
+        record.state,
+        "address phone email",
+      ].join(" "),
+    );
+
+  const ownerPropertyResearchUrl =
+    webSearchHref(
+      [
+        `"${record.formerOwnerName}"`,
+        `"${record.addressLine1}"`,
+        record.city,
+        record.state,
+      ].join(" "),
+    );
+
+  const identifierResearchTerms = [
+    record.caseNumber
+      ? `"${record.caseNumber}"`
       : undefined,
 
-    !approvedJurisdiction
-      ? "No approved Duequity jurisdiction rule is available for this county."
+    record.propertyId
+      ? `"${record.propertyId}"`
       : undefined,
 
-    ...enrichmentReadiness.missing,
+    record.parcelNumber
+      ? `"${record.parcelNumber}"`
+      : undefined,
+
+    `"${record.formerOwnerName}"`,
+
+    record.county,
+
+    record.state,
   ].filter((value): value is string => Boolean(value));
+
+  const identifierResearchUrl =
+    webSearchHref(
+      identifierResearchTerms.join(" "),
+    );
 
   return (
     <div className="space-y-5">
@@ -191,7 +252,16 @@ export default async function DiscoveredRecordDetailPage({
       </div>
 
       {/* ========================================================== operational gate */}
-      {workflowReady ? (
+      {isPromoted ? (
+        <Callout tone="positive" title="Promoted to operational workflow">
+          <p>
+            This discovery record has already been promoted to an Opportunity.
+            Discovery review and promotion are now closed for this record.
+            Claimant-location research may continue without creating a claimant
+            or authorizing outreach automatically.
+          </p>
+        </Callout>
+      ) : workflowReady ? (
         <Callout tone="positive" title="Enrichment requirements complete">
           <p>
             The discovery record has completed review, verified enrichment is
@@ -482,6 +552,130 @@ export default async function DiscoveredRecordDetailPage({
             </CardBody>
           </Card>
 
+          {/* ================================================= claimant locator */}
+          <Card>
+            <CardHeader
+              title="Claimant Locator"
+              description="Research and verify candidate identity and contact information without creating a claimant or authorizing outreach."
+            />
+
+            <CardBody>
+              {canLocate ? (
+                <>
+                  <div className="mb-5 rounded-md border border-line bg-inset p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-ink-900">
+                        Research starting points
+                      </p>
+
+                      <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                        Launch targeted public-web research using the exact facts
+                        already retained from the official county record. Search
+                        results are research leads only and are never saved,
+                        verified, or treated as claimant contact information
+                        automatically.
+                      </p>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <a
+                        href={ownerLocationResearchUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex min-h-9 items-center justify-center rounded-md border border-line bg-paper px-3.5 py-2 text-sm font-semibold text-ink-700 transition hover:border-accent-300 hover:bg-accent-50 hover:text-accent-800"
+                      >
+                        Search owner + location
+                      </a>
+
+                      <a
+                        href={ownerPropertyResearchUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex min-h-9 items-center justify-center rounded-md border border-line bg-paper px-3.5 py-2 text-sm font-semibold text-ink-700 transition hover:border-accent-300 hover:bg-accent-50 hover:text-accent-800"
+                      >
+                        Search owner + property
+                      </a>
+
+                      <a
+                        href={identifierResearchUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex min-h-9 items-center justify-center rounded-md border border-line bg-paper px-3.5 py-2 text-sm font-semibold text-ink-700 transition hover:border-accent-300 hover:bg-accent-50 hover:text-accent-800"
+                      >
+                        Search case / property IDs
+                      </a>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 text-xs text-ink-500 sm:grid-cols-2">
+                      <p>
+                        Owner:{" "}
+                        <span className="font-medium text-ink-700">
+                          {record.formerOwnerName}
+                        </span>
+                      </p>
+
+                      <p>
+                        Jurisdiction:{" "}
+                        <span className="font-medium text-ink-700">
+                          {record.county}, {record.state}
+                        </span>
+                      </p>
+
+                      <p className="sm:col-span-2">
+                        Property:{" "}
+                        <span className="font-medium text-ink-700">
+                          {record.addressLine1}, {record.city}, {record.state}{" "}
+                          {record.postalCode}
+                        </span>
+                      </p>
+
+                      <p>
+                        Case:{" "}
+                        <span className="font-mono text-ink-700">
+                          {record.caseNumber ?? "Not recorded"}
+                        </span>
+                      </p>
+
+                      <p>
+                        Property ID:{" "}
+                        <span className="font-mono text-ink-700">
+                          {record.propertyId ?? "Not recorded"}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <ClaimantLocatorControls
+                    recordId={record.id}
+                    candidates={
+                      enrichment?.claimantLocator?.candidates ??
+                      []
+                    }
+                    identities={
+                      enrichment?.claimantLocator?.identities ??
+                      []
+                    }
+                    associatedContacts={
+                      enrichment?.claimantLocator?.associatedContacts ??
+                      []
+                    }
+                  />
+                </>
+              ) : (
+                <div className="rounded-md border border-line bg-inset px-3.5 py-3">
+                  <p className="text-sm font-medium text-ink-700">
+                    Claimant Locator unavailable
+                  </p>
+
+                  <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                    Your current staff permissions or state clearance do not
+                    authorize claimant-location research for this record.
+                  </p>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+
           {(record.reviewedAt ||
             record.reviewNote ||
             record.reviewedByUserId) && (
@@ -536,7 +730,28 @@ export default async function DiscoveredRecordDetailPage({
             />
 
             <CardBody>
-              {promotionBlockers.length > 0 ? (
+              {isPromoted ? (
+                <div className="rounded-md border border-positive-200 bg-positive-50 px-4 py-3.5">
+                  <p className="text-sm font-semibold text-positive-900">
+                    Record already promoted
+                  </p>
+
+                  <p className="mt-1 text-xs leading-relaxed text-positive-800">
+                    This discovery has already entered the operational
+                    Opportunity workflow. It cannot be promoted again.
+                  </p>
+
+                  {record.promotedOpportunityId && (
+                    <p className="mt-3 text-sm">
+                      <TextLink
+                        href={`/pro/opportunities/${record.promotedOpportunityId}`}
+                      >
+                        Open Opportunity
+                      </TextLink>
+                    </p>
+                  )}
+                </div>
+              ) : promotionBlockers.length > 0 ? (
                 <ol className="space-y-3">
                   {promotionBlockers.map((blocker, index) => (
                     <li
@@ -679,7 +894,18 @@ export default async function DiscoveredRecordDetailPage({
             />
 
             <CardBody>
-              {canReview && record.status !== "promoted" ? (
+              {isPromoted ? (
+                <div className="rounded-md border border-positive-200 bg-positive-50 px-3.5 py-3">
+                  <p className="text-sm font-medium text-positive-900">
+                    Record already promoted
+                  </p>
+
+                  <p className="mt-1 text-xs leading-relaxed text-positive-800">
+                    Discovery review is closed because this record has already
+                    been promoted to the operational Opportunity workflow.
+                  </p>
+                </div>
+              ) : canReview ? (
                 <DiscoveredRecordReviewControls
                   recordId={record.id}
                   currentStatus={
@@ -698,8 +924,8 @@ export default async function DiscoveredRecordDetailPage({
                   </p>
 
                   <p className="mt-1 text-xs leading-relaxed text-ink-500">
-                    Your current staff permissions do not authorize operational
-                    review of discovered records in this state.
+                    Your current staff permissions or state clearance do not
+                    authorize operational review of this discovered record.
                   </p>
                 </div>
               )}

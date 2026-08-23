@@ -1,8 +1,16 @@
 import type { Metadata } from "next";
 
 import {
+  CountySurplusHarvestControls,
+  type StateHarvestOption,
+} from "@/components/pro/county-surplus-harvest-controls";
+
+import { StaffAuthenticationRequired } from "@/components/ui/authentication-required";
+
+import {
   Card,
   CardBody,
+  CardHeader,
   Callout,
   EmptyState,
   NotRecorded,
@@ -23,13 +31,22 @@ import {
 import { formatDate } from "@/lib/format";
 
 import {
+  can,
+} from "@/lib/session";
+
+import {
   listDiscoveredRecords,
   type DiscoveredRecord,
   type DiscoveredRecordStatus,
 } from "@/server/discovered-record-store";
 
-import { resolveStaffSession } from "@/server/staff-session";
-import { StaffAuthenticationRequired } from "@/components/ui/authentication-required";
+import {
+  loadNationalGeography,
+} from "@/server/geography-resolver";
+
+import {
+  resolveStaffSession,
+} from "@/server/staff-session";
 
 export const metadata: Metadata = {
   title: "Discovered Records",
@@ -51,22 +68,39 @@ const USD = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-function formatSourceBalance(cents: number | undefined): string | undefined {
-  if (cents === undefined) {
+function formatSourceBalance(
+  cents: number | undefined,
+): string | undefined {
+  if (
+    cents === undefined
+  ) {
     return undefined;
   }
 
-  return USD.format(cents / 100);
+  return USD.format(
+    cents / 100,
+  );
 }
 
-function locationLabel(record: DiscoveredRecord): string {
-  return [record.city, record.county, record.state, record.postalCode]
+function locationLabel(
+  record: DiscoveredRecord,
+): string {
+  return [
+    record.city,
+    record.county,
+    record.state,
+    record.postalCode,
+  ]
     .filter(Boolean)
     .join(", ");
 }
 
-function statusLabel(status: DiscoveredRecordStatus): string {
-  switch (status) {
+function statusLabel(
+  status: DiscoveredRecordStatus,
+): string {
+  switch (
+    status
+  ) {
     case "new":
       return "New";
 
@@ -84,8 +118,12 @@ function statusLabel(status: DiscoveredRecordStatus): string {
   }
 }
 
-function statusClassName(status: DiscoveredRecordStatus): string {
-  switch (status) {
+function statusClassName(
+  status: DiscoveredRecordStatus,
+): string {
+  switch (
+    status
+  ) {
     case "new":
       return "border-accent-200 bg-accent-50 text-accent-800";
 
@@ -103,14 +141,20 @@ function statusClassName(status: DiscoveredRecordStatus): string {
   }
 }
 
-function StatusPill({ status }: { status: DiscoveredRecordStatus }) {
+function StatusPill({
+  status,
+}: {
+  status: DiscoveredRecordStatus;
+}) {
   return (
     <span
       className={`inline-flex rounded-full border px-2 py-0.5 text-2xs font-semibold ${statusClassName(
         status,
       )}`}
     >
-      {statusLabel(status)}
+      {statusLabel(
+        status,
+      )}
     </span>
   );
 }
@@ -123,38 +167,111 @@ export default async function ProDiscoveredRecordsPage() {
   /*
    * Server-side session gate.
    *
-   * Resolved before any store read. The layout also withholds the operations
-   * shell, but layout and page render in parallel, so the page must refuse to
-   * read operational data on its own account.
+   * Resolved before any operational store read. The layout also withholds the
+   * operations shell, but the page must independently refuse unauthorized
+   * operational data access.
    */
-  if (!(await resolveStaffSession())) {
+  const session =
+    await resolveStaffSession();
+
+  if (!session) {
     return <StaffAuthenticationRequired />;
   }
 
-  const records = await listDiscoveredRecords();
+  const [
+    records,
+    geography,
+  ] =
+    await Promise.all([
+      listDiscoveredRecords(),
 
-  const newCount = records.filter((record) => record.status === "new").length;
+      loadNationalGeography(),
+    ]);
 
-  const reviewedCount = records.filter(
-    (record) => record.status === "reviewed",
-  ).length;
+  const canHarvest =
+    can(
+      session,
+      "opportunity.write",
+    );
 
-  const promotedCount = records.filter(
-    (record) => record.status === "promoted",
-  ).length;
+  /*
+   * The discovery selector is intentionally national.
+   *
+   * Every state and county from the national geography registry is visible to
+   * an authorized discovery user so the interface accurately represents the
+   * national source engine.
+   *
+   * Visibility is not authorization.
+   *
+   * The county-harvest API independently verifies:
+   *
+   *   - staff authentication
+   *   - opportunity.write permission
+   *   - state clearance
+   *   - valid national geography
+   *   - activated official source
+   *
+   * A state or county appearing here therefore does not mean its source has
+   * been activated or that the current staff user may harvest it.
+   */
+  const harvestStates: StateHarvestOption[] =
+    canHarvest
+      ? geography.states.map(
+          (state) => ({
+            postalCode:
+              state.postalCode,
+
+            name:
+              state.name,
+
+            counties:
+              state.counties.map(
+                (county) => ({
+                  geoid:
+                    county.geoid,
+
+                  name:
+                    county.name,
+                }),
+              ),
+          }),
+        )
+      : [];
+
+  const newCount =
+    records.filter(
+      (record) =>
+        record.status === "new",
+    ).length;
+
+  const reviewedCount =
+    records.filter(
+      (record) =>
+        record.status === "reviewed",
+    ).length;
+
+  const promotedCount =
+    records.filter(
+      (record) =>
+        record.status === "promoted",
+    ).length;
 
   return (
     <div className="space-y-5">
       {/* ================================================================ header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="eyebrow text-ink-500">Pipeline</p>
+          <p className="eyebrow text-ink-500">
+            Pipeline
+          </p>
 
-          <h1 className="mt-1.5 text-2xl">Discovered Records</h1>
+          <h1 className="mt-1.5 text-2xl">
+            Discovered Records
+          </h1>
 
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-600">
-            Official public-source records staged for review before they enter
-            Duequity&apos;s operational opportunity pipeline.
+            Pull official county surplus records, stage discovery leads, and
+            prepare them for claimant-location research and operational review.
           </p>
         </div>
 
@@ -184,28 +301,67 @@ export default async function ProDiscoveredRecordsPage() {
         )}
       </div>
 
-      <Callout tone="neutral" title="Discovery is not an opportunity">
+      {/* ====================================================== county discovery */}
+      <Card>
+        <CardHeader
+          title="County Surplus Discovery"
+          description="Select a state and county to pull available records from an activated official government source."
+        />
+
+        <CardBody>
+          {canHarvest &&
+          harvestStates.length > 0 ? (
+            <CountySurplusHarvestControls
+              states={
+                harvestStates
+              }
+            />
+          ) : (
+            <div className="rounded-md border border-line bg-inset px-4 py-4">
+              <p className="text-sm font-semibold text-ink-800">
+                County discovery unavailable
+              </p>
+
+              <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                Your current staff role does not authorize official
+                public-record harvesting.
+              </p>
+            </div>
+          )}
+        </CardBody>
+      </Card>
+
+      <Callout
+        tone="neutral"
+        title="Discovery is not an opportunity"
+      >
         <p>
-          These records preserve facts collected from an official source. Their
-          presence here does not approve a jurisdiction, authorize claimant
-          intake, authorize outreach, create a claim, or establish that every
-          fact required for an operational opportunity has been verified.
+          County pulls create discovery leads only. A former owner appearing
+          in an official surplus source is not automatically a claimant or
+          client. Duequity does not authorize outreach, create an Opportunity,
+          create a Claim, create a claimant account, or begin onboarding from
+          the county pull alone.
         </p>
       </Callout>
 
+      {/* ========================================================== record queue */}
       {records.length === 0 ? (
         <EmptyState
           title="No discovered records yet"
-          description="Records will appear here after an authorized official-source harvest stages them for review."
+          description="Select a supported state and county above, then pull available surplus records from the activated official source."
         />
       ) : (
         <Card className="overflow-hidden">
           <TableToolbar
-            count={records.length}
+            count={
+              records.length
+            }
             noun={{
-              one: "discovered record",
+              one:
+                "discovered record",
 
-              many: "discovered records",
+              many:
+                "discovered records",
             }}
           />
 
@@ -214,113 +370,163 @@ export default async function ProDiscoveredRecordsPage() {
             <TableRegion label="Discovered record queue">
               <Table caption="Official public-source records staged for Duequity review">
                 <THead>
-                  <TH width="22%">Former owner</TH>
+                  <TH width="22%">
+                    Former owner
+                  </TH>
 
-                  <TH width="24%">Property</TH>
+                  <TH width="24%">
+                    Property
+                  </TH>
 
-                  <TH width="13%">Case</TH>
+                  <TH width="13%">
+                    Case
+                  </TH>
 
-                  <TH width="10%">Sale date</TH>
+                  <TH width="10%">
+                    Sale date
+                  </TH>
 
-                  <TH width="12%" align="right">
+                  <TH
+                    width="12%"
+                    align="right"
+                  >
                     Source-listed balance
                   </TH>
 
-                  <TH width="12%">Source</TH>
+                  <TH width="12%">
+                    Source
+                  </TH>
 
-                  <TH width="7%">Status</TH>
+                  <TH width="7%">
+                    Status
+                  </TH>
                 </THead>
 
                 <TBody>
-                  {records.map((record) => {
-                    const balance = formatSourceBalance(
-                      record.sourceListedBalanceCents,
-                    );
+                  {records.map(
+                    (record) => {
+                      const balance =
+                        formatSourceBalance(
+                          record.sourceListedBalanceCents,
+                        );
 
-                    return (
-                      <TR key={record.id}>
-                        <TDPrimary
-                          href={`/pro/discovered-records/${record.id}`}
-                          secondary={
-                            record.propertyId
-                              ? `Property ID ${record.propertyId}`
-                              : "No property identifier recorded"
+                      return (
+                        <TR
+                          key={
+                            record.id
                           }
                         >
-                          {record.formerOwnerName}
-                        </TDPrimary>
-
-                        <TD>
-                          <p className="text-xs font-medium text-ink-800">
-                            {record.addressLine1}
-                          </p>
-
-                          <p className="mt-0.5 text-2xs text-ink-500">
-                            {locationLabel(record)}
-                          </p>
-                        </TD>
-
-                        <TD>
-                          {record.caseNumber ? (
-                            <span className="font-mono text-2xs break-all text-ink-700">
-                              {record.caseNumber}
-                            </span>
-                          ) : (
-                            <NotRecorded />
-                          )}
-
-                          {record.parcelNumber && (
-                            <span className="mt-1 block font-mono text-2xs break-all text-ink-400">
-                              {record.parcelNumber}
-                            </span>
-                          )}
-                        </TD>
-
-                        <TD>
-                          <span className="text-xs text-ink-700">
-                            {formatDate(record.saleDate)}
-                          </span>
-                        </TD>
-
-                        <TD align="right">
-                          {balance ? (
-                            <>
-                              <span className="tnum text-sm font-semibold text-ink-900">
-                                {balance}
-                              </span>
-
-                              <span className="mt-0.5 block text-2xs text-ink-400">
-                                Source-listed
-                              </span>
-                            </>
-                          ) : (
-                            <NotRecorded />
-                          )}
-                        </TD>
-
-                        <TD>
-                          <a
-                            href={record.sourceUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="line-clamp-2 text-xs font-medium text-accent-700 underline decoration-accent-300 underline-offset-2 hover:text-accent-800"
+                          <TDPrimary
+                            href={`/pro/discovered-records/${record.id}`}
+                            secondary={
+                              record.propertyId
+                                ? `Property ID ${record.propertyId}`
+                                : "No property identifier recorded"
+                            }
                           >
-                            {record.sourceName}
-                          </a>
+                            {
+                              record.formerOwnerName
+                            }
+                          </TDPrimary>
 
-                          {record.sourceReference && (
-                            <span className="mt-1 block line-clamp-2 font-mono text-2xs text-ink-400">
-                              {record.sourceReference}
+                          <TD>
+                            <p className="text-xs font-medium text-ink-800">
+                              {
+                                record.addressLine1
+                              }
+                            </p>
+
+                            <p className="mt-0.5 text-2xs text-ink-500">
+                              {
+                                locationLabel(
+                                  record,
+                                )
+                              }
+                            </p>
+                          </TD>
+
+                          <TD>
+                            {record.caseNumber ? (
+                              <span className="break-all font-mono text-2xs text-ink-700">
+                                {
+                                  record.caseNumber
+                                }
+                              </span>
+                            ) : (
+                              <NotRecorded />
+                            )}
+
+                            {record.parcelNumber && (
+                              <span className="mt-1 block break-all font-mono text-2xs text-ink-400">
+                                {
+                                  record.parcelNumber
+                                }
+                              </span>
+                            )}
+                          </TD>
+
+                          <TD>
+                            <span className="text-xs text-ink-700">
+                              {
+                                formatDate(
+                                  record.saleDate,
+                                )
+                              }
                             </span>
-                          )}
-                        </TD>
+                          </TD>
 
-                        <TD>
-                          <StatusPill status={record.status} />
-                        </TD>
-                      </TR>
-                    );
-                  })}
+                          <TD align="right">
+                            {balance ? (
+                              <>
+                                <span className="tnum text-sm font-semibold text-ink-900">
+                                  {
+                                    balance
+                                  }
+                                </span>
+
+                                <span className="mt-0.5 block text-2xs text-ink-400">
+                                  Source-listed
+                                </span>
+                              </>
+                            ) : (
+                              <NotRecorded />
+                            )}
+                          </TD>
+
+                          <TD>
+                            <a
+                              href={
+                                record.sourceUrl
+                              }
+                              target="_blank"
+                              rel="noreferrer"
+                              className="line-clamp-2 text-xs font-medium text-accent-700 underline decoration-accent-300 underline-offset-2 hover:text-accent-800"
+                            >
+                              {
+                                record.sourceName
+                              }
+                            </a>
+
+                            {record.sourceReference && (
+                              <span className="mt-1 block line-clamp-2 font-mono text-2xs text-ink-400">
+                                {
+                                  record.sourceReference
+                                }
+                              </span>
+                            )}
+                          </TD>
+
+                          <TD>
+                            <StatusPill
+                              status={
+                                record.status
+                              }
+                            />
+                          </TD>
+                        </TR>
+                      );
+                    },
+                  )}
                 </TBody>
               </Table>
             </TableRegion>
@@ -328,79 +534,109 @@ export default async function ProDiscoveredRecordsPage() {
 
           {/* ============================================================= mobile */}
           <div className="divide-y divide-line lg:hidden">
-            {records.map((record) => {
-              const balance = formatSourceBalance(
-                record.sourceListedBalanceCents,
-              );
+            {records.map(
+              (record) => {
+                const balance =
+                  formatSourceBalance(
+                    record.sourceListedBalanceCents,
+                  );
 
-              return (
-                <a
-                  key={record.id}
-                  href={`/pro/discovered-records/${record.id}`}
-                  className="block p-4 transition-colors hover:bg-inset"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium text-ink-900">
-                        {record.formerOwnerName}
-                      </p>
+                return (
+                  <a
+                    key={
+                      record.id
+                    }
+                    href={`/pro/discovered-records/${record.id}`}
+                    className="block p-4 transition-colors hover:bg-inset"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium text-ink-900">
+                          {
+                            record.formerOwnerName
+                          }
+                        </p>
 
-                      <p className="mt-1 text-sm text-ink-700">
-                        {record.addressLine1}
-                      </p>
+                        <p className="mt-1 text-sm text-ink-700">
+                          {
+                            record.addressLine1
+                          }
+                        </p>
 
-                      <p className="mt-0.5 text-xs text-ink-500">
-                        {locationLabel(record)}
-                      </p>
+                        <p className="mt-0.5 text-xs text-ink-500">
+                          {
+                            locationLabel(
+                              record,
+                            )
+                          }
+                        </p>
+                      </div>
+
+                      <StatusPill
+                        status={
+                          record.status
+                        }
+                      />
                     </div>
 
-                    <StatusPill status={record.status} />
-                  </div>
+                    <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line-subtle pt-4">
+                      <div>
+                        <dt className="text-2xs font-medium uppercase tracking-wide text-ink-400">
+                          Case
+                        </dt>
 
-                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line-subtle pt-4">
-                    <div>
-                      <dt className="text-2xs font-medium uppercase tracking-wide text-ink-400">
-                        Case
-                      </dt>
+                        <dd className="mt-1 font-mono text-xs text-ink-700">
+                          {
+                            record.caseNumber ??
+                            "Not recorded"
+                          }
+                        </dd>
+                      </div>
 
-                      <dd className="mt-1 font-mono text-xs text-ink-700">
-                        {record.caseNumber ?? "Not recorded"}
-                      </dd>
-                    </div>
+                      <div>
+                        <dt className="text-2xs font-medium uppercase tracking-wide text-ink-400">
+                          Sale date
+                        </dt>
 
-                    <div>
-                      <dt className="text-2xs font-medium uppercase tracking-wide text-ink-400">
-                        Sale date
-                      </dt>
+                        <dd className="mt-1 text-xs text-ink-700">
+                          {
+                            formatDate(
+                              record.saleDate,
+                            )
+                          }
+                        </dd>
+                      </div>
 
-                      <dd className="mt-1 text-xs text-ink-700">
-                        {formatDate(record.saleDate)}
-                      </dd>
-                    </div>
+                      <div>
+                        <dt className="text-2xs font-medium uppercase tracking-wide text-ink-400">
+                          Property ID
+                        </dt>
 
-                    <div>
-                      <dt className="text-2xs font-medium uppercase tracking-wide text-ink-400">
-                        Property ID
-                      </dt>
+                        <dd className="mt-1 font-mono text-xs text-ink-700">
+                          {
+                            record.propertyId ??
+                            "Not recorded"
+                          }
+                        </dd>
+                      </div>
 
-                      <dd className="mt-1 font-mono text-xs text-ink-700">
-                        {record.propertyId ?? "Not recorded"}
-                      </dd>
-                    </div>
+                      <div>
+                        <dt className="text-2xs font-medium uppercase tracking-wide text-ink-400">
+                          Source-listed balance
+                        </dt>
 
-                    <div>
-                      <dt className="text-2xs font-medium uppercase tracking-wide text-ink-400">
-                        Source-listed balance
-                      </dt>
-
-                      <dd className="tnum mt-1 text-xs font-semibold text-ink-900">
-                        {balance ?? "Not recorded"}
-                      </dd>
-                    </div>
-                  </dl>
-                </a>
-              );
-            })}
+                        <dd className="tnum mt-1 text-xs font-semibold text-ink-900">
+                          {
+                            balance ??
+                            "Not recorded"
+                          }
+                        </dd>
+                      </div>
+                    </dl>
+                  </a>
+                );
+              },
+            )}
           </div>
         </Card>
       )}
@@ -410,9 +646,11 @@ export default async function ProDiscoveredRecordsPage() {
           <CardBody>
             <p className="text-sm leading-relaxed text-ink-600">
               A source-listed balance is preserved exactly as a financial value
-              reported by the source adapter. Duequity does not automatically
-              treat that value as an operational recovery amount until the
-              record has completed the required review and enrichment process.
+              reported by the official source adapter. Duequity does not
+              automatically treat that value as an operational recovery amount.
+              Each discovery lead must continue through the applicable review,
+              claimant-location, verification, jurisdiction, and engagement
+              workflow.
             </p>
           </CardBody>
         </Card>

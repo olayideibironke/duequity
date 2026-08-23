@@ -587,7 +587,8 @@ function discoveredRecordFromRow(
     );
 
   return {
-    id: row.id,
+    id:
+      row.id,
 
     adapterKey:
       row.adapter_key,
@@ -746,11 +747,19 @@ async function getDiscoveredRecordRowById(
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("discovered_records")
+      .from(
+        "discovered_records",
+      )
       .select("*")
-      .eq("id", id)
+      .eq(
+        "id",
+        id,
+      )
       .maybeSingle();
 
   if (error) {
@@ -760,7 +769,7 @@ async function getDiscoveredRecordRowById(
   }
 
   return data
-    ? (data as DiscoveredRecordRow)
+    ? data as DiscoveredRecordRow
     : undefined;
 }
 
@@ -772,9 +781,14 @@ async function updateDiscoveredRecordWithVersion(
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("discovered_records")
+      .from(
+        "discovered_records",
+      )
       .update({
         ...values,
 
@@ -784,7 +798,10 @@ async function updateDiscoveredRecordWithVersion(
         updated_at:
           new Date().toISOString(),
       })
-      .eq("id", id)
+      .eq(
+        "id",
+        id,
+      )
       .eq(
         "row_version",
         expectedRowVersion,
@@ -817,13 +834,21 @@ export async function listDiscoveredRecords(): Promise<
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("discovered_records")
+      .from(
+        "discovered_records",
+      )
       .select("*")
-      .order("last_seen_at", {
-        ascending: false,
-      });
+      .order(
+        "last_seen_at",
+        {
+          ascending: false,
+        },
+      );
 
   if (error) {
     throw new Error(
@@ -831,10 +856,11 @@ export async function listDiscoveredRecords(): Promise<
     );
   }
 
-  return (data ?? []).map((row) =>
-    discoveredRecordFromRow(
-      row as DiscoveredRecordRow,
-    ),
+  return (data ?? []).map(
+    (row) =>
+      discoveredRecordFromRow(
+        row as DiscoveredRecordRow,
+      ),
   );
 }
 
@@ -849,7 +875,9 @@ export async function getDiscoveredRecordById(
     );
 
   return row
-    ? discoveredRecordFromRow(row)
+    ? discoveredRecordFromRow(
+        row,
+      )
     : undefined;
 }
 
@@ -862,9 +890,14 @@ export async function getDiscoveredRecordBySourceKey(
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("discovered_records")
+      .from(
+        "discovered_records",
+      )
       .select("*")
       .eq(
         "adapter_key",
@@ -896,7 +929,9 @@ export async function getDiscoveredRecordBySourceKey(
 export async function saveDiscoveredRecord(
   input: SaveDiscoveredRecordInput,
 ): Promise<DiscoveredRecord> {
-  assertInput(input);
+  assertInput(
+    input,
+  );
 
   const id =
     discoveredRecordId(
@@ -912,8 +947,42 @@ export async function saveDiscoveredRecord(
   const seenAt =
     nowIsoInstant();
 
+  /*
+   * The government-source snapshot on discovered_records is immutable.
+   *
+   * Re-harvesting an already staged source record therefore means only that
+   * Duequity observed the same record again at the activated official source.
+   * Preserve the original source evidence and advance last_seen_at only.
+   *
+   * This also preserves review status, promotion state, enrichment links and
+   * every other workflow fact already attached to the discovery record.
+   */
+  if (
+    existingRow
+  ) {
+    const updatedRow =
+      await updateDiscoveredRecordWithVersion(
+        id,
+
+        rowVersion(
+          existingRow,
+        ),
+
+        {
+          last_seen_at:
+            seenAt,
+        },
+      );
+
+    return discoveredRecordFromRow(
+      updatedRow,
+    );
+  }
+
   const sourceSnapshot =
-    buildSourceSnapshot(input);
+    buildSourceSnapshot(
+      input,
+    );
 
   const payload = {
     adapter_key:
@@ -996,49 +1065,45 @@ export async function saveDiscoveredRecord(
       sourceSnapshot,
   };
 
-  if (existingRow) {
-    const updatedRow =
-      await updateDiscoveredRecordWithVersion(
-        id,
-
-        rowVersion(existingRow),
-
-        payload,
-      );
-
-    return discoveredRecordFromRow(
-      updatedRow,
-    );
-  }
-
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("discovered_records")
+      .from(
+        "discovered_records",
+      )
       .insert({
         id,
 
         ...payload,
 
-        status: "new",
+        status:
+          "new",
 
-        state_fips: null,
+        state_fips:
+          null,
 
-        county_geoid: null,
+        county_geoid:
+          null,
 
         discovered_at:
           seenAt,
 
-        reviewed_at: null,
+        reviewed_at:
+          null,
 
-        review_note: null,
+        review_note:
+          null,
 
         promoted_opportunity_id:
           null,
 
-        row_version: 1,
+        row_version:
+          1,
 
         updated_by_user_id:
           null,
@@ -1064,7 +1129,9 @@ export async function saveDiscoveredRecord(
 export async function reviewDiscoveredRecord(
   input: ReviewDiscoveredRecordInput,
 ): Promise<DiscoveredRecord> {
-  assertReviewInput(input);
+  assertReviewInput(
+    input,
+  );
 
   const id =
     input.id.trim();
@@ -1101,7 +1168,9 @@ export async function reviewDiscoveredRecord(
     await updateDiscoveredRecordWithVersion(
       id,
 
-      rowVersion(currentRow),
+      rowVersion(
+        currentRow,
+      ),
 
       {
         status:
@@ -1131,7 +1200,9 @@ export async function reviewDiscoveredRecord(
 export async function promoteDiscoveredRecord(
   input: PromoteDiscoveredRecordInput,
 ): Promise<DiscoveredRecord> {
-  assertPromotionInput(input);
+  assertPromotionInput(
+    input,
+  );
 
   const id =
     input.id.trim();
@@ -1189,7 +1260,9 @@ export async function promoteDiscoveredRecord(
     await updateDiscoveredRecordWithVersion(
       id,
 
-      rowVersion(currentRow),
+      rowVersion(
+        currentRow,
+      ),
 
       {
         status:

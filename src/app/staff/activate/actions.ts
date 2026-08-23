@@ -33,16 +33,39 @@ interface InvitedStaffRow {
   status: string;
 }
 
-function readFormValue(
+function readPasswordValue(
   formData: FormData,
   name: string,
 ): string {
   const value =
     formData.get(name);
 
+  /*
+   * Never trim passwords.
+   */
   return typeof value === "string"
-    ? value.trim()
+    ? value
     : "";
+}
+
+function isStrongStaffPassword(
+  password: string,
+): boolean {
+  return (
+    password.length >= 12 &&
+    /[a-z]/.test(
+      password,
+    ) &&
+    /[A-Z]/.test(
+      password,
+    ) &&
+    /[0-9]/.test(
+      password,
+    ) &&
+    /[^A-Za-z0-9\s]/.test(
+      password,
+    )
+  );
 }
 
 function normalizeStatesCleared(
@@ -69,19 +92,21 @@ export async function activateStaffAccount(
   formData: FormData,
 ) {
   const password =
-    readFormValue(
+    readPasswordValue(
       formData,
       "password",
     );
 
   const confirmPassword =
-    readFormValue(
+    readPasswordValue(
       formData,
       "confirmPassword",
     );
 
   if (
-    password.length < 12 ||
+    !isStrongStaffPassword(
+      password,
+    ) ||
     password !== confirmPassword
   ) {
     redirect(
@@ -164,6 +189,10 @@ export async function activateStaffAccount(
     );
   }
 
+  /*
+   * Replace the administrator-issued temporary password with the
+   * employee's private permanent password.
+   */
   const {
     error: passwordError,
   } =
@@ -178,9 +207,10 @@ export async function activateStaffAccount(
   }
 
   /*
-   * Record the verified activation before granting active staff access.
-   * If the audit insert fails, the profile remains invited and the current
-   * invitation session can retry without granting staff authorization.
+   * Record verified activation before granting active staff authority.
+   *
+   * If audit persistence fails, staff_users remains invited and the account
+   * still receives no DueQuity staff permissions.
    */
   const activatedStaff: StaffUser = {
     id:
@@ -231,7 +261,7 @@ export async function activateStaffAccount(
         "success",
 
       detail:
-        "Staff invitation accepted, identity verified and password established.",
+        "Staff first-login activation authorized after identity verification and permanent password establishment.",
     });
   } catch {
     redirect(
@@ -274,6 +304,10 @@ export async function activateStaffAccount(
     );
   }
 
+  /*
+   * Force a fresh authentication using the employee's new permanent
+   * password. The temporary first-login session does not continue.
+   */
   await supabase.auth.signOut();
 
   redirect(
