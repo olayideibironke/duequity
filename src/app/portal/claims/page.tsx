@@ -50,37 +50,79 @@ export const dynamic = "force-dynamic";
 /* Helpers                                                                     */
 /* ========================================================================== */
 
-function stageLabel(stageKey: string): string {
+function stageLabel(
+  stageKey: string,
+): string {
   return stageKey
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replaceAll(
+      "_",
+      " ",
+    )
+    .replace(
+      /\b\w/g,
+      (character) =>
+        character.toUpperCase(),
+    );
 }
 
-async function loadClaimantClaims(claimantId: string): Promise<Claim[]> {
-  const conversions = await listOpportunityConversions();
+async function loadClaimantClaims(
+  claimantId: string,
+): Promise<Claim[]> {
+  const conversions =
+    await listOpportunityConversions();
 
-  const resolved = await Promise.all(
-    conversions.map(async (conversion) => {
-      const claimRecord = await resolveClaimRecord(conversion.claimId);
+  const resolved =
+    await Promise.all(
+      conversions.map(
+        async (
+          conversion,
+        ) => {
+          const claimRecord =
+            await resolveClaimRecord(
+              conversion.claimId,
+            );
 
-      if (!claimRecord) {
-        return undefined;
-      }
+          if (
+            !claimRecord
+          ) {
+            return undefined;
+          }
 
-      const onboarding = await getClaimantOnboarding(claimRecord.claim.id);
+          const onboarding =
+            await getClaimantOnboarding(
+              claimRecord.claim.id,
+            );
 
-      if (!onboarding || onboarding.claimant.id !== claimantId) {
-        return undefined;
-      }
+          if (
+            !onboarding ||
+            onboarding.claimant.id !==
+              claimantId
+          ) {
+            return undefined;
+          }
 
-      return claimRecord.claim;
-    }),
-  );
+          return claimRecord.claim;
+        },
+      ),
+    );
 
   return resolved
-    .flatMap((claim) => (claim ? [claim] : []))
-    .sort((left, right) =>
-      right.lastActivityAt.localeCompare(left.lastActivityAt),
+    .flatMap(
+      (
+        claim,
+      ) =>
+        claim
+          ? [claim]
+          : [],
+    )
+    .sort(
+      (
+        left,
+        right,
+      ) =>
+        right.lastActivityAt.localeCompare(
+          left.lastActivityAt,
+        ),
     );
 }
 
@@ -95,54 +137,104 @@ export default async function PortalClaimsPage() {
    * The session implementation will be replaced during the dedicated
    * authentication phase. This page does not accept a claimant ID from the
    * browser or query string.
+   *
+   * Claimants may view only claims Duequity has already linked to their verified
+   * claimant profile. Property checking and surplus discovery are staff-only
+   * capabilities and are not exposed through the claimant portal.
    */
-  const session = await resolveClaimantSession();
+  const session =
+    await resolveClaimantSession();
 
-  if (!session) {
-    return <ClaimantAuthenticationRequired />;
+  if (
+    !session
+  ) {
+    return (
+      <ClaimantAuthenticationRequired />
+    );
   }
 
-  const claims = await loadClaimantClaims(session.claimantId);
+  const claims =
+    await loadClaimantClaims(
+      session.claimantId,
+    );
 
-  const jurisdictionPackages = await listJurisdictionRulePackages();
+  const jurisdictionPackages =
+    await listJurisdictionRulePackages();
 
-  const jurisdictionById = new Map(
-    jurisdictionPackages
-      .filter(
-        (rulePackage) =>
-          rulePackage.status === "approved" && Boolean(rulePackage.rule),
-      )
-      .map((rulePackage) => [rulePackage.rule!.id, rulePackage.rule!]),
-  );
+  const jurisdictionById =
+    new Map(
+      jurisdictionPackages
+        .filter(
+          (
+            rulePackage,
+          ) =>
+            rulePackage.status ===
+              "approved" &&
+            Boolean(
+              rulePackage.rule,
+            ),
+        )
+        .map(
+          (
+            rulePackage,
+          ) => [
+            rulePackage.rule!.id,
+            rulePackage.rule!,
+          ],
+        ),
+    );
 
-  const claimViews = await Promise.all(
-    claims.map(async (claim) => {
-      const [property, documentReadiness] = await Promise.all([
-        getPropertyById(claim.propertyId),
+  const claimViews =
+    await Promise.all(
+      claims.map(
+        async (
+          claim,
+        ) => {
+          const [
+            property,
+            documentReadiness,
+          ] =
+            await Promise.all([
+              getPropertyById(
+                claim.propertyId,
+              ),
 
-        resolveClaimDocumentReadiness(claim.id),
-      ]);
+              resolveClaimDocumentReadiness(
+                claim.id,
+              ),
+            ]);
 
-      const jurisdiction = jurisdictionById.get(claim.jurisdictionId);
+          const jurisdiction =
+            jurisdictionById.get(
+              claim.jurisdictionId,
+            );
 
-      const outstandingRequests = documentReadiness.requiredRequests.filter(
-        (request) => request.status !== "accepted",
-      );
+          const outstandingRequests =
+            documentReadiness.requiredRequests.filter(
+              (
+                request,
+              ) =>
+                request.status !==
+                "accepted",
+            );
 
-      return {
-        claim,
-        property,
-        jurisdiction,
-        outstandingRequests,
-      };
-    }),
-  );
+          return {
+            claim,
+            property,
+            jurisdiction,
+            outstandingRequests,
+          };
+        },
+      ),
+    );
 
   return (
     <div className="space-y-6">
       {/* ================================================================ header */}
       <div>
-        <h1 className="text-2xl sm:text-3xl">Your claims</h1>
+        <h1 className="text-2xl sm:text-3xl">
+          Your claims
+        </h1>
 
         <p className="mt-1.5 text-md text-ink-600">
           Track every recovery claim Duequity is handling for you, including its
@@ -151,44 +243,73 @@ export default async function PortalClaimsPage() {
       </div>
 
       {/* ================================================================= empty */}
-      {claimViews.length === 0 ? (
+      {claimViews.length ===
+      0 ? (
         <EmptyState
           title="No claims yet"
           description="When an eligible recovery claim is opened and linked to your verified claimant profile, it will appear here."
-          action={<ButtonLink href="/check">Check a property</ButtonLink>}
         />
       ) : (
         <div className="space-y-4">
           {claimViews.map(
-            ({ claim, property, jurisdiction, outstandingRequests }) => {
+            ({
+              claim,
+              property,
+              jurisdiction,
+              outstandingRequests,
+            }) => {
               const recovery =
-                claim.confirmedRecovery ?? claim.estimatedRecovery;
+                claim.confirmedRecovery ??
+                claim.estimatedRecovery;
 
-              const propertyTitle = property
-                ? property.address.line1
-                : "Property record";
+              const propertyTitle =
+                property
+                  ? property.address
+                      .line1
+                  : "Property record";
 
-              const propertyLocation = property
-                ? [
-                    property.address.city,
-                    property.address.county
-                      ? `${property.address.county} County`
-                      : undefined,
-                    property.address.state,
-                  ]
-                    .filter(Boolean)
-                    .join(", ")
-                : "Property information unavailable";
+              const propertyLocation =
+                property
+                  ? [
+                      property.address
+                        .city,
+
+                      property.address
+                        .county
+                        ? `${property.address.county} County`
+                        : undefined,
+
+                      property.address
+                        .state,
+                    ]
+                      .filter(
+                        Boolean,
+                      )
+                      .join(
+                        ", ",
+                      )
+                  : "Property information unavailable";
 
               return (
-                <Card key={claim.id}>
+                <Card
+                  key={
+                    claim.id
+                  }
+                >
                   <CardHeader
                     eyebrow={
                       <span className="flex flex-wrap items-center gap-2">
-                        <Identifier>{claim.reference}</Identifier>
+                        <Identifier>
+                          {
+                            claim.reference
+                          }
+                        </Identifier>
 
                         <span className="text-ink-400">
-                          Opened {formatDate(claim.createdAt)}
+                          Opened{" "}
+                          {formatDate(
+                            claim.createdAt,
+                          )}
                         </span>
                       </span>
                     }
@@ -197,7 +318,9 @@ export default async function PortalClaimsPage() {
                         href={`/portal/claims/${claim.id}`}
                         className="rounded-xs transition-colors hover:text-accent-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
                       >
-                        {propertyTitle}
+                        {
+                          propertyTitle
+                        }
                       </Link>
                     }
                     description={
@@ -207,7 +330,11 @@ export default async function PortalClaimsPage() {
                     }
                     actions={
                       <StatusBadge
-                        status={CLAIM_STATUS[claim.status]}
+                        status={
+                          CLAIM_STATUS[
+                            claim.status
+                          ]
+                        }
                         audience="claimant"
                         size="md"
                       />
@@ -222,7 +349,9 @@ export default async function PortalClaimsPage() {
                         </p>
 
                         <p className="mt-1 text-sm font-semibold text-ink-900">
-                          {stageLabel(claim.stageKey)}
+                          {stageLabel(
+                            claim.stageKey,
+                          )}
                         </p>
                       </div>
 
@@ -232,11 +361,17 @@ export default async function PortalClaimsPage() {
                         </p>
 
                         <p className="mt-1">
-                          <MoneyInline fact={recovery} />
+                          <MoneyInline
+                            fact={
+                              recovery
+                            }
+                          />
                         </p>
 
                         <p className="mt-1 text-2xs text-ink-500">
-                          {claim.confirmedRecovery ? "Confirmed" : "Estimated"}
+                          {claim.confirmedRecovery
+                            ? "Confirmed"
+                            : "Estimated"}
                         </p>
                       </div>
 
@@ -245,15 +380,23 @@ export default async function PortalClaimsPage() {
                           Documents
                         </p>
 
-                        {outstandingRequests.length === 0 ? (
+                        {outstandingRequests.length ===
+                        0 ? (
                           <div className="mt-1">
-                            <Badge tone="positive">Current</Badge>
+                            <Badge tone="positive">
+                              Current
+                            </Badge>
                           </div>
                         ) : (
                           <>
                             <p className="mt-1 text-sm font-semibold text-caution-800">
-                              {outstandingRequests.length}{" "}
-                              {plural(outstandingRequests.length, "item")}{" "}
+                              {
+                                outstandingRequests.length
+                              }{" "}
+                              {plural(
+                                outstandingRequests.length,
+                                "item",
+                              )}{" "}
                               outstanding
                             </p>
 
@@ -265,7 +408,8 @@ export default async function PortalClaimsPage() {
                       </div>
                     </div>
 
-                    {outstandingRequests.length > 0 && (
+                    {outstandingRequests.length >
+                      0 && (
                       <div className="mt-4 rounded-md border border-caution-200 bg-caution-50 px-3.5 py-3">
                         <p className="text-2xs font-semibold uppercase tracking-wide text-caution-700">
                           Action needed from you
@@ -277,8 +421,13 @@ export default async function PortalClaimsPage() {
                         </p>
 
                         <p className="mt-1 text-xs text-ink-600">
-                          {outstandingRequests.length}{" "}
-                          {plural(outstandingRequests.length, "document")}{" "}
+                          {
+                            outstandingRequests.length
+                          }{" "}
+                          {plural(
+                            outstandingRequests.length,
+                            "document",
+                          )}{" "}
                           remaining.
                         </p>
                       </div>
@@ -288,7 +437,9 @@ export default async function PortalClaimsPage() {
                       <p className="mt-4 text-xs text-ink-500">
                         Filing deadline:{" "}
                         <span className="font-medium text-ink-700">
-                          {formatDate(claim.filingDeadline)}
+                          {formatDate(
+                            claim.filingDeadline,
+                          )}
                         </span>
                       </p>
                     )}
@@ -304,7 +455,11 @@ export default async function PortalClaimsPage() {
                     <ButtonLink
                       href={`/portal/claims/${claim.id}`}
                       size="sm"
-                      trailing={<IconArrowRight size={14} />}
+                      trailing={
+                        <IconArrowRight
+                          size={14}
+                        />
+                      }
                     >
                       Open claim
                     </ButtonLink>

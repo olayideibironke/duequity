@@ -48,6 +48,11 @@ export interface PublicRecordTableOwnerColumns {
   firstName?: number;
 
   /**
+   * Use when the source provides middle name or middle initial separately.
+   */
+  middleName?: number;
+
+  /**
    * Use when the source provides last name, company, trust, estate or another
    * owner value separately.
    */
@@ -184,8 +189,6 @@ export interface PublicRecordTableProfile {
 
   /**
    * Transport formats whose raw rows can use this profile.
-   *
-   * HTML, CSV and XLSX can eventually share the same normalized row engine.
    */
   supportedSourceFormats: readonly PublicRecordSourceFormat[];
 
@@ -231,7 +234,7 @@ export interface PublicRecordTableProfile {
 }
 
 /* ========================================================================== */
-/* Profiles                                                                    */
+/* Carroll County, Maryland                                                    */
 /* ========================================================================== */
 
 /**
@@ -385,11 +388,119 @@ const CARROLL_TAX_SALE_SURPLUS_PROFILE: PublicRecordTableProfile = {
 };
 
 /* ========================================================================== */
+/* DeKalb County, Georgia                                                      */
+/* ========================================================================== */
+
+/**
+ * DeKalb County Tax Commissioner Excess Funds List.
+ *
+ * Current official PDF column order:
+ *
+ * 0 Parcel ID
+ * 1 Excess Amount
+ * 2 Sale Date
+ * 3 First Name
+ * 4 Middle
+ * 5 Last Name
+ * 6 Situs Address
+ * 7 City
+ * 8 ZIP Code
+ *
+ * Parcel ID is mapped to both the generic propertyId field and the more
+ * descriptive parcelNumber field. It remains source-native evidence.
+ *
+ * This profile enables source parsing only. It does not approve Georgia or
+ * DeKalb County for claimant engagement, representation or payment routing.
+ */
+const DEKALB_EXCESS_FUNDS_PROFILE: PublicRecordTableProfile = {
+  key:
+    "ga-dekalb-excess-funds-pdf-table-v1",
+
+  parserKey:
+    "ga-dekalb-excess-funds-v1",
+
+  supportedSourceFormats: [
+    "pdf_table",
+  ],
+
+  minimumColumns:
+    9,
+
+  rowIdentity: {
+    column:
+      0,
+
+    pattern:
+      /^\d{2}\s+\d{3}\s+\d{2}\s+\d{3}$/,
+  },
+
+  owner: {
+    firstName:
+      3,
+
+    middleName:
+      4,
+
+    lastNameOrCompany:
+      5,
+  },
+
+  dates: {
+    saleDate:
+      2,
+
+    format:
+      "us_slash_date",
+  },
+
+  address: {
+    mode:
+      "structured",
+
+    addressLine1:
+      6,
+
+    city:
+      7,
+
+    postalCode:
+      8,
+  },
+
+  money: {
+    surplus:
+      1,
+  },
+
+  columns: {
+    propertyId:
+      0,
+
+    parcelNumber:
+      0,
+  },
+
+  recordKey: [
+    "property_id",
+    "sale_date",
+  ],
+
+  sourceReference: {
+    propertyId:
+      true,
+
+    caseNumber:
+      false,
+  },
+};
+
+/* ========================================================================== */
 /* Profile registry                                                            */
 /* ========================================================================== */
 
 const TABLE_PROFILES: readonly PublicRecordTableProfile[] = [
   CARROLL_TAX_SALE_SURPLUS_PROFILE,
+  DEKALB_EXCESS_FUNDS_PROFILE,
 ];
 
 /**

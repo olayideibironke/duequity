@@ -146,28 +146,31 @@ export default function AboutPage() {
             <Card>
               <CardBody>
                 <h2 className="font-sans text-base font-semibold text-ink-900">
-                  Check a property
+                  How Duequity works
                 </h2>
                 <p className="mt-1.5 text-sm text-ink-600">
-                  Free, and no personal information is required.
+                  Learn how we identify records, verify claimants and coordinate
+                  eligible surplus claims.
                 </p>
                 <ButtonLink
-                  href="/check"
+                  href="/how-it-works"
                   variant="primary"
                   accent
                   className="mt-4"
                 >
-                  Start a search
+                  View the process
                 </ButtonLink>
               </CardBody>
             </Card>
+
             <Card>
               <CardBody>
                 <h2 className="font-sans text-base font-semibold text-ink-900">
                   Speak to someone
                 </h2>
                 <p className="mt-1.5 text-sm text-ink-600">
-                  A specialist can talk through your situation.
+                  Contact Duequity if you have a question about our company or
+                  services.
                 </p>
                 <ButtonLink href="/contact" className="mt-4">
                   Contact Duequity

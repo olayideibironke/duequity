@@ -41,6 +41,9 @@ export const dynamic = "force-dynamic";
  * every surplus claim is currently eligible for intake or that every county
  * source has already been activated.
  *
+ * Property checking, surplus discovery, claimant-location research and related
+ * operational tools are staff-only capabilities and are not exposed here.
+ *
  * Operational eligibility remains controlled by Duequity's private
  * jurisdiction, source, payment-routing and compliance systems.
  */
@@ -98,25 +101,26 @@ export default async function StatesPage() {
           </h1>
 
           <p className="mt-4 max-w-3xl text-lg leading-relaxed text-ink-300">
-            Duequity maintains nationwide coverage across all 50 states and the
-            District of Columbia. Search our directory below to find your state
-            and county or county equivalent.
+            Duequity maintains nationwide geography across all 50 states and the
+            District of Columbia. Browse the directory below to view states,
+            counties and county-equivalent jurisdictions represented in our
+            national research system.
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link
-              href="/check"
-              className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
-            >
-              Check a property
-            </Link>
-
             <a
               href="tel:+18886692551"
-              className="inline-flex min-h-11 items-center justify-center rounded-md border border-ink-700 bg-ink-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:border-ink-500 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
+              className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
             >
               Call 1-888-669-2551
             </a>
+
+            <Link
+              href="/claimant/sign-in"
+              className="inline-flex min-h-11 items-center justify-center rounded-md border border-ink-700 bg-ink-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:border-ink-500 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
+            >
+              Claimant sign in
+            </Link>
           </div>
         </Container>
       </Section>
@@ -129,7 +133,9 @@ export default async function StatesPage() {
         <Container>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <CoverageStat
-              value={formatCount(stateCount)}
+              value={formatCount(
+                stateCount,
+              )}
               label="States"
               hint="All U.S. states are represented in Duequity's national geography system."
             />
@@ -155,7 +161,7 @@ export default async function StatesPage() {
             <CoverageStat
               value="Nationwide"
               label="Coverage directory"
-              hint="Property and claimant research can be organized nationally by jurisdiction."
+              hint="Duequity organizes jurisdiction research nationally while operational eligibility remains jurisdiction specific."
             />
           </div>
 
@@ -184,7 +190,7 @@ export default async function StatesPage() {
         <Container>
           <SectionIntro
             eyebrow="Nationwide directory"
-            title="Find your state and county"
+            title="Browse states and counties"
             lede="Select a state below to view every county or county-equivalent jurisdiction in Duequity's national geography registry."
           />
 
@@ -192,7 +198,9 @@ export default async function StatesPage() {
             {states.map(
               (state) => (
                 <details
-                  key={state.postalCode}
+                  key={
+                    state.postalCode
+                  }
                   className="group overflow-hidden rounded-lg border border-line bg-paper shadow-xs"
                 >
                   <summary className="flex cursor-pointer list-none items-center gap-4 px-4 py-4 transition-colors hover:bg-inset focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-500 sm:px-5">
@@ -213,7 +221,9 @@ export default async function StatesPage() {
                     </div>
 
                     <span className="shrink-0 rounded-md border border-line bg-inset px-2.5 py-1 font-mono text-xs font-semibold text-ink-600">
-                      {state.postalCode}
+                      {
+                        state.postalCode
+                      }
                     </span>
 
                     <span
@@ -227,17 +237,26 @@ export default async function StatesPage() {
                   <div className="border-t border-line bg-canvas px-4 py-4 sm:px-5">
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {state.counties.map(
-                        (county) => (
+                        (
+                          county,
+                        ) => (
                           <div
-                            key={county.geoid}
+                            key={
+                              county.geoid
+                            }
                             className="rounded-md border border-line bg-paper px-3.5 py-3"
                           >
                             <p className="text-sm font-medium text-ink-800">
-                              {county.name}
+                              {
+                                county.name
+                              }
                             </p>
 
                             <p className="mt-1 font-mono text-2xs text-ink-400">
-                              GEOID {county.geoid}
+                              GEOID{" "}
+                              {
+                                county.geoid
+                              }
                             </p>
                           </div>
                         ),
@@ -251,22 +270,22 @@ export default async function StatesPage() {
 
           <div className="mt-8 rounded-lg border border-line bg-paper p-5">
             <p className="text-sm font-semibold text-ink-900">
-              Don&apos;t see the answer you need?
+              Need help understanding Duequity&apos;s coverage?
             </p>
 
             <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-600">
-              Finding your state and county confirms that the jurisdiction is
-              represented in Duequity&apos;s nationwide directory. To check
-              whether we have a matching surplus record for a specific
-              property, start with the property search.
+              The directory above shows the jurisdictions represented in
+              Duequity&apos;s national geography system. Operational claim
+              eligibility is evaluated separately under the rules and available
+              official sources for each jurisdiction.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
-                href="/check"
+                href="/how-it-works"
                 className="inline-flex min-h-10 items-center justify-center rounded-md bg-accent-700 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
               >
-                Check a property
+                How Duequity works
               </Link>
 
               <a

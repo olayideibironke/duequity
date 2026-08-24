@@ -191,12 +191,10 @@ export function ClaimNextSteps({
             in a first message.
           </p>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-5">
             <ButtonLink href="/contact" variant="primary" accent>
               How to contact us
             </ButtonLink>
-
-            <ButtonLink href="/check">Search another property</ButtonLink>
           </div>
 
           <p className="mt-4 text-xs leading-relaxed text-ink-500">

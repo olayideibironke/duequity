@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { isUserRole } from "@/lib/session";
+import { staffLandingPath } from "@/lib/pro-access";
 
 import { getSupabaseAdmin } from "@/server/supabase-admin";
 import { resolveStaffSession } from "@/server/staff-session";
@@ -44,11 +45,6 @@ function readPasswordValue(
   const value =
     formData.get(name);
 
-  /*
-   * Passwords are never trimmed.
-   *
-   * A leading or trailing space may legitimately be part of a password.
-   */
   return typeof value === "string"
     ? value
     : "";
@@ -100,12 +96,6 @@ export async function signInStaff(
     );
   }
 
-  /*
-   * Authentication is not authorization.
-   *
-   * Resolve the staff profile independently from the authenticated
-   * Supabase identity before allowing either activation or staff access.
-   */
   const admin =
     getSupabaseAdmin();
 
@@ -162,13 +152,6 @@ export async function signInStaff(
     );
   }
 
-  /*
-   * First-login onboarding.
-   *
-   * An invited employee is authenticated but has no staff authority yet.
-   * Preserve the Supabase session and send the employee directly to the
-   * permanent-password activation gate.
-   */
   if (
     staff.status === "invited"
   ) {
@@ -182,9 +165,6 @@ export async function signInStaff(
     );
   }
 
-  /*
-   * Suspended and otherwise invalid staff states fail closed.
-   */
   if (
     staff.status !== "active"
   ) {
@@ -212,6 +192,8 @@ export async function signInStaff(
   );
 
   redirect(
-    "/pro",
+    staffLandingPath(
+      staffSession.user.role,
+    ),
   );
 }

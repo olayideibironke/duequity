@@ -16,9 +16,10 @@ import type {
  * Instead, DueQuity resolves the jurisdiction to an approved official source
  * definition and dispatches that source to a reusable parser/extractor.
  *
- * Current implementation:
+ * Current activated discovery sources:
  *
- *   - Carroll County, Maryland is the first activated source.
+ *   - Carroll County, Maryland
+ *   - DeKalb County, Georgia
  *
  * Future implementation:
  *
@@ -27,6 +28,11 @@ import type {
  *   - approved definitions are activated here or in the future persisted
  *     source registry
  *   - reusable HTML/PDF/CSV/XLSX/API extractors consume the definition
+ *
+ * Source activation here authorizes public-record discovery only.
+ *
+ * It does not approve claimant engagement, representation, payment routing,
+ * jurisdiction compliance or claimant onboarding.
  *
  * Unsupported jurisdictions fail closed.
  */
@@ -87,19 +93,16 @@ export interface PublicRecordSourceDefinition {
   sourceUrl: string;
 
   /**
-   * Source transport/format. Reusable extraction engines will dispatch from
-   * this value rather than from county-specific conditionals.
+   * Source transport/format. Reusable extraction engines dispatch from this
+   * value rather than from county-specific conditionals.
    */
   sourceFormat: PublicRecordSourceFormat;
 
   /**
    * Parser/extraction profile.
    *
-   * Parser profiles are reusable. A profile may serve multiple jurisdictions
-   * that publish the same source structure.
-   *
-   * Carroll currently uses its proven parser while the generic HTML-table
-   * extractor is introduced around it.
+   * Parser profiles describe source structure without placing jurisdiction
+   * routing or field interpretation inside the transport extractor.
    */
   parserKey: string;
 
@@ -112,7 +115,7 @@ export interface PublicRecordSourceDefinition {
   saleType: SaleType;
 
   /**
-   * Only active sources may be used by the operational county pull.
+   * Only active sources may be used by the county discovery pull.
    *
    * Research-required and disabled sources remain unavailable to harvesting.
    */
@@ -184,6 +187,53 @@ const PUBLIC_RECORD_SOURCE_REGISTRY: readonly PublicRecordSourceDefinition[] = [
     supportsBulkPull:
       true,
   },
+
+  {
+    key:
+      "ga-dekalb-excess-funds",
+
+    state:
+      "GA",
+
+    countyGeoid:
+      "13089",
+
+    countyName:
+      "DeKalb County",
+
+    sourceLevel:
+      "county",
+
+    sourceName:
+      "DeKalb County Tax Commissioner Excess Funds List",
+
+    sourceUrl:
+      "https://dekalbtax.org/wp-content/uploads/Excess-Funds-List.pdf",
+
+    sourceFormat:
+      "pdf_table",
+
+    parserKey:
+      "ga-dekalb-excess-funds-v1",
+
+    agencyName:
+      "DeKalb County Tax Commissioner",
+
+    agencyPhone:
+      "4042984000",
+
+    custodian:
+      "county_tax_collector",
+
+    saleType:
+      "tax_lien_foreclosure",
+
+    status:
+      "active",
+
+    supportsBulkPull:
+      true,
+  },
 ];
 
 /* ========================================================================== */
@@ -203,6 +253,13 @@ function normalizeState(
     "MARYLAND"
   ) {
     return "MD";
+  }
+
+  if (
+    normalized ===
+    "GEORGIA"
+  ) {
+    return "GA";
   }
 
   return normalized;
@@ -258,7 +315,7 @@ export function listPublicRecordSources(): PublicRecordSourceDefinition[] {
 }
 
 /**
- * Sources that are currently authorized for operational harvesting.
+ * Sources that are currently authorized for discovery harvesting.
  */
 export function listActivePublicRecordSources(): PublicRecordSourceDefinition[] {
   return PUBLIC_RECORD_SOURCE_REGISTRY
@@ -275,7 +332,7 @@ export function listActivePublicRecordSources(): PublicRecordSourceDefinition[] 
 }
 
 /**
- * Active sources for one state.
+ * Active discovery sources for one state.
  */
 export function listActivePublicRecordSourcesForState(
   state: string,
@@ -301,7 +358,7 @@ export function listActivePublicRecordSourcesForState(
 }
 
 /**
- * Resolve the activated official source for a jurisdiction.
+ * Resolve the activated official discovery source for a jurisdiction.
  *
  * Resolution priority:
  *
@@ -402,8 +459,8 @@ export function resolvePublicRecordSource(
 }
 
 /**
- * Whether DueQuity currently has an activated bulk source for the supplied
- * jurisdiction.
+ * Whether DueQuity currently has an activated bulk discovery source for the
+ * supplied jurisdiction.
  */
 export function publicRecordBulkPullAvailable(
   lookup: PublicRecordJurisdictionLookup,

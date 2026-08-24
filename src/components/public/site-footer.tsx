@@ -8,13 +8,16 @@ import { Logo } from "@/components/brand/logo";
  * the not a government agency statement and the free claim option are part of the
  * brand and are never buried, so they appear here in full on every public page,
  * at readable size rather than in grey fine print.
+ *
+ * Property checking, surplus discovery, claimant-location research and related
+ * operational tooling are staff-only capabilities and are not exposed through
+ * the public footer.
  */
 
 const COLUMNS = [
   {
     heading: "Product",
     links: [
-      { href: "/check", label: "Check a property" },
       { href: "/how-it-works", label: "How it works" },
       { href: "/fees", label: "Fees" },
       { href: "/portal", label: "Claimant portal" },

@@ -2,6 +2,10 @@ import "server-only";
 
 import ExcelJS from "exceljs";
 
+import {
+  extractPublicRecordPdfRows,
+} from "@/server/public-record-pdf-row-extractor";
+
 import type {
   PublicRecordSourcePayload,
 } from "@/server/public-record-source-fetcher";
@@ -37,9 +41,12 @@ import type {
  *   - HTML tables
  *   - CSV files
  *   - XLSX workbooks
+ *   - text-based PDF tables
  *
- * PDF, JSON/API and interactive portal extraction remain separate source
- * families and fail closed until their extraction engines are implemented.
+ * JSON/API extraction uses its own structured parser family.
+ *
+ * Interactive portal extraction remains a separate source family and fails
+ * closed until its extraction engine is implemented.
  */
 
 /* ========================================================================== */
@@ -379,7 +386,7 @@ function extractCsvRows(
       row.some(
         (value) =>
           value.length >
-          0,
+            0,
       )
     ) {
       rows.push(
@@ -635,14 +642,38 @@ export async function extractPublicRecordRows(
       return rows;
     }
 
-    case "pdf_table":
-      throw new Error(
-        `PDF table extraction for source ${source.key} is not implemented yet.`,
-      );
+    case "pdf_table": {
+      if (
+        payload.kind !==
+          "binary" ||
+        payload.format !==
+          "pdf_table"
+      ) {
+        throw new Error(
+          `Source ${source.key} did not return the expected PDF-table payload.`,
+        );
+      }
+
+      const rows =
+        await extractPublicRecordPdfRows(
+          payload.bytes,
+        );
+
+      if (
+        rows.length ===
+        0
+      ) {
+        throw new Error(
+          `${source.sourceName} did not contain any readable PDF table rows.`,
+        );
+      }
+
+      return rows;
+    }
 
     case "json_api":
       throw new Error(
-        `JSON/API row extraction for source ${source.key} is not implemented yet.`,
+        `JSON/API source ${source.key} uses the structured JSON parser and does not produce table rows.`,
       );
 
     case "web_portal":

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+
 import { ButtonLink, TextLink } from "@/components/ui/button";
 import {
   Container,
@@ -49,6 +50,10 @@ export const dynamic = "force-dynamic";
  * hidden. This page renders the recorded caps from persisted jurisdiction rule
  * packages, so the ceilings shown are the ceilings the platform enforces.
  *
+ * Public visitors cannot run property discovery or surplus-search tooling.
+ * Duequity staff performs discovery internally and contacts legitimate potential
+ * claimants before secure onboarding begins.
+ *
  * THE WORKED EXAMPLE IS AN ILLUSTRATION
  *
  * The calculation shown is arithmetic on hypothetical figures and is labelled as
@@ -58,49 +63,89 @@ export const dynamic = "force-dynamic";
  */
 
 /** Hypothetical approved amount used only to demonstrate the arithmetic. */
-const ILLUSTRATIVE_RECOVERY = 100_000_00;
+const ILLUSTRATIVE_RECOVERY =
+  100_000_00;
 
 /** Hypothetical success-fee rate used only to demonstrate the arithmetic. */
-const ILLUSTRATIVE_RATE = 0.12;
+const ILLUSTRATIVE_RATE =
+  0.12;
 
-const COVERAGE_LABEL: Record<PublicCoverageState, string> = {
-  open: "Open for claims",
-  attorney_required: "Attorney required",
-  under_review: "Under review",
-  not_available: "Not available",
+const COVERAGE_LABEL: Record<
+  PublicCoverageState,
+  string
+> = {
+  open:
+    "Open for claims",
+
+  attorney_required:
+    "Attorney required",
+
+  under_review:
+    "Under review",
+
+  not_available:
+    "Not available",
 };
 
 const COVERAGE_TONE: Record<
   PublicCoverageState,
-  "positive" | "counsel" | "neutral" | "critical"
+  | "positive"
+  | "counsel"
+  | "neutral"
+  | "critical"
 > = {
-  open: "positive",
-  attorney_required: "counsel",
-  under_review: "neutral",
-  not_available: "critical",
+  open:
+    "positive",
+
+  attorney_required:
+    "counsel",
+
+  under_review:
+    "neutral",
+
+  not_available:
+    "critical",
 };
 
-function jurisdictionTitle(jurisdiction: PublicJurisdiction): string {
+function jurisdictionTitle(
+  jurisdiction: PublicJurisdiction,
+): string {
   return jurisdiction.county
     ? `${jurisdiction.county}, ${jurisdiction.stateName}`
     : `${jurisdiction.stateName} (statewide)`;
 }
 
 export default async function FeesPage() {
-  const coverage = await resolvePublicCoverage();
+  const coverage =
+    await resolvePublicCoverage();
 
-  const jurisdictions = coverage.states.flatMap((state) => state.jurisdictions);
+  const jurisdictions =
+    coverage.states.flatMap(
+      (state) =>
+        state.jurisdictions,
+    );
 
-  const illustrativeFee = Math.round(ILLUSTRATIVE_RECOVERY * ILLUSTRATIVE_RATE);
+  const illustrativeFee =
+    Math.round(
+      ILLUSTRATIVE_RECOVERY *
+        ILLUSTRATIVE_RATE,
+    );
 
   return (
     <>
-      <Section tone="ink" size="sm">
+      <Section
+        tone="ink"
+        size="sm"
+      >
         <Container>
-          <p className="eyebrow text-accent-300">Fees</p>
+          <p className="eyebrow text-accent-300">
+            Fees
+          </p>
+
           <h1 className="mt-3 max-w-3xl text-3xl text-white sm:text-4xl">
             One disclosed fee, capped by your jurisdiction
           </h1>
+
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-ink-300">
             You will know the exact fee and how it is calculated before you sign
             anything. There are no application fees, no upfront costs, no
@@ -110,40 +155,57 @@ export default async function FeesPage() {
       </Section>
 
       {/* ============================================================ PRINCIPLES */}
-      <Section tone="paper" size="md">
+      <Section
+        tone="paper"
+        size="md"
+      >
         <Container>
           <div className="grid gap-6 lg:grid-cols-3">
             <Card>
               <CardBody>
-                <p className="eyebrow text-accent-700">No recovery</p>
+                <p className="eyebrow text-accent-700">
+                  No recovery
+                </p>
+
                 <p className="mt-2 text-3xl font-semibold text-ink-900">
                   No fee
                 </p>
+
                 <p className="mt-2 text-md leading-relaxed text-ink-600">
                   If your claim is not approved, or the agency pays nothing, you
                   owe Duequity nothing. We carry the research cost.
                 </p>
               </CardBody>
             </Card>
+
             <Card>
               <CardBody>
-                <p className="eyebrow text-accent-700">Nothing upfront</p>
+                <p className="eyebrow text-accent-700">
+                  Nothing upfront
+                </p>
+
                 <p className="mt-2 text-3xl font-semibold text-ink-900">
                   $0.00
                 </p>
+
                 <p className="mt-2 text-md leading-relaxed text-ink-600">
-                  No search fee, no application fee, no retainer, no
-                  subscription. We do not ask you for money before an agency has
-                  paid you.
+                  No application fee, no retainer and no subscription. Duequity
+                  does not ask a claimant for payment before recovery under an
+                  agreed service arrangement.
                 </p>
               </CardBody>
             </Card>
+
             <Card>
               <CardBody>
-                <p className="eyebrow text-accent-700">Capped by law</p>
+                <p className="eyebrow text-accent-700">
+                  Capped by law
+                </p>
+
                 <p className="mt-2 text-3xl font-semibold text-ink-900">
                   Jurisdiction set
                 </p>
+
                 <p className="mt-2 text-md leading-relaxed text-ink-600">
                   Where a state or county caps what a recovery service may
                   charge, our system enforces that cap. It cannot be exceeded by
@@ -156,7 +218,10 @@ export default async function FeesPage() {
       </Section>
 
       {/* ========================================================= WORKED EXAMPLE */}
-      <Section tone="canvas" size="md">
+      <Section
+        tone="canvas"
+        size="md"
+      >
         <Container>
           <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_28rem] lg:gap-16">
             <div>
@@ -173,6 +238,7 @@ export default async function FeesPage() {
                   purpose: it is here to show the order of operations, not to
                   suggest a typical recovery.
                 </p>
+
                 <p>
                   The ceiling that applies to you is the one recorded for your
                   jurisdiction. In a jurisdiction with a lower ceiling, the
@@ -182,7 +248,11 @@ export default async function FeesPage() {
                 </p>
               </Prose>
 
-              <Callout tone="neutral" className="mt-6" title="On the fee cap">
+              <Callout
+                tone="neutral"
+                className="mt-6"
+                title="On the fee cap"
+              >
                 <p>
                   A cap is not a target. Where a matter is straightforward we
                   may charge less than the ceiling, and the figure in your
@@ -211,15 +281,25 @@ export default async function FeesPage() {
                 description="Hypothetical figures shown to explain the calculation."
                 eyebrow="Illustration only"
               />
+
               <CardBody className="space-y-0">
                 <Line
                   label="Amount approved by the agency"
-                  value={formatCents(ILLUSTRATIVE_RECOVERY)}
+                  value={
+                    formatCents(
+                      ILLUSTRATIVE_RECOVERY,
+                    )
+                  }
                   strong
                 />
+
                 <Line
                   label="Paid by the agency directly to the claimant"
-                  value={formatCents(ILLUSTRATIVE_RECOVERY)}
+                  value={
+                    formatCents(
+                      ILLUSTRATIVE_RECOVERY,
+                    )
+                  }
                   muted
                 />
 
@@ -228,15 +308,29 @@ export default async function FeesPage() {
                 <p className="eyebrow mb-2 text-ink-500">
                   Duequity service fee
                 </p>
-                <Line label="Fee model" value="Capped success fee" muted />
+
                 <Line
-                  label="Illustrative rate"
-                  value={`${(ILLUSTRATIVE_RATE * 100).toFixed(1)}%`}
+                  label="Fee model"
+                  value="Capped success fee"
                   muted
                 />
+
+                <Line
+                  label="Illustrative rate"
+                  value={`${(
+                    ILLUSTRATIVE_RATE *
+                    100
+                  ).toFixed(1)}%`}
+                  muted
+                />
+
                 <Line
                   label="Fee charged"
-                  value={formatCents(illustrativeFee)}
+                  value={
+                    formatCents(
+                      illustrativeFee,
+                    )
+                  }
                   strong
                   negative
                 />
@@ -247,8 +341,12 @@ export default async function FeesPage() {
                   <p className="text-base font-semibold text-ink-900">
                     Net to the claimant
                   </p>
+
                   <p className="tnum text-2xl font-semibold text-accent-700">
-                    {formatCents(ILLUSTRATIVE_RECOVERY - illustrativeFee)}
+                    {formatCents(
+                      ILLUSTRATIVE_RECOVERY -
+                        illustrativeFee,
+                    )}
                   </p>
                 </div>
 
@@ -257,9 +355,18 @@ export default async function FeesPage() {
                     <span className="font-semibold text-ink-800">
                       How this was calculated:
                     </span>{" "}
-                    {(ILLUSTRATIVE_RATE * 100).toFixed(1)}% of{" "}
-                    {formatCents(ILLUSTRATIVE_RECOVERY)}, subject to whatever
-                    ceiling the recorded jurisdiction rule imposes.
+                    {(
+                      ILLUSTRATIVE_RATE *
+                      100
+                    ).toFixed(
+                      1,
+                    )}
+                    % of{" "}
+                    {formatCents(
+                      ILLUSTRATIVE_RECOVERY,
+                    )}
+                    , subject to whatever ceiling the recorded jurisdiction rule
+                    imposes.
                   </p>
                 </div>
 
@@ -278,7 +385,10 @@ export default async function FeesPage() {
       </Section>
 
       {/* ============================================================ BY JURISDICTION */}
-      <Section tone="paper" size="md">
+      <Section
+        tone="paper"
+        size="md"
+      >
         <Container>
           <SectionIntro
             eyebrow="Recorded rules"
@@ -286,7 +396,8 @@ export default async function FeesPage() {
             lede="Fee rules are recorded per jurisdiction and enforced by the platform. Where a jurisdiction is not cleared for intake, no fee arrangement is available at all."
           />
 
-          {jurisdictions.length === 0 ? (
+          {jurisdictions.length ===
+          0 ? (
             <div className="mt-8">
               <EmptyState
                 title="No jurisdiction fee rules are published yet"
@@ -300,57 +411,138 @@ export default async function FeesPage() {
                 <TableRegion label="Fee rules by jurisdiction">
                   <Table caption="Permitted fee models and recorded caps by jurisdiction">
                     <THead>
-                      <TH>Jurisdiction</TH>
-                      <TH>Permitted models</TH>
-                      <TH align="right">Percentage cap</TH>
-                      <TH align="right">Amount cap</TH>
-                      <TH align="right">Cancellation</TH>
-                      <TH>Intake position</TH>
+                      <TH>
+                        Jurisdiction
+                      </TH>
+
+                      <TH>
+                        Permitted models
+                      </TH>
+
+                      <TH align="right">
+                        Percentage cap
+                      </TH>
+
+                      <TH align="right">
+                        Amount cap
+                      </TH>
+
+                      <TH align="right">
+                        Cancellation
+                      </TH>
+
+                      <TH>
+                        Intake position
+                      </TH>
                     </THead>
+
                     <TBody>
-                      {jurisdictions.map((jurisdiction) => (
-                        <TR key={jurisdiction.packageId}>
-                          <TD className="font-medium text-ink-900">
-                            {jurisdictionTitle(jurisdiction)}
-                          </TD>
-                          <TD>
-                            <span className="text-ink-600">
-                              {jurisdiction.permittedFeeModels.length > 0
-                                ? jurisdiction.permittedFeeModels
-                                    .map((model) => FEE_MODEL_LABEL[model])
-                                    .join(", ")
-                                : "None recorded"}
-                            </span>
-                          </TD>
-                          <TD align="right" numeric>
-                            {jurisdiction.feeCapPercent !== undefined ? (
-                              `${(jurisdiction.feeCapPercent * 100).toFixed(1)}%`
-                            ) : (
-                              <span className="text-ink-400">Not recorded</span>
-                            )}
-                          </TD>
-                          <TD align="right" numeric>
-                            {jurisdiction.feeCapAmount !== undefined ? (
-                              formatCents(jurisdiction.feeCapAmount)
-                            ) : (
-                              <span className="text-ink-400">Not recorded</span>
-                            )}
-                          </TD>
-                          <TD align="right" numeric>
-                            {jurisdiction.cancellationPeriodDays !==
-                            undefined ? (
-                              `${jurisdiction.cancellationPeriodDays} days`
-                            ) : (
-                              <span className="text-ink-400">Not recorded</span>
-                            )}
-                          </TD>
-                          <TD>
-                            <Badge tone={COVERAGE_TONE[jurisdiction.coverage]}>
-                              {COVERAGE_LABEL[jurisdiction.coverage]}
-                            </Badge>
-                          </TD>
-                        </TR>
-                      ))}
+                      {jurisdictions.map(
+                        (
+                          jurisdiction,
+                        ) => (
+                          <TR
+                            key={
+                              jurisdiction.packageId
+                            }
+                          >
+                            <TD className="font-medium text-ink-900">
+                              {jurisdictionTitle(
+                                jurisdiction,
+                              )}
+                            </TD>
+
+                            <TD>
+                              <span className="text-ink-600">
+                                {jurisdiction
+                                  .permittedFeeModels
+                                  .length >
+                                0
+                                  ? jurisdiction.permittedFeeModels
+                                      .map(
+                                        (
+                                          model,
+                                        ) =>
+                                          FEE_MODEL_LABEL[
+                                            model
+                                          ],
+                                      )
+                                      .join(
+                                        ", ",
+                                      )
+                                  : "None recorded"}
+                              </span>
+                            </TD>
+
+                            <TD
+                              align="right"
+                              numeric
+                            >
+                              {jurisdiction.feeCapPercent !==
+                              undefined ? (
+                                `${(
+                                  jurisdiction.feeCapPercent *
+                                  100
+                                ).toFixed(
+                                  1,
+                                )}%`
+                              ) : (
+                                <span className="text-ink-400">
+                                  Not recorded
+                                </span>
+                              )}
+                            </TD>
+
+                            <TD
+                              align="right"
+                              numeric
+                            >
+                              {jurisdiction.feeCapAmount !==
+                              undefined ? (
+                                formatCents(
+                                  jurisdiction.feeCapAmount,
+                                )
+                              ) : (
+                                <span className="text-ink-400">
+                                  Not recorded
+                                </span>
+                              )}
+                            </TD>
+
+                            <TD
+                              align="right"
+                              numeric
+                            >
+                              {jurisdiction.cancellationPeriodDays !==
+                              undefined ? (
+                                `${jurisdiction.cancellationPeriodDays} days`
+                              ) : (
+                                <span className="text-ink-400">
+                                  Not recorded
+                                </span>
+                              )}
+                            </TD>
+
+                            <TD>
+                              <Badge
+                                tone={
+                                  COVERAGE_TONE[
+                                    jurisdiction
+                                      .coverage
+                                  ]
+                                }
+                              >
+                                {
+                                  COVERAGE_LABEL[
+                                    jurisdiction
+                                      .coverage
+                                  ]
+                                }
+                              </Badge>
+                            </TD>
+                          </TR>
+                        ),
+                      )}
                     </TBody>
                   </Table>
                 </TableRegion>
@@ -359,40 +551,87 @@ export default async function FeesPage() {
               {/* Mobile list */}
               <div className="md:hidden">
                 <RecordList>
-                  {jurisdictions.map((jurisdiction) => (
-                    <RecordListItem
-                      key={jurisdiction.packageId}
-                      title={jurisdictionTitle(jurisdiction)}
-                      subtitle={
-                        jurisdiction.permittedFeeModels.length > 0
-                          ? jurisdiction.permittedFeeModels
-                              .map((model) => FEE_MODEL_LABEL[model])
-                              .join(", ")
-                          : "No fee model recorded"
-                      }
-                      status={
-                        <Badge tone={COVERAGE_TONE[jurisdiction.coverage]}>
-                          {COVERAGE_LABEL[jurisdiction.coverage]}
-                        </Badge>
-                      }
-                      facts={[
-                        {
-                          label: "Percentage cap",
-                          value:
-                            jurisdiction.feeCapPercent !== undefined
-                              ? `${(jurisdiction.feeCapPercent * 100).toFixed(1)}%`
-                              : "Not recorded",
-                        },
-                        {
-                          label: "Amount cap",
-                          value:
-                            jurisdiction.feeCapAmount !== undefined
-                              ? formatCents(jurisdiction.feeCapAmount)
-                              : "Not recorded",
-                        },
-                      ]}
-                    />
-                  ))}
+                  {jurisdictions.map(
+                    (
+                      jurisdiction,
+                    ) => (
+                      <RecordListItem
+                        key={
+                          jurisdiction.packageId
+                        }
+                        title={
+                          jurisdictionTitle(
+                            jurisdiction,
+                          )
+                        }
+                        subtitle={
+                          jurisdiction
+                            .permittedFeeModels
+                            .length >
+                          0
+                            ? jurisdiction.permittedFeeModels
+                                .map(
+                                  (
+                                    model,
+                                  ) =>
+                                    FEE_MODEL_LABEL[
+                                      model
+                                    ],
+                                )
+                                .join(
+                                  ", ",
+                                )
+                            : "No fee model recorded"
+                        }
+                        status={
+                          <Badge
+                            tone={
+                              COVERAGE_TONE[
+                                jurisdiction
+                                  .coverage
+                              ]
+                            }
+                          >
+                            {
+                              COVERAGE_LABEL[
+                                jurisdiction
+                                  .coverage
+                              ]
+                            }
+                          </Badge>
+                        }
+                        facts={[
+                          {
+                            label:
+                              "Percentage cap",
+
+                            value:
+                              jurisdiction.feeCapPercent !==
+                              undefined
+                                ? `${(
+                                    jurisdiction.feeCapPercent *
+                                    100
+                                  ).toFixed(
+                                    1,
+                                  )}%`
+                                : "Not recorded",
+                          },
+                          {
+                            label:
+                              "Amount cap",
+
+                            value:
+                              jurisdiction.feeCapAmount !==
+                              undefined
+                                ? formatCents(
+                                    jurisdiction.feeCapAmount,
+                                  )
+                                : "Not recorded",
+                          },
+                        ]}
+                      />
+                    ),
+                  )}
                 </RecordList>
               </div>
             </Card>
@@ -402,13 +641,19 @@ export default async function FeesPage() {
             Recorded rules are reviewed against official sources before a
             jurisdiction is activated, and the review date is shown on each
             jurisdiction page. See{" "}
-            <TextLink href="/states">where we operate</TextLink>.
+            <TextLink href="/states">
+              where we operate
+            </TextLink>
+            .
           </p>
         </Container>
       </Section>
 
       {/* =============================================================== THE FREE OPTION */}
-      <Section tone="canvas" size="md">
+      <Section
+        tone="canvas"
+        size="md"
+      >
         <Container width="reading">
           <SectionIntro
             eyebrow="Your alternative"
@@ -421,32 +666,44 @@ export default async function FeesPage() {
               If you want to pursue a claim on your own, the process generally
               looks like this:
             </p>
+
             <ol>
               <li>
                 Identify which agency holds the funds. This is usually the clerk
                 of court, the county treasurer or tax collector, the sheriff,
                 the trustee, or the state unclaimed property office.
               </li>
+
               <li>
                 Ask that agency for its surplus or excess proceeds claim
                 procedure and its claim form.
               </li>
+
               <li>
                 Gather the documents on their list, which typically includes
                 identification and proof of former ownership.
               </li>
-              <li>Submit the claim by the method the agency specifies.</li>
-              <li>Follow up, and keep a record of every contact.</li>
+
+              <li>
+                Submit the claim by the method the agency specifies.
+              </li>
+
+              <li>
+                Follow up, and keep a record of every contact.
+              </li>
             </ol>
+
             <p>
               <strong>
-                We will help you do this even if you do not hire us.
+                We will explain the direct claim option even if you do not hire
+                us.
               </strong>{" "}
-              If you search a property on Duequity and decide to proceed alone,
-              we will tell you which agency holds the funds and give you their
-              published contact details. That is part of how we operate, not a
-              concession.
+              If Duequity identifies a potential claim and contacts you, we will
+              identify the responsible agency and provide its published contact
+              information so you can independently verify the record and decide
+              whether to pursue the claim yourself.
             </p>
+
             <p>
               What we offer instead is the work: locating the record in the
               first place, jurisdiction expertise, obtaining documents that are
@@ -463,7 +720,10 @@ export default async function FeesPage() {
       </Section>
 
       {/* ================================================================ WHAT WE DONT DO */}
-      <Section tone="paper" size="md">
+      <Section
+        tone="paper"
+        size="md"
+      >
         <Container>
           <SectionIntro
             eyebrow="Boundaries"
@@ -474,62 +734,112 @@ export default async function FeesPage() {
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               {
-                title: "Buy your claim",
-                body: "We do not purchase surplus claims or take assignments of your rights at a discount to their value.",
+                title:
+                  "Buy your claim",
+
+                body:
+                  "We do not purchase surplus claims or take assignments of your rights at a discount to their value.",
               },
               {
-                title: "Hold your money",
-                body: "We are never a payee on an agency disbursement. We do not deposit or endorse claimant instruments.",
+                title:
+                  "Hold your money",
+
+                body:
+                  "We are never a payee on an agency disbursement. We do not deposit or endorse claimant instruments.",
               },
               {
-                title: "Charge a fee you have not seen",
-                body: "The fee, its basis and its cap are in your agreement before you sign, and on your closing statement afterwards.",
+                title:
+                  "Charge a fee you have not seen",
+
+                body:
+                  "The fee, its basis and its cap are in your agreement before you sign, and on your closing statement afterwards.",
               },
               {
-                title: "Share in attorney fees",
-                body: "Where counsel is needed you engage them directly. We take no part of their fee and no referral payment.",
+                title:
+                  "Share in attorney fees",
+
+                body:
+                  "Where counsel is needed you engage them directly. We take no part of their fee and no referral payment.",
               },
               {
-                title: "Guarantee a recovery",
-                body: "No one can. Agencies decide claims, liens can consume a surplus, and deadlines can already have passed.",
+                title:
+                  "Guarantee a recovery",
+
+                body:
+                  "No one can. Agencies decide claims, liens can consume a surplus, and deadlines can already have passed.",
               },
               {
-                title: "Pressure you to sign",
-                body: "No countdown timers, no expiring offers, no implication that a delay costs you the money.",
+                title:
+                  "Pressure you to sign",
+
+                body:
+                  "No countdown timers, no expiring offers, no implication that a delay costs you the money.",
               },
-            ].map((item) => (
-              <div
-                key={item.title}
-                className="rounded-lg border border-line bg-inset p-4"
-              >
-                <div className="flex items-start gap-2.5">
-                  <Badge tone="critical" className="mt-0.5">
-                    Never
-                  </Badge>
+            ].map(
+              (item) => (
+                <div
+                  key={
+                    item.title
+                  }
+                  className="rounded-lg border border-line bg-inset p-4"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <Badge
+                      tone="critical"
+                      className="mt-0.5"
+                    >
+                      Never
+                    </Badge>
+                  </div>
+
+                  <h3 className="mt-2.5 font-sans text-base font-semibold text-ink-900">
+                    {item.title}
+                  </h3>
+
+                  <p className="mt-1.5 text-sm leading-relaxed text-ink-600">
+                    {item.body}
+                  </p>
                 </div>
-                <h3 className="mt-2.5 font-sans text-base font-semibold text-ink-900">
-                  {item.title}
-                </h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-ink-600">
-                  {item.body}
-                </p>
-              </div>
-            ))}
+              ),
+            )}
           </div>
         </Container>
       </Section>
 
-      <Section tone="sunken" size="sm">
-        <Container width="narrow" className="text-center">
-          <h2 className="text-2xl">See whether there is anything to claim</h2>
+      <Section
+        tone="sunken"
+        size="sm"
+      >
+        <Container
+          width="narrow"
+          className="text-center"
+        >
+          <h2 className="text-2xl">
+            Understand the process before you decide
+          </h2>
+
           <p className="mt-3 text-lg leading-relaxed text-ink-600">
-            No fee applies to a search, and no agreement is signed until you
-            have seen the record and the exact fee that would apply to your
-            jurisdiction.
+            If Duequity contacts you about a potential surplus claim, you will
+            be shown the source, responsible agency, applicable fee and
+            jurisdiction-specific requirements before deciding whether to work
+            with us.
           </p>
-          <div className="mt-6 flex justify-center">
-            <ButtonLink href="/check" variant="primary" accent size="lg">
-              Check a property
+
+          <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+            <ButtonLink
+              href="/how-it-works"
+              variant="primary"
+              accent
+              size="lg"
+            >
+              How Duequity works
+            </ButtonLink>
+
+            <ButtonLink
+              href="/contact"
+              size="lg"
+            >
+              Contact Duequity
             </ButtonLink>
           </div>
         </Container>
@@ -555,16 +865,23 @@ function Line({
     <div className="flex items-baseline justify-between gap-4 py-1.5">
       <span
         className={
-          strong ? "text-base font-medium text-ink-900" : "text-sm text-ink-600"
+          strong
+            ? "text-base font-medium text-ink-900"
+            : "text-sm text-ink-600"
         }
       >
         {negative && (
-          <span aria-hidden="true" className="mr-1 text-ink-400">
+          <span
+            aria-hidden="true"
+            className="mr-1 text-ink-400"
+          >
             less
           </span>
         )}
+
         {label}
       </span>
+
       <span
         className={
           muted
