@@ -1,11 +1,16 @@
-import { createServerClient } from "@supabase/ssr";
+import {
+  createServerClient,
+} from "@supabase/ssr";
+
 import {
   NextResponse,
   type NextRequest,
 } from "next/server";
 
 import {
+  canAccessDiscoveredRecords,
   canAccessProPath,
+  isDiscoveredRecordsPath,
   staffLandingPath,
 } from "@/lib/pro-access";
 
@@ -14,28 +19,43 @@ import {
   permissionsFor,
 } from "@/lib/session";
 
-import { getSupabaseAdmin } from "@/server/supabase-admin";
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
 
 /**
  * SUPABASE AUTH SESSION + PRO ROUTE GATE
  *
  * Keeps the existing Supabase cookie-refresh architecture.
  *
- * For /pro routes only:
- * - requires a real authenticated Supabase identity
- * - requires a matching active staff_users row
- * - enforces DueQuity role permissions
+ * Ordinary /pro routes:
  *
- * The local development adapter remains available only when explicitly enabled.
+ * - require authenticated active staff
+ * - enforce role/permission access
+ *
+ * Discovered Records:
+ *
+ * - requires the exact authorized administrator identity
+ * - requires role = super_admin
+ * - applies to pages AND /api/pro/discovered-records/*
+ * - cannot be bypassed by the local development session adapter
  */
+
+/* ========================================================================== */
+/* Environment                                                                 */
+/* ========================================================================== */
 
 function requireEnvironmentVariable(
   name: string,
 ): string {
   const value =
-    process.env[name]?.trim();
+    process.env[
+      name
+    ]?.trim();
 
-  if (!value) {
+  if (
+    !value
+  ) {
     throw new Error(
       `Missing required environment variable: ${name}`,
     );
@@ -46,14 +66,65 @@ function requireEnvironmentVariable(
 
 function localDevelopmentAdapterActive(): boolean {
   return (
-    process.env.NODE_ENV === "development" &&
-    process.env.DUEQUITY_LOCAL_DEV_SESSION === "enabled"
+    process.env.NODE_ENV ===
+      "development" &&
+    process.env.DUEQUITY_LOCAL_DEV_SESSION ===
+      "enabled"
   );
 }
 
+/* ========================================================================== */
+/* Paths                                                                       */
+/* ========================================================================== */
+
+function isDiscoveredRecordsApiPath(
+  pathname: string,
+): boolean {
+  return (
+    pathname ===
+      "/api/pro/discovered-records" ||
+    pathname.startsWith(
+      "/api/pro/discovered-records/",
+    )
+  );
+}
+
+/* ========================================================================== */
+/* Cookie-preserving responses                                                 */
+/* ========================================================================== */
+
+function copySessionCookies(
+  source:
+    NextResponse,
+  target:
+    NextResponse,
+): NextResponse {
+  for (
+    const cookie of
+      source.cookies.getAll()
+  ) {
+    const {
+      name,
+      value,
+      ...options
+    } =
+      cookie;
+
+    target.cookies.set(
+      name,
+      value,
+      options,
+    );
+  }
+
+  return target;
+}
+
 function redirectWithSessionCookies(
-  request: NextRequest,
-  response: NextResponse,
+  request:
+    NextRequest,
+  response:
+    NextResponse,
   pathname: string,
 ): NextResponse {
   const url =
@@ -65,32 +136,45 @@ function redirectWithSessionCookies(
   url.search =
     "";
 
-  const redirectResponse =
-    NextResponse.redirect(url);
-
-  /*
-   * Preserve any refreshed Supabase Auth cookies.
-   */
-  for (
-    const cookie
-    of response.cookies.getAll()
-  ) {
-    const {
-      name,
-      value,
-      ...options
-    } =
-      cookie;
-
-    redirectResponse.cookies.set(
-      name,
-      value,
-      options,
-    );
-  }
-
-  return redirectResponse;
+  return copySessionCookies(
+    response,
+    NextResponse.redirect(
+      url,
+    ),
+  );
 }
+
+function jsonWithSessionCookies(
+  response:
+    NextResponse,
+  message: string,
+  status: number,
+): NextResponse {
+  return copySessionCookies(
+    response,
+    NextResponse.json(
+      {
+        ok:
+          false,
+
+        error:
+          message,
+      },
+      {
+        status,
+
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      },
+    ),
+  );
+}
+
+/* ========================================================================== */
+/* Proxy                                                                       */
+/* ========================================================================== */
 
 export async function proxy(
   request: NextRequest,
@@ -124,8 +208,8 @@ export async function proxy(
               const {
                 name,
                 value,
-              }
-              of cookiesToSet
+              } of
+                cookiesToSet
             ) {
               request.cookies.set(
                 name,
@@ -143,8 +227,8 @@ export async function proxy(
                 name,
                 value,
                 options,
-              }
-              of cookiesToSet
+              } of
+                cookiesToSet
             ) {
               response.cookies.set(
                 name,
@@ -157,10 +241,10 @@ export async function proxy(
               const [
                 name,
                 value,
-              ]
-              of Object.entries(
-                headers,
-              )
+              ] of
+                Object.entries(
+                  headers,
+                )
             ) {
               response.headers.set(
                 name,
@@ -173,44 +257,83 @@ export async function proxy(
     );
 
   /*
-   * Preserve the existing Supabase SSR session-refresh behavior.
+   * Preserve Supabase SSR cookie/session refresh.
    */
   const {
-    data: claimsData,
-    error: claimsError,
+    data:
+      claimsData,
+    error:
+      claimsError,
   } =
     await supabase.auth.getClaims();
 
   const pathname =
     request.nextUrl.pathname;
 
+  const proPage =
+    pathname.startsWith(
+      "/pro",
+    );
+
+  const discoveredPage =
+    isDiscoveredRecordsPath(
+      pathname,
+    );
+
+  const discoveredApi =
+    isDiscoveredRecordsApiPath(
+      pathname,
+    );
+
   /*
-   * Nothing outside DueQuity Pro needs role-route authorization here.
+   * Nothing outside Pro or the protected discovery API family requires this
+   * role-route authorization layer.
    */
   if (
-    !pathname.startsWith(
-      "/pro",
-    )
+    !proPage &&
+    !discoveredApi
   ) {
     return response;
   }
 
   /*
-   * Preserve the existing development-only staff adapter.
+   * The development adapter may continue to support ordinary local Pro pages.
+   *
+   * It does NOT bypass Discovered Records. Discovery always requires the real
+   * authorized Supabase administrator identity.
    */
   if (
-    localDevelopmentAdapterActive()
+    localDevelopmentAdapterActive() &&
+    !discoveredPage &&
+    !discoveredApi
   ) {
     return response;
   }
 
   const authUserId =
     !claimsError &&
-    typeof claimsData?.claims?.sub === "string"
-      ? claimsData.claims.sub
+    typeof claimsData
+      ?.claims
+      ?.sub ===
+      "string"
+      ? claimsData
+          .claims
+          .sub
       : "";
 
-  if (!authUserId) {
+  if (
+    !authUserId
+  ) {
+    if (
+      discoveredApi
+    ) {
+      return jsonWithSessionCookies(
+        response,
+        "Administrator authentication is required.",
+        401,
+      );
+    }
+
     return redirectWithSessionCookies(
       request,
       response,
@@ -219,9 +342,7 @@ export async function proxy(
   }
 
   /*
-   * Use DueQuity's existing privileged server client.
-   *
-   * No new Supabase architecture is introduced here.
+   * Resolve the trusted staff profile by the authenticated Supabase user ID.
    */
   const admin =
     getSupabaseAdmin();
@@ -231,9 +352,11 @@ export async function proxy(
     error,
   } =
     await admin
-      .from("staff_users")
+      .from(
+        "staff_users",
+      )
       .select(
-        "id, role, status",
+        "id, email, role, status",
       )
       .eq(
         "id",
@@ -245,6 +368,16 @@ export async function proxy(
     error ||
     !data
   ) {
+    if (
+      discoveredApi
+    ) {
+      return jsonWithSessionCookies(
+        response,
+        "Administrator authentication is required.",
+        401,
+      );
+    }
+
     return redirectWithSessionCookies(
       request,
       response,
@@ -253,17 +386,67 @@ export async function proxy(
   }
 
   if (
-    data.status !== "active" ||
+    data.status !==
+      "active" ||
     !isUserRole(
       data.role,
     ) ||
-    data.role === "claimant"
+    data.role ===
+      "claimant"
   ) {
+    if (
+      discoveredApi
+    ) {
+      return jsonWithSessionCookies(
+        response,
+        "Administrator authentication is required.",
+        401,
+      );
+    }
+
     return redirectWithSessionCookies(
       request,
       response,
       "/staff/sign-in",
     );
+  }
+
+  /*
+   * Exact Discovered Records administrator gate.
+   *
+   * This happens before ordinary role authorization and before any
+   * super-admin shortcut.
+   */
+  if (
+    discoveredPage ||
+    discoveredApi
+  ) {
+    if (
+      !canAccessDiscoveredRecords(
+        data.role,
+        data.email,
+      )
+    ) {
+      if (
+        discoveredApi
+      ) {
+        return jsonWithSessionCookies(
+          response,
+          "Discovered Records is restricted to the DueQuity administrator.",
+          403,
+        );
+      }
+
+      return redirectWithSessionCookies(
+        request,
+        response,
+        staffLandingPath(
+          data.role,
+        ),
+      );
+    }
+
+    return response;
   }
 
   const permissions =
@@ -276,6 +459,7 @@ export async function proxy(
       data.role,
       permissions,
       pathname,
+      data.email,
     )
   ) {
     return redirectWithSessionCookies(

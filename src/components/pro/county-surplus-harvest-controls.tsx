@@ -24,7 +24,8 @@ export interface StateHarvestOption {
 
   name: string;
 
-  counties: CountyHarvestOption[];
+  counties:
+    CountyHarvestOption[];
 }
 
 interface CountyHarvestResponse {
@@ -62,7 +63,8 @@ interface CountyHarvestResponse {
 export function CountySurplusHarvestControls({
   states,
 }: {
-  states: StateHarvestOption[];
+  states:
+    StateHarvestOption[];
 }) {
   const router =
     useRouter();
@@ -103,7 +105,9 @@ export function CountySurplusHarvestControls({
     error,
     setError,
   ] =
-    useState<string | null>(
+    useState<
+      string | null
+    >(
       null,
     );
 
@@ -111,7 +115,9 @@ export function CountySurplusHarvestControls({
     success,
     setSuccess,
   ] =
-    useState<string | null>(
+    useState<
+      string | null
+    >(
       null,
     );
 
@@ -130,7 +136,8 @@ export function CountySurplusHarvestControls({
     );
 
   const counties =
-    selectedState?.counties ??
+    selectedState
+      ?.counties ??
     [];
 
   const selectedCounty =
@@ -158,7 +165,8 @@ export function CountySurplusHarvestControls({
       : undefined;
 
   function handleStateChange(
-    value: string,
+    value:
+      string,
   ) {
     setStateCode(
       value,
@@ -182,7 +190,8 @@ export function CountySurplusHarvestControls({
   }
 
   function handleCountyChange(
-    value: string,
+    value:
+      string,
   ) {
     setCountyGeoid(
       value,
@@ -269,7 +278,8 @@ export function CountySurplusHarvestControls({
         );
 
       const payload =
-        await response.json() as CountyHarvestResponse;
+        await response.json() as
+          CountyHarvestResponse;
 
       if (
         !response.ok ||
@@ -287,10 +297,11 @@ export function CountySurplusHarvestControls({
 
       setSuccess(
         `${harvest.county}, ${harvest.state}: ${harvest.stagedRecordCount} record${
-          harvest.stagedRecordCount === 1
+          harvest.stagedRecordCount ===
+          1
             ? ""
             : "s"
-        } staged from ${harvest.sourceName}. ${harvest.createdCount} new, ${harvest.refreshedCount} refreshed.`,
+        } staged from ${harvest.sourceName}. ${harvest.createdCount} new, ${harvest.refreshedCount} refreshed. Excel export is ready.`,
       );
 
       setExportReady(
@@ -326,8 +337,12 @@ export function CountySurplusHarvestControls({
 
           <select
             id="county-harvest-state"
-            value={stateCode}
-            onChange={(event) =>
+            value={
+              stateCode
+            }
+            onChange={(
+              event,
+            ) =>
               handleStateChange(
                 event.target.value,
               )
@@ -339,12 +354,25 @@ export function CountySurplusHarvestControls({
             </option>
 
             {states.map(
-              (state) => (
+              (
+                state,
+              ) => (
                 <option
-                  key={state.postalCode}
-                  value={state.postalCode}
+                  key={
+                    state.postalCode
+                  }
+                  value={
+                    state.postalCode
+                  }
                 >
-                  {state.name} ({state.postalCode})
+                  {
+                    state.name
+                  }{" "}
+                  (
+                  {
+                    state.postalCode
+                  }
+                  )
                 </option>
               ),
             )}
@@ -361,9 +389,15 @@ export function CountySurplusHarvestControls({
 
           <select
             id="county-harvest-county"
-            value={countyGeoid}
-            disabled={!selectedState}
-            onChange={(event) =>
+            value={
+              countyGeoid
+            }
+            disabled={
+              !selectedState
+            }
+            onChange={(
+              event,
+            ) =>
               handleCountyChange(
                 event.target.value,
               )
@@ -377,12 +411,20 @@ export function CountySurplusHarvestControls({
             </option>
 
             {counties.map(
-              (county) => (
+              (
+                county,
+              ) => (
                 <option
-                  key={county.geoid}
-                  value={county.geoid}
+                  key={
+                    county.geoid
+                  }
+                  value={
+                    county.geoid
+                  }
                 >
-                  {county.name}
+                  {
+                    county.name
+                  }
                 </option>
               ),
             )}
@@ -397,14 +439,12 @@ export function CountySurplusHarvestControls({
 
       <div className="rounded-md border border-line bg-inset px-4 py-3.5">
         <p className="text-sm font-semibold text-ink-900">
-          Official county source pull
+          Official county surplus records
         </p>
 
         <p className="mt-1 text-xs leading-relaxed text-ink-600">
-          Duequity will pull records only when an activated official-source
-          adapter exists for the selected county. Unsupported counties remain
-          unavailable until their source and jurisdiction workflow are
-          researched and activated.
+          Duequity pulls available surplus records from the official government
+          source and stages them for administrator review and Excel export.
         </p>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -428,7 +468,9 @@ export function CountySurplusHarvestControls({
           {exportReady &&
             exportHref && (
               <a
-                href={exportHref}
+                href={
+                  exportHref
+                }
                 className="inline-flex min-h-9 items-center justify-center rounded-md border border-accent-300 bg-paper px-3.5 py-2 text-sm font-semibold text-accent-800 transition hover:bg-accent-50"
               >
                 Export Excel
@@ -442,7 +484,9 @@ export function CountySurplusHarvestControls({
           role="alert"
           className="rounded-md border border-critical-200 bg-critical-50 px-3.5 py-3 text-sm text-critical-800"
         >
-          {error}
+          {
+            error
+          }
         </div>
       )}
 
@@ -451,7 +495,9 @@ export function CountySurplusHarvestControls({
           role="status"
           className="rounded-md border border-positive-200 bg-positive-50 px-3.5 py-3 text-sm text-positive-800"
         >
-          {success}
+          {
+            success
+          }
         </div>
       )}
 
@@ -459,13 +505,16 @@ export function CountySurplusHarvestControls({
         selectedCounty && (
           <div className="rounded-md border border-line bg-paper px-3.5 py-3">
             <p className="text-xs font-semibold text-ink-700">
-              Staff research report ready
+              Excel report ready
             </p>
 
             <p className="mt-1 text-xs leading-relaxed text-ink-500">
-              The Excel report contains staff-only discovery and claimant
-              research data for {selectedCounty.name}. It is not available
-              through the claimant portal.
+              Download the official discovery report for{" "}
+              {
+                selectedCounty.name
+              }.
+              Missing claimant contact fields remain blank until external
+              research establishes them.
             </p>
           </div>
         )}

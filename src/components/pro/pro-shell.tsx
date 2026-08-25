@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useState,
+} from "react";
 
 import Link from "next/link";
 
-import { usePathname } from "next/navigation";
+import {
+  usePathname,
+} from "next/navigation";
 
 import type {
   Permission,
@@ -16,12 +20,21 @@ import {
   staffLandingPath,
 } from "@/lib/pro-access";
 
-import { cn } from "@/lib/cn";
-import { initials } from "@/lib/format";
+import {
+  cn,
+} from "@/lib/cn";
 
-import { Logo } from "@/components/brand/logo";
+import {
+  initials,
+} from "@/lib/format";
 
-import { ProSearch } from "./pro-search";
+import {
+  Logo,
+} from "@/components/brand/logo";
+
+import {
+  ProSearch,
+} from "./pro-search";
 
 import {
   IconAttorney,
@@ -55,13 +68,16 @@ interface NavItem {
 
   badge?: number;
 
-  badgeTone?: "caution" | "critical";
+  badgeTone?:
+    | "caution"
+    | "critical";
 }
 
 interface NavGroup {
   heading: string;
 
-  items: NavItem[];
+  items:
+    NavItem[];
 }
 
 export function ProShell({
@@ -69,35 +85,47 @@ export function ProShell({
   operator,
   counts,
 }: {
-  children: React.ReactNode;
+  children:
+    React.ReactNode;
 
   operator: {
     name: string;
 
+    email: string;
+
     title: string;
 
-    role: UserRole;
+    role:
+      UserRole;
 
-    permissions: Permission[];
+    permissions:
+      Permission[];
   };
 
   counts: {
-    opportunities: number;
+    opportunities:
+      number;
 
-    claims: number;
+    claims:
+      number;
 
-    tasksOverdue: number;
+    tasksOverdue:
+      number;
 
-    documentsOutstanding: number;
+    documentsOutstanding:
+      number;
 
-    complianceBlocked: number;
+    complianceBlocked:
+      number;
   };
 }) {
   const [
     railOpen,
     setRailOpen,
   ] =
-    useState(false);
+    useState(
+      false,
+    );
 
   const pathname =
     usePathname();
@@ -108,184 +136,240 @@ export function ProShell({
     );
 
   /*
-   * Type the raw navigation before applying role filtering.
-   *
-   * This prevents TypeScript from widening badgeTone values such as
-   * "critical" and "caution" into generic strings.
+   * Type the raw navigation before applying authorization filtering.
    */
-  const baseGroups: NavGroup[] = [
+  const baseGroups:
+    NavGroup[] = [
     {
-      heading: "Pipeline",
+      heading:
+        "Pipeline",
 
       items: [
         {
-          href: "/pro",
+          href:
+            "/pro",
 
-          label: "Overview",
+          label:
+            "Overview",
 
-          icon: IconDashboard,
+          icon:
+            IconDashboard,
 
-          exact: true,
+          exact:
+            true,
         },
 
         {
-          href: "/pro/discovered-records",
+          href:
+            "/pro/discovered-records",
 
-          label: "Discovered Records",
+          label:
+            "Discovered Records",
 
-          icon: IconOpportunity,
+          icon:
+            IconOpportunity,
         },
 
         {
-          href: "/pro/opportunities",
+          href:
+            "/pro/opportunities",
 
-          label: "Opportunities",
+          label:
+            "Opportunities",
 
-          icon: IconOpportunity,
+          icon:
+            IconOpportunity,
 
-          badge: counts.opportunities,
+          badge:
+            counts.opportunities,
         },
 
         {
-          href: "/pro/claims",
+          href:
+            "/pro/claims",
 
-          label: "Claims",
+          label:
+            "Claims",
 
-          icon: IconClaim,
+          icon:
+            IconClaim,
 
-          badge: counts.claims,
+          badge:
+            counts.claims,
         },
 
         {
-          href: "/pro/recoveries",
+          href:
+            "/pro/recoveries",
 
-          label: "Recoveries",
+          label:
+            "Recoveries",
 
-          icon: IconRecovery,
+          icon:
+            IconRecovery,
         },
       ],
     },
 
     {
-      heading: "Work",
+      heading:
+        "Work",
 
       items: [
         {
-          href: "/pro/tasks",
+          href:
+            "/pro/tasks",
 
-          label: "Tasks",
+          label:
+            "Tasks",
 
-          icon: IconTask,
+          icon:
+            IconTask,
 
           badge:
             counts.tasksOverdue ||
             undefined,
 
-          badgeTone: "critical",
+          badgeTone:
+            "critical",
         },
 
         {
-          href: "/pro/documents",
+          href:
+            "/pro/documents",
 
-          label: "Documents",
+          label:
+            "Documents",
 
-          icon: IconDocument,
+          icon:
+            IconDocument,
 
           badge:
             counts.documentsOutstanding ||
             undefined,
 
-          badgeTone: "caution",
+          badgeTone:
+            "caution",
         },
 
         {
-          href: "/pro/claimants",
+          href:
+            "/pro/claimants",
 
-          label: "Claimants",
+          label:
+            "Claimants",
 
-          icon: IconClaimant,
+          icon:
+            IconClaimant,
         },
 
         {
-          href: "/pro/properties",
+          href:
+            "/pro/properties",
 
-          label: "Properties",
+          label:
+            "Properties",
 
-          icon: IconProperty,
+          icon:
+            IconProperty,
         },
       ],
     },
 
     {
-      heading: "Governance",
+      heading:
+        "Governance",
 
       items: [
         {
-          href: "/pro/jurisdictions",
+          href:
+            "/pro/jurisdictions",
 
-          label: "Jurisdictions",
+          label:
+            "Jurisdictions",
 
-          icon: IconJurisdiction,
+          icon:
+            IconJurisdiction,
         },
 
         {
-          href: "/pro/fee-policies",
+          href:
+            "/pro/fee-policies",
 
-          label: "Fee Policies",
+          label:
+            "Fee Policies",
 
-          icon: IconRecovery,
+          icon:
+            IconRecovery,
         },
 
         {
-          href: "/pro/manager",
+          href:
+            "/pro/manager",
 
-          label: "Manager Dashboard",
+          label:
+            "Manager Dashboard",
 
-          icon: IconDashboard,
+          icon:
+            IconDashboard,
         },
 
         {
-          href: "/pro/staff",
+          href:
+            "/pro/staff",
 
-          label: "Staff Management",
+          label:
+            "Staff Management",
 
-          icon: IconClaimant,
+          icon:
+            IconClaimant,
         },
 
         {
-          href: "/pro/compliance",
+          href:
+            "/pro/compliance",
 
-          label: "Compliance",
+          label:
+            "Compliance",
 
-          icon: IconCompliance,
+          icon:
+            IconCompliance,
 
           badge:
             counts.complianceBlocked ||
             undefined,
 
-          badgeTone: "critical",
+          badgeTone:
+            "critical",
         },
 
         {
-          href: "/pro/attorneys",
+          href:
+            "/pro/attorneys",
 
-          label: "Attorneys",
+          label:
+            "Attorneys",
 
-          icon: IconAttorney,
+          icon:
+            IconAttorney,
         },
 
         {
-          href: "/pro/audit",
+          href:
+            "/pro/audit",
 
-          label: "Audit",
+          label:
+            "Audit",
 
-          icon: IconAudit,
+          icon:
+            IconAudit,
         },
       ],
     },
   ];
 
-  const groups: NavGroup[] =
+  const groups:
+    NavGroup[] =
     baseGroups
       .map(
         (group) => ({
@@ -298,24 +382,32 @@ export function ProShell({
                   operator.role,
                   operator.permissions,
                   item.href,
+                  operator.email,
                 ),
             ),
         }),
       )
       .filter(
         (group) =>
-          group.items.length > 0,
+          group.items.length >
+          0,
       );
 
   function isActive(
     item: NavItem,
   ) {
-    if (item.exact) {
-      return pathname === item.href;
+    if (
+      item.exact
+    ) {
+      return (
+        pathname ===
+        item.href
+      );
     }
 
     return (
-      pathname === item.href ||
+      pathname ===
+        item.href ||
       pathname.startsWith(
         `${item.href}/`,
       )
@@ -344,7 +436,9 @@ export function ProShell({
           <Logo
             tone="light"
             size="sm"
-            href={homeHref}
+            href={
+              homeHref
+            }
           />
 
           <span className="rounded-xs border border-ink-700 px-1.5 py-0.5 font-mono text-2xs tracking-tight text-ink-400">
@@ -354,12 +448,18 @@ export function ProShell({
           <button
             type="button"
             onClick={() =>
-              setRailOpen(false)
+              setRailOpen(
+                false,
+              )
             }
             aria-label="Close navigation"
             className="inline-flex size-8 items-center justify-center rounded-md text-ink-300 hover:bg-ink-800 hover:text-white lg:hidden"
           >
-            <IconClose size={18} />
+            <IconClose
+              size={
+                18
+              }
+            />
           </button>
         </div>
 
@@ -370,28 +470,44 @@ export function ProShell({
           {groups.map(
             (group) => (
               <div
-                key={group.heading}
+                key={
+                  group.heading
+                }
                 className="mb-4 last:mb-0"
               >
                 <p className="eyebrow px-2 pb-1.5 text-ink-600">
-                  {group.heading}
+                  {
+                    group.heading
+                  }
                 </p>
 
                 <ul className="space-y-0.5">
                   {group.items.map(
-                    (item) => {
+                    (
+                      item,
+                    ) => {
                       const active =
-                        isActive(item);
+                        isActive(
+                          item,
+                        );
 
                       const Icon =
                         item.icon;
 
                       return (
-                        <li key={item.href}>
+                        <li
+                          key={
+                            item.href
+                          }
+                        >
                           <Link
-                            href={item.href}
+                            href={
+                              item.href
+                            }
                             onClick={() =>
-                              setRailOpen(false)
+                              setRailOpen(
+                                false,
+                              )
                             }
                             aria-current={
                               active
@@ -408,7 +524,9 @@ export function ProShell({
                             )}
                           >
                             <Icon
-                              size={17}
+                              size={
+                                17
+                              }
                               className={
                                 active
                                   ? "text-accent-300"
@@ -417,12 +535,15 @@ export function ProShell({
                             />
 
                             <span className="flex-1 truncate">
-                              {item.label}
+                              {
+                                item.label
+                              }
                             </span>
 
                             {item.badge !==
                               undefined &&
-                              item.badge > 0 && (
+                              item.badge >
+                                0 && (
                                 <span
                                   className={cn(
                                     "tnum rounded-xs px-1.5 py-0.5 text-2xs font-semibold",
@@ -436,7 +557,9 @@ export function ProShell({
                                         : "bg-ink-700 text-ink-200",
                                   )}
                                 >
-                                  {item.badge}
+                                  {
+                                    item.badge
+                                  }
                                 </span>
                               )}
                           </Link>
@@ -456,16 +579,22 @@ export function ProShell({
               aria-hidden="true"
               className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink-800 text-2xs font-semibold text-ink-200"
             >
-              {initials(operator.name)}
+              {initials(
+                operator.name,
+              )}
             </span>
 
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-ink-100">
-                {operator.name}
+                {
+                  operator.name
+                }
               </p>
 
               <p className="truncate text-2xs text-ink-500">
-                {operator.title}
+                {
+                  operator.title
+                }
               </p>
             </div>
           </div>
@@ -501,7 +630,9 @@ export function ProShell({
           type="button"
           aria-label="Close navigation"
           onClick={() =>
-            setRailOpen(false)
+            setRailOpen(
+              false,
+            )
           }
           className="fixed inset-0 z-30 bg-ink-950/50 lg:hidden"
         />
@@ -512,12 +643,18 @@ export function ProShell({
           <button
             type="button"
             onClick={() =>
-              setRailOpen(true)
+              setRailOpen(
+                true,
+              )
             }
             aria-label="Open navigation"
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-ink-600 transition-colors hover:bg-ink-100 hover:text-ink-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500 lg:hidden"
           >
-            <IconMenu size={19} />
+            <IconMenu
+              size={
+                19
+              }
+            />
           </button>
 
           <ProSearch />
@@ -535,7 +672,9 @@ export function ProShell({
           className="w-full min-w-0 self-stretch flex-1 bg-canvas px-3 py-5 sm:px-5 sm:py-6"
         >
           <div className="w-full max-w-none">
-            {children}
+            {
+              children
+            }
           </div>
         </main>
       </div>

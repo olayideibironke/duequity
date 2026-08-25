@@ -1,8 +1,6 @@
 import "server-only";
 
-import type {
-  IsoInstant,
-} from "@/domain/types";
+import type { IsoInstant } from "@/domain/types";
 
 import {
   discoverOfficialPublicRecords,
@@ -17,11 +15,22 @@ import {
   type DiscoveredRecord,
 } from "@/server/discovered-record-store";
 
+import type { PublicRecordSourceFormat } from "@/server/public-record-source-registry";
+
 /**
  * OFFICIAL PUBLIC-RECORD HARVESTER
  *
- * Pulls records from activated official source adapters and stages them in the
- * discovered-record repository.
+ * Pulls records from activated or safely discovered official source adapters
+ * and stages them in the discovered-record repository.
+ *
+ * The harvester preserves source-native record precision.
+ *
+ * In particular:
+ *
+ *   - exact sale dates remain exact
+ *   - month/year timing remains month/year
+ *   - missing street addresses remain missing
+ *   - missing cities remain missing
  *
  * The harvester refreshes source evidence while preserving analyst workflow
  * state already attached to an existing staged record.
@@ -55,13 +64,19 @@ export interface PublicRecordHarvestResult {
   records: DiscoveredRecord[];
 }
 
-export interface CountyPublicRecordHarvestResult
-  extends PublicRecordHarvestResult {
+export interface CountyPublicRecordHarvestResult extends PublicRecordHarvestResult {
   state: string;
 
   county: string;
 
   sourceName: string;
+
+  sourceUrl: string;
+
+  /**
+   * Reusable source family the records were ingested through.
+   */
+  sourceFormat: PublicRecordSourceFormat;
 }
 
 /* ========================================================================== */
@@ -92,16 +107,9 @@ async function stageSourceRecords(
     };
   }
 
-  const existingRecords =
-    await listDiscoveredRecords();
+  const existingRecords = await listDiscoveredRecords();
 
-  const existingIds =
-    new Set(
-      existingRecords.map(
-        (record) =>
-          record.id,
-      ),
-    );
+  const existingIds = new Set(existingRecords.map((record) => record.id));
 
   const stagedRecords: DiscoveredRecord[] = [];
 
@@ -109,137 +117,109 @@ async function stageSourceRecords(
 
   let refreshedCount = 0;
 
-  for (
-    const sourceRecord of sourceRecords
-  ) {
-    const id =
-      discoveredRecordId(
-        sourceRecord.adapterKey,
-        sourceRecord.recordKey,
-      );
-
-    const existedBefore =
-      existingIds.has(
-        id,
-      );
-
-    const staged =
-      await saveDiscoveredRecord({
-        adapterKey:
-          sourceRecord.adapterKey,
-
-        recordKey:
-          sourceRecord.recordKey,
-
-        sourceKind:
-          "county_tax_sale_list",
-
-        sourceName:
-          sourceRecord.sourceName,
-
-        sourceUrl:
-          sourceRecord.sourceUrl,
-
-        sourceReference:
-          sourceRecord.sourceReference,
-
-        formerOwnerName:
-          sourceRecord.formerOwnerName,
-
-        currentOwnerName:
-          sourceRecord.currentOwnerName,
-
-        propertyId:
-          sourceRecord.propertyId,
-
-        addressLine1:
-          sourceRecord.addressLine1,
-
-        city:
-          sourceRecord.city,
-
-        county:
-          sourceRecord.county,
-
-        state:
-          sourceRecord.state,
-
-        postalCode:
-          sourceRecord.postalCode,
-
-        saleType:
-          sourceRecord.saleType,
-
-        saleDate:
-          sourceRecord.saleDate,
-
-        dateTransferred:
-          sourceRecord.dateTransferred,
-
-        caseNumber:
-          sourceRecord.caseNumber,
-
-        parcelNumber:
-          sourceRecord.parcelNumber,
-
-        mapNumber:
-          sourceRecord.mapNumber,
-
-        gridNumber:
-          sourceRecord.gridNumber,
-
-        legalDescription:
-          sourceRecord.legalDescription,
-
-        agencyName:
-          sourceRecord.agencyName,
-
-        agencyPhone:
-          sourceRecord.agencyPhone,
-
-        custodian:
-          sourceRecord.custodian,
-
-        sourceListedBidCents:
-          sourceRecord.bidCents,
-
-        sourceListedDepositCents:
-          sourceRecord.depositCents,
-
-        sourceListedSurplusCents:
-          sourceRecord.sourceListedSurplusCents,
-
-        /*
-         * Preserve the source's original balance field for existing consumers
-         * while also storing the richer source-listed surplus evidence.
-         */
-        sourceListedBalanceCents:
-          sourceRecord.balanceOwedCents,
-
-        sourceRetrievedAt:
-          harvestedAt,
-      });
-
-    stagedRecords.push(
-      staged,
+  for (const sourceRecord of sourceRecords) {
+    const id = discoveredRecordId(
+      sourceRecord.adapterKey,
+      sourceRecord.recordKey,
     );
 
-    if (
-      existedBefore
-    ) {
+    const existedBefore = existingIds.has(id);
+
+    const staged = await saveDiscoveredRecord({
+      adapterKey: sourceRecord.adapterKey,
+
+      recordKey: sourceRecord.recordKey,
+
+      sourceKind: "county_tax_sale_list",
+
+      sourceName: sourceRecord.sourceName,
+
+      sourceUrl: sourceRecord.sourceUrl,
+
+      sourceReference: sourceRecord.sourceReference,
+
+      formerOwnerName: sourceRecord.formerOwnerName,
+
+      currentOwnerName: sourceRecord.currentOwnerName,
+
+      propertyId: sourceRecord.propertyId,
+
+      addressLine1: sourceRecord.addressLine1,
+
+      city: sourceRecord.city,
+
+      county: sourceRecord.county,
+
+      state: sourceRecord.state,
+
+      postalCode: sourceRecord.postalCode,
+
+      saleType: sourceRecord.saleType,
+
+      /*
+       * Preserve sale timing at the precision published by the source.
+       *
+       * Exact day:
+       *   saleDate = YYYY-MM-DD
+       *
+       * Month/year only:
+       *   saleMonthYear = YYYY-MM
+       *
+       * Original government text is retained separately so DueQuity never
+       * needs to reconstruct or guess what the source actually published.
+       */
+      saleDate: sourceRecord.saleDate,
+
+      saleMonthYear: sourceRecord.saleMonthYear,
+
+      sourceSaleTimingText: sourceRecord.sourceSaleTimingText,
+
+      dateTransferred: sourceRecord.dateTransferred,
+
+      caseNumber: sourceRecord.caseNumber,
+
+      parcelNumber: sourceRecord.parcelNumber,
+
+      mapNumber: sourceRecord.mapNumber,
+
+      gridNumber: sourceRecord.gridNumber,
+
+      legalDescription: sourceRecord.legalDescription,
+
+      agencyName: sourceRecord.agencyName,
+
+      agencyPhone: sourceRecord.agencyPhone,
+
+      custodian: sourceRecord.custodian,
+
+      sourceListedBidCents: sourceRecord.bidCents,
+
+      sourceListedDepositCents: sourceRecord.depositCents,
+
+      sourceListedSurplusCents: sourceRecord.sourceListedSurplusCents,
+
+      /*
+       * Preserve the source's original balance field for existing consumers
+       * while also storing the richer source-listed surplus evidence.
+       */
+      sourceListedBalanceCents: sourceRecord.balanceOwedCents,
+
+      sourceRetrievedAt: harvestedAt,
+    });
+
+    stagedRecords.push(staged);
+
+    if (existedBefore) {
       refreshedCount += 1;
     } else {
       createdCount += 1;
 
-      existingIds.add(
-        id,
-      );
+      existingIds.add(id);
     }
   }
 
   return {
-    records:
-      stagedRecords,
+    records: stagedRecords,
 
     createdCount,
 
@@ -255,88 +235,66 @@ export async function harvestOfficialPublicRecordsForCounty(
   state: string,
   county: string,
 ): Promise<CountyPublicRecordHarvestResult> {
-  const normalizedState =
-    state.trim();
+  const normalizedState = state.trim();
 
-  const normalizedCounty =
-    county.trim();
+  const normalizedCounty = county.trim();
 
-  if (
-    !normalizedState
-  ) {
+  if (!normalizedState) {
+    throw new Error("A state is required to pull county surplus records.");
+  }
+
+  if (!normalizedCounty) {
+    throw new Error("A county is required to pull county surplus records.");
+  }
+
+  const discovery = await discoverOfficialPublicRecords({
+    state: normalizedState,
+
+    county: normalizedCounty,
+  });
+
+  /*
+   * An unsupported or failing source reports why. It never becomes a silent
+   * empty harvest and never produces approximated records.
+   */
+  if (discovery.status === "unsupported") {
     throw new Error(
-      "A state is required to pull county surplus records.",
+      discovery.reason
+        ? `${discovery.reason} / REVIEW REQUIRED: ${discovery.message}`
+        : discovery.message,
     );
   }
 
-  if (
-    !normalizedCounty
-  ) {
-    throw new Error(
-      "A county is required to pull county surplus records.",
-    );
+  if (discovery.status === "error") {
+    throw new Error(discovery.message);
   }
 
-  const discovery =
-    await discoverOfficialPublicRecords({
-      state:
-        normalizedState,
+  const harvestedAt = nowIsoInstant();
 
-      county:
-        normalizedCounty,
-    });
-
-  if (
-    discovery.status === "unsupported"
-  ) {
-    throw new Error(
-      discovery.message,
-    );
-  }
-
-  if (
-    discovery.status === "error"
-  ) {
-    throw new Error(
-      discovery.message,
-    );
-  }
-
-  const harvestedAt =
-    nowIsoInstant();
-
-  const staged =
-    await stageSourceRecords(
-      discovery.records,
-      harvestedAt,
-    );
+  const staged = await stageSourceRecords(discovery.records, harvestedAt);
 
   return {
     harvestedAt,
 
-    state:
-      normalizedState.toUpperCase(),
+    state: normalizedState.toUpperCase(),
 
-    county:
-      normalizedCounty,
+    county: normalizedCounty,
 
-    sourceName:
-      discovery.sourceName,
+    sourceName: discovery.sourceName,
 
-    sourceRecordCount:
-      discovery.records.length,
+    sourceUrl: discovery.sourceUrl,
 
-    stagedRecordCount:
-      staged.records.length,
+    sourceFormat: discovery.sourceFormat,
 
-    createdCount:
-      staged.createdCount,
+    sourceRecordCount: discovery.records.length,
 
-    refreshedCount:
-      staged.refreshedCount,
+    stagedRecordCount: staged.records.length,
 
-    records:
-      staged.records,
+    createdCount: staged.createdCount,
+
+    refreshedCount: staged.refreshedCount,
+
+    records: staged.records,
   };
 }
 
@@ -345,42 +303,29 @@ export async function harvestOfficialPublicRecordsForCounty(
 /* ========================================================================== */
 
 export async function harvestSupportedPublicRecords(): Promise<PublicRecordHarvestResult> {
-  const harvestedAt =
-    nowIsoInstant();
+  const harvestedAt = nowIsoInstant();
 
-  const sourceRecords =
-    await listSupportedOfficialPublicRecords();
+  const sourceRecords = await listSupportedOfficialPublicRecords();
 
-  if (
-    sourceRecords.length === 0
-  ) {
+  if (sourceRecords.length === 0) {
     throw new Error(
       "No official public records were returned by the activated source adapters. Harvesting was not treated as successful.",
     );
   }
 
-  const staged =
-    await stageSourceRecords(
-      sourceRecords,
-      harvestedAt,
-    );
+  const staged = await stageSourceRecords(sourceRecords, harvestedAt);
 
   return {
     harvestedAt,
 
-    sourceRecordCount:
-      sourceRecords.length,
+    sourceRecordCount: sourceRecords.length,
 
-    stagedRecordCount:
-      staged.records.length,
+    stagedRecordCount: staged.records.length,
 
-    createdCount:
-      staged.createdCount,
+    createdCount: staged.createdCount,
 
-    refreshedCount:
-      staged.refreshedCount,
+    refreshedCount: staged.refreshedCount,
 
-    records:
-      staged.records,
+    records: staged.records,
   };
 }

@@ -1,25 +1,46 @@
-import type { Metadata } from "next";
+import type {
+  Metadata,
+} from "next";
 
-import { IdleSessionGuard } from "@/components/auth/idle-session-guard";
-import { ProShell } from "@/components/pro/pro-shell";
-import { StaffAuthenticationRequired } from "@/components/ui/authentication-required";
+import {
+  IdleSessionGuard,
+} from "@/components/auth/idle-session-guard";
 
-import { resolveOperationsWorkload } from "@/server/operations-workload";
-import { resolveStaffSession } from "@/server/staff-session";
+import {
+  ProShell,
+} from "@/components/pro/pro-shell";
 
-export const metadata: Metadata = {
+import {
+  StaffAuthenticationRequired,
+} from "@/components/ui/authentication-required";
+
+import {
+  resolveOperationsWorkload,
+} from "@/server/operations-workload";
+
+import {
+  resolveStaffSession,
+} from "@/server/staff-session";
+
+export const metadata:
+  Metadata = {
   title: {
-    default: "Duequity Pro",
+    default:
+      "Duequity Pro",
 
-    template: "%s | Duequity Pro",
+    template:
+      "%s | Duequity Pro",
   },
 
   robots: {
-    index: false,
+    index:
+      false,
 
-    follow: false,
+    follow:
+      false,
 
-    nocache: true,
+    nocache:
+      true,
   },
 };
 
@@ -32,7 +53,9 @@ export default async function ProLayout({
   const session =
     await resolveStaffSession();
 
-  if (!session) {
+  if (
+    !session
+  ) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <StaffAuthenticationRequired />
@@ -48,6 +71,9 @@ export default async function ProLayout({
       operator={{
         name:
           session.user.name,
+
+        email:
+          session.user.email,
 
         title:
           session.user.title,

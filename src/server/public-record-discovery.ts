@@ -7,23 +7,24 @@ import type {
   SurplusCustodian,
 } from "@/domain/types";
 
-import {
-  resolveAddressGeography,
-} from "@/server/geography-resolver";
+import { resolveAddressGeography } from "@/server/geography-resolver";
+
+import { fetchPublicRecordSourcePayload } from "@/server/public-record-source-fetcher";
+
+import { parsePublicRecordSourcePayload } from "@/server/public-record-source-parser";
 
 import {
-  fetchPublicRecordSourcePayload,
-} from "@/server/public-record-source-fetcher";
-
-import {
-  parsePublicRecordSourcePayload,
-} from "@/server/public-record-source-parser";
+  toIngestionFailure,
+  type PublicRecordIngestionFailureReason,
+} from "@/server/public-record-source-family";
 
 import {
   listActivePublicRecordSources,
-  resolvePublicRecordSource,
   type PublicRecordSourceDefinition,
+  type PublicRecordSourceFormat,
 } from "@/server/public-record-source-registry";
+
+import { resolvePublicRecordSourceWithDiagnostics } from "@/server/public-record-source-auto-discovery";
 
 /**
  * OFFICIAL PUBLIC RECORD DISCOVERY
@@ -34,15 +35,30 @@ import {
  *
  *   Geography
  *      ↓
- *   National source registry
+ *   Configured source registry
+ *      ↓
+ *   National automatic official-source discovery when no configured source
  *      ↓
  *   Standardized source fetcher
  *      ↓
- *   Parser profile
+ *   Parser profile / automatic header mapper
  *      ↓
  *   Normalized official records
  *      ↓
  *   Query filtering
+ *
+ * IMPORTANT NATIONAL DATA RULE:
+ *
+ * Government sources are allowed to be incomplete.
+ *
+ * A valid source record may publish:
+ *
+ *   - a parcel but no situs street address
+ *   - a sale month/year but no exact sale day
+ *   - an owner and surplus amount but no phone/email
+ *
+ * DueQuity preserves exactly what the source publishes. Missing facts remain
+ * missing and may later be enriched from other authoritative sources.
  *
  * This module deliberately does not contain:
  *
@@ -87,9 +103,6 @@ export interface OfficialPublicRecord {
 
   /**
    * Exact value from an official source's First Name column, when supplied.
-   *
-   * This is preserved separately so downstream reporting never has to split or
-   * infer a person's first name from formerOwnerName.
    */
   sourceFirstName?: string;
 
@@ -104,9 +117,21 @@ export interface OfficialPublicRecord {
    */
   sourceLastNameOrCompany?: string;
 
-  addressLine1: string;
+  /**
+   * Source-published situs/property street address.
+   *
+   * Optional nationally. A government surplus list may identify the property
+   * only by parcel, account or case number.
+   */
+  addressLine1?: string;
 
-  city: string;
+  /**
+   * Source-published property city/locality.
+   *
+   * Optional. The county name is not substituted here because county and city
+   * are different facts.
+   */
+  city?: string;
 
   county: string;
 
@@ -116,7 +141,38 @@ export interface OfficialPublicRecord {
 
   saleType: SaleType;
 
-  saleDate: IsoDate;
+  /**
+   * Exact sale date only when the source publishes day-level precision.
+   *
+   * DueQuity must not manufacture an exact date from month/year data.
+   */
+  saleDate?: IsoDate;
+
+  /**
+   * Normalized government-published sale month/year in YYYY-MM form when the
+   * source provides only month precision.
+   *
+   * Example:
+   *
+   *   source: "08/2024"
+   *   normalized: "2024-08"
+   *
+   * This does NOT mean August 1, August 31, or any other specific day.
+   */
+  saleMonthYear?: string;
+
+  /**
+   * Exact source-native sale timing text.
+   *
+   * Examples:
+   *
+   *   "08/2024"
+   *   "August 2024"
+   *   "2024-08"
+   *
+   * This preserves source evidence even after normalization.
+   */
+  sourceSaleTimingText?: string;
 
   /**
    * Date the tax-sale interest or related property record was transferred,
@@ -204,12 +260,21 @@ export type OfficialRecordDiscoveryResult =
 
       sourceName: string;
 
+      sourceUrl: string;
+
+      sourceFormat: PublicRecordSourceFormat;
+
       records: OfficialPublicRecord[];
     }
   | {
       status: "unsupported";
 
       records: [];
+
+      /**
+       * Machine-readable review reason. Never a silent empty result.
+       */
+      reason?: PublicRecordIngestionFailureReason;
 
       message: string;
     }
@@ -220,6 +285,8 @@ export type OfficialRecordDiscoveryResult =
 
       sourceName: string;
 
+      reason: PublicRecordIngestionFailureReason;
+
       message: string;
     };
 
@@ -227,9 +294,7 @@ export type OfficialRecordDiscoveryResult =
 /* Search helpers                                                              */
 /* ========================================================================== */
 
-function canonicalToken(
-  token: string,
-): string {
+function canonicalToken(token: string): string {
   switch (token) {
     case "road":
       return "rd";
@@ -278,91 +343,35 @@ function canonicalToken(
   }
 }
 
-function searchableTokens(
-  value: string,
-): string[] {
+function searchableTokens(value: string): string[] {
   return value
     .toLowerCase()
-    .replace(
-      /[^a-z0-9]+/g,
-      " ",
-    )
-    .split(
-      /\s+/,
-    )
-    .map(
-      (token) =>
-        canonicalToken(
-          token,
-        ),
-    )
-    .filter(
-      (token) =>
-        token.length > 2 ||
-        /^\d+$/.test(
-          token,
-        ),
-    );
+    .replace(/[^a-z0-9]+/g, " ")
+    .split(/\s+/)
+    .map((token) => canonicalToken(token))
+    .filter((token) => token.length > 2 || /^\d+$/.test(token));
 }
 
-function normalizedSearchText(
-  value: string,
-): string {
-  return searchableTokens(
-    value,
-  ).join(
-    " ",
-  );
+function normalizedSearchText(value: string): string {
+  return searchableTokens(value).join(" ");
 }
 
-function queryMatchesText(
-  query: string,
-  candidate: string,
-): boolean {
-  const queryTokens =
-    searchableTokens(
-      query,
-    );
+function queryMatchesText(query: string, candidate: string): boolean {
+  const queryTokens = searchableTokens(query);
 
-  if (
-    queryTokens.length ===
-    0
-  ) {
+  if (queryTokens.length === 0) {
     return true;
   }
 
-  const candidateText =
-    normalizedSearchText(
-      candidate,
-    );
+  const candidateText = normalizedSearchText(candidate);
 
-  return queryTokens.every(
-    (token) =>
-      candidateText.includes(
-        token,
-      ),
-  );
+  return queryTokens.every((token) => candidateText.includes(token));
 }
 
-function normalizeState(
-  value: string,
-): string {
-  const normalized =
-    value
-      .trim()
-      .toUpperCase();
+function normalizeState(value: string): string {
+  const normalized = value.trim().toUpperCase();
 
-  /*
-   * Retain the existing public-search compatibility for Maryland.
-   *
-   * National form controls normally supply USPS postal codes. Additional
-   * human-readable state-name normalization belongs in the geography layer,
-   * not in jurisdiction-specific source routing.
-   */
-  if (
-    normalized ===
-    "MARYLAND"
-  ) {
+  if (normalized === "MARYLAND") {
     return "MD";
   }
 
@@ -374,23 +383,18 @@ function normalizeState(
 /* ========================================================================== */
 
 /**
- * Retrieve and parse one activated official source.
+ * Retrieve and parse one official source.
  *
  * Discovery does not know whether the source is HTML, CSV, XLSX, PDF, JSON or
- * a portal. The registry, fetcher and parser layers own those responsibilities.
+ * a portal. The source definition, fetcher and parser layers own those
+ * responsibilities.
  */
 async function loadRecordsForSource(
   source: PublicRecordSourceDefinition,
 ): Promise<OfficialPublicRecord[]> {
-  const payload =
-    await fetchPublicRecordSourcePayload(
-      source,
-    );
+  const payload = await fetchPublicRecordSourcePayload(source);
 
-  return parsePublicRecordSourcePayload(
-    source,
-    payload,
-  );
+  return parsePublicRecordSourcePayload(source, payload);
 }
 
 /* ========================================================================== */
@@ -408,57 +412,36 @@ interface ResolvedQueryLocation {
 async function resolveQueryLocation(
   query: OfficialRecordSearchQuery,
 ): Promise<ResolvedQueryLocation> {
-  const rawAddress =
-    query.address
-      ?.trim() ??
-    "";
+  const rawAddress = query.address?.trim() ?? "";
 
-  if (
-    rawAddress.length >=
-    8
-  ) {
+  if (rawAddress.length >= 8) {
     try {
-      const geography =
-        await resolveAddressGeography(
-          rawAddress,
-        );
+      const geography = await resolveAddressGeography(rawAddress);
 
       return {
-        state:
-          geography.state.postalCode,
+        state: geography.state.postalCode,
 
-        county:
-          geography.county.name,
+        county: geography.county.name,
 
-        countyGeoid:
-          geography.county.geoid,
+        countyGeoid: geography.county.geoid,
       };
     } catch {
       /*
        * Fall through to form-supplied geography.
        *
        * A temporary Census-resolution failure does not invent a jurisdiction.
-       * Registry resolution still fails closed if the supplied state/county
-       * does not identify an activated official source.
+       * National source resolution still fails closed if the supplied
+       * geography cannot be tied to a trusted official source.
        */
     }
   }
 
   return {
-    state:
-      normalizeState(
-        query.state ??
-          "",
-      ),
+    state: normalizeState(query.state ?? ""),
 
-    county:
-      query.county ??
-      "",
+    county: query.county ?? "",
 
-    countyGeoid:
-      query.countyGeoid
-        ?.trim() ||
-      undefined,
+    countyGeoid: query.countyGeoid?.trim() || undefined,
   };
 }
 
@@ -470,47 +453,26 @@ function recordMatchesQuery(
   record: OfficialPublicRecord,
   query: OfficialRecordSearchQuery,
 ): boolean {
-  const address =
-    query.address
-      ?.trim() ??
-    "";
+  const address = query.address?.trim() ?? "";
 
-  const ownerName =
-    query.ownerName
-      ?.trim() ??
-    "";
+  const ownerName = query.ownerName?.trim() ?? "";
 
   if (
     address &&
     !queryMatchesText(
       address,
       [
-        record.addressLine1,
-        record.city,
+        record.addressLine1 ?? "",
+        record.city ?? "",
         record.state,
-        record.postalCode ??
-          "",
-      ].join(
-        " ",
-      ),
+        record.postalCode ?? "",
+      ].join(" "),
     )
   ) {
     return false;
   }
 
-  /*
-   * Public owner search remains tied to the former owner of record.
-   *
-   * Current-owner data may be preserved as official evidence but is not used
-   * to make a claimant-facing former-owner match.
-   */
-  if (
-    ownerName &&
-    !queryMatchesText(
-      ownerName,
-      record.formerOwnerName,
-    )
-  ) {
+  if (ownerName && !queryMatchesText(ownerName, record.formerOwnerName)) {
     return false;
   }
 
@@ -524,83 +486,75 @@ function recordMatchesQuery(
 export async function discoverOfficialPublicRecords(
   query: OfficialRecordSearchQuery,
 ): Promise<OfficialRecordDiscoveryResult> {
-  const location =
-    await resolveQueryLocation(
-      query,
-    );
+  const location = await resolveQueryLocation(query);
 
   /*
-   * National jurisdiction routing occurs only through the source registry.
+   * Resolution order:
    *
-   * There are no county-specific or state-specific routing conditions in this
-   * discovery orchestrator.
+   *   1. configured activated source
+   *   2. national trusted-government source discovery
+   *
+   * An automatically discovered source must successfully retrieve and parse
+   * real surplus records before it is accepted.
    */
-  const source =
-    resolvePublicRecordSource({
-      state:
-        location.state,
+  const resolution = await resolvePublicRecordSourceWithDiagnostics({
+    state: location.state,
 
-      county:
-        location.county,
+    county: location.county,
 
-      countyGeoid:
-        location.countyGeoid,
-    });
+    countyGeoid: location.countyGeoid,
+  });
 
-  if (
-    !source
-  ) {
+  const source = resolution.source;
+
+  if (!source) {
     return {
-      status:
-        "unsupported",
+      status: "unsupported",
 
-      records:
-        [],
+      records: [],
 
-      message:
-        "Duequity does not yet have an activated official-record source for this jurisdiction.",
+      ...(resolution.reviewReason
+        ? {
+            reason: resolution.reviewReason,
+          }
+        : {}),
+
+      message: resolution.message,
     };
   }
 
   try {
-    const records =
-      await loadRecordsForSource(
-        source,
-      );
+    const records = await loadRecordsForSource(source);
 
     return {
-      status:
-        "supported",
+      status: "supported",
 
-      sourceName:
-        source.sourceName,
+      sourceName: source.sourceName,
 
-      records:
-        records.filter(
-          (record) =>
-            recordMatchesQuery(
-              record,
-              query,
-            ),
-        ),
+      sourceUrl: source.sourceUrl,
+
+      sourceFormat: source.sourceFormat,
+
+      records: records.filter((record) => recordMatchesQuery(record, query)),
     };
-  } catch (
-    error
-  ) {
+  } catch (error) {
+    const failure = toIngestionFailure(
+      error,
+      `DueQuity could not search ${source.sourceName}.`,
+    );
+
     return {
-      status:
-        "error",
+      status: "error",
 
-      records:
-        [],
+      records: [],
 
-      sourceName:
-        source.sourceName,
+      sourceName: source.sourceName,
 
-      message:
-        error instanceof Error
-          ? error.message
-          : `Duequity could not search ${source.sourceName}.`,
+      reason: failure.reason,
+
+      message: `${failure.reason}${
+        failure.variant ? ` (${failure.variant})` : ""
+      }: ${failure.message}`,
     };
   }
 }
@@ -610,41 +564,29 @@ export async function discoverOfficialPublicRecords(
 /* ========================================================================== */
 
 /**
- * Return records from every active bulk-capable official source.
+ * Return records from every permanently activated bulk-capable official source.
  *
- * This is registry driven. Adding an activated source to the national registry
- * automatically makes it eligible for this aggregate harvest when
- * supportsBulkPull is true and its parser profile is implemented.
+ * Runtime-discovered sources are intentionally county-selective and are not
+ * included in this global registry harvest. A runtime source is validated when
+ * a staff operator requests that jurisdiction.
  *
- * One source failure does not erase successful records from another source.
- * County-specific discovery continues to surface its own source error.
+ * One activated-source failure does not erase successful records from another
+ * source.
  */
 export async function listSupportedOfficialPublicRecords(): Promise<
   OfficialPublicRecord[]
 > {
-  const sources =
-    listActivePublicRecordSources()
-      .filter(
-        (source) =>
-          source.supportsBulkPull,
-      );
+  const sources = listActivePublicRecordSources().filter(
+    (source) => source.supportsBulkPull,
+  );
 
-  const records:
-    OfficialPublicRecord[] =
-    [];
+  const records: OfficialPublicRecord[] = [];
 
-  for (
-    const source of sources
-  ) {
+  for (const source of sources) {
     try {
-      const sourceRecords =
-        await loadRecordsForSource(
-          source,
-        );
+      const sourceRecords = await loadRecordsForSource(source);
 
-      records.push(
-        ...sourceRecords,
-      );
+      records.push(...sourceRecords);
     } catch {
       /*
        * Preserve aggregate-harvest isolation.

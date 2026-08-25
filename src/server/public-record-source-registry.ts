@@ -1,10 +1,6 @@
 import "server-only";
 
-import type {
-  SaleType,
-  StateCode,
-  SurplusCustodian,
-} from "@/domain/types";
+import type { SaleType, StateCode, SurplusCustodian } from "@/domain/types";
 
 /**
  * NATIONAL PUBLIC-RECORD SOURCE REGISTRY
@@ -41,22 +37,25 @@ import type {
 /* Types                                                                       */
 /* ========================================================================== */
 
+/**
+ * Reusable national source families.
+ *
+ * A family is a transport/structure contract shared by many jurisdictions, not
+ * a county. Every family below has exactly one generic parser path.
+ */
 export type PublicRecordSourceFormat =
   | "html_table"
   | "pdf_table"
   | "csv"
   | "xlsx"
   | "json_api"
+  | "arcgis"
   | "web_portal";
 
 export type PublicRecordSourceStatus =
-  | "active"
-  | "research_required"
-  | "disabled";
+  "active" | "research_required" | "disabled";
 
-export type PublicRecordSourceLevel =
-  | "county"
-  | "state";
+export type PublicRecordSourceLevel = "county" | "state";
 
 export interface PublicRecordSourceDefinition {
   /**
@@ -142,97 +141,68 @@ export interface PublicRecordJurisdictionLookup {
 
 const PUBLIC_RECORD_SOURCE_REGISTRY: readonly PublicRecordSourceDefinition[] = [
   {
-    key:
-      "md-carroll-tax-sale-surplus",
+    key: "md-carroll-tax-sale-surplus",
 
-    state:
-      "MD",
+    state: "MD",
 
-    countyGeoid:
-      "24013",
+    countyGeoid: "24013",
 
-    countyName:
-      "Carroll County",
+    countyName: "Carroll County",
 
-    sourceLevel:
-      "county",
+    sourceLevel: "county",
 
-    sourceName:
-      "Carroll County Tax Sale Surplus Funds List",
+    sourceName: "Carroll County Tax Sale Surplus Funds List",
 
     sourceUrl:
       "https://www.carrollcountymd.gov/government/directory/comptroller/collectionstaxes/surplus-funds-list/",
 
-    sourceFormat:
-      "html_table",
+    sourceFormat: "html_table",
 
-    parserKey:
-      "md-carroll-tax-sale-surplus-v1",
+    parserKey: "md-carroll-tax-sale-surplus-v1",
 
-    agencyName:
-      "Carroll County Government",
+    agencyName: "Carroll County Government",
 
-    agencyPhone:
-      "4103862971",
+    agencyPhone: "4103862971",
 
-    custodian:
-      "county_tax_collector",
+    custodian: "county_tax_collector",
 
-    saleType:
-      "tax_lien_foreclosure",
+    saleType: "tax_lien_foreclosure",
 
-    status:
-      "active",
+    status: "active",
 
-    supportsBulkPull:
-      true,
+    supportsBulkPull: true,
   },
 
   {
-    key:
-      "ga-dekalb-excess-funds",
+    key: "ga-dekalb-excess-funds",
 
-    state:
-      "GA",
+    state: "GA",
 
-    countyGeoid:
-      "13089",
+    countyGeoid: "13089",
 
-    countyName:
-      "DeKalb County",
+    countyName: "DeKalb County",
 
-    sourceLevel:
-      "county",
+    sourceLevel: "county",
 
-    sourceName:
-      "DeKalb County Tax Commissioner Excess Funds List",
+    sourceName: "DeKalb County Tax Commissioner Excess Funds List",
 
-    sourceUrl:
-      "https://dekalbtax.org/wp-content/uploads/Excess-Funds-List.pdf",
+    sourceUrl: "https://dekalbtax.org/wp-content/uploads/Excess-Funds-List.pdf",
 
-    sourceFormat:
-      "pdf_table",
+    sourceFormat: "pdf_table",
 
-    parserKey:
-      "ga-dekalb-excess-funds-v1",
+    parserKey: "ga-dekalb-excess-funds-v1",
 
-    agencyName:
-      "DeKalb County Tax Commissioner",
+    agencyName: "DeKalb County Tax Commissioner",
 
-    agencyPhone:
-      "4042984000",
+    agencyPhone: "4042984000",
 
-    custodian:
-      "county_tax_collector",
+    custodian: "county_tax_collector",
 
-    saleType:
-      "tax_lien_foreclosure",
+    saleType: "tax_lien_foreclosure",
 
-    status:
-      "active",
+    status: "active",
 
-    supportsBulkPull:
-      true,
+    supportsBulkPull: true,
   },
 ];
 
@@ -240,60 +210,29 @@ const PUBLIC_RECORD_SOURCE_REGISTRY: readonly PublicRecordSourceDefinition[] = [
 /* Normalization                                                               */
 /* ========================================================================== */
 
-function normalizeState(
-  value: string,
-): string {
-  const normalized =
-    value
-      .trim()
-      .toUpperCase();
+function normalizeState(value: string): string {
+  const normalized = value.trim().toUpperCase();
 
-  if (
-    normalized ===
-    "MARYLAND"
-  ) {
+  if (normalized === "MARYLAND") {
     return "MD";
   }
 
-  if (
-    normalized ===
-    "GEORGIA"
-  ) {
+  if (normalized === "GEORGIA") {
     return "GA";
   }
 
   return normalized;
 }
 
-function normalizeCounty(
-  value: string,
-): string {
+function normalizeCounty(value: string): string {
   return value
     .toLowerCase()
-    .replace(
-      /\bcounty\b/g,
-      "",
-    )
-    .replace(
-      /\bparish\b/g,
-      "",
-    )
-    .replace(
-      /\bborough\b/g,
-      "",
-    )
-    .replace(
-      /\bcensus area\b/g,
-      "",
-    )
-    .replace(
-      /[^a-z0-9]+/g,
-      " ",
-    )
-    .replace(
-      /\s+/g,
-      " ",
-    )
+    .replace(/\bcounty\b/g, "")
+    .replace(/\bparish\b/g, "")
+    .replace(/\bborough\b/g, "")
+    .replace(/\bcensus area\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -307,28 +246,20 @@ function normalizeCounty(
  * Returned as a copy so callers cannot mutate registry state.
  */
 export function listPublicRecordSources(): PublicRecordSourceDefinition[] {
-  return PUBLIC_RECORD_SOURCE_REGISTRY.map(
-    (source) => ({
-      ...source,
-    }),
-  );
+  return PUBLIC_RECORD_SOURCE_REGISTRY.map((source) => ({
+    ...source,
+  }));
 }
 
 /**
  * Sources that are currently authorized for discovery harvesting.
  */
 export function listActivePublicRecordSources(): PublicRecordSourceDefinition[] {
-  return PUBLIC_RECORD_SOURCE_REGISTRY
-    .filter(
-      (source) =>
-        source.status ===
-        "active",
-    )
-    .map(
-      (source) => ({
-        ...source,
-      }),
-    );
+  return PUBLIC_RECORD_SOURCE_REGISTRY.filter(
+    (source) => source.status === "active",
+  ).map((source) => ({
+    ...source,
+  }));
 }
 
 /**
@@ -337,24 +268,13 @@ export function listActivePublicRecordSources(): PublicRecordSourceDefinition[] 
 export function listActivePublicRecordSourcesForState(
   state: string,
 ): PublicRecordSourceDefinition[] {
-  const stateCode =
-    normalizeState(
-      state,
-    );
+  const stateCode = normalizeState(state);
 
-  return PUBLIC_RECORD_SOURCE_REGISTRY
-    .filter(
-      (source) =>
-        source.status ===
-          "active" &&
-        source.state ===
-          stateCode,
-    )
-    .map(
-      (source) => ({
-        ...source,
-      }),
-    );
+  return PUBLIC_RECORD_SOURCE_REGISTRY.filter(
+    (source) => source.status === "active" && source.state === stateCode,
+  ).map((source) => ({
+    ...source,
+  }));
 }
 
 /**
@@ -371,85 +291,50 @@ export function listActivePublicRecordSourcesForState(
 export function resolvePublicRecordSource(
   lookup: PublicRecordJurisdictionLookup,
 ): PublicRecordSourceDefinition | undefined {
-  const state =
-    normalizeState(
-      lookup.state,
+  const state = normalizeState(lookup.state);
+
+  const countyGeoid = lookup.countyGeoid?.trim();
+
+  const county = normalizeCounty(lookup.county ?? "");
+
+  if (countyGeoid) {
+    const byGeoid = PUBLIC_RECORD_SOURCE_REGISTRY.find(
+      (source) =>
+        source.status === "active" &&
+        source.state === state &&
+        source.countyGeoid === countyGeoid,
     );
 
-  const countyGeoid =
-    lookup.countyGeoid
-      ?.trim();
-
-  const county =
-    normalizeCounty(
-      lookup.county ??
-        "",
-    );
-
-  if (
-    countyGeoid
-  ) {
-    const byGeoid =
-      PUBLIC_RECORD_SOURCE_REGISTRY.find(
-        (source) =>
-          source.status ===
-            "active" &&
-          source.state ===
-            state &&
-          source.countyGeoid ===
-            countyGeoid,
-      );
-
-    if (
-      byGeoid
-    ) {
+    if (byGeoid) {
       return {
         ...byGeoid,
       };
     }
   }
 
-  if (
-    county
-  ) {
-    const byCountyName =
-      PUBLIC_RECORD_SOURCE_REGISTRY.find(
-        (source) =>
-          source.status ===
-            "active" &&
-          source.state ===
-            state &&
-          source.sourceLevel ===
-            "county" &&
-          Boolean(
-            source.countyName,
-          ) &&
-          normalizeCounty(
-            source.countyName ??
-              "",
-          ) ===
-            county,
-      );
+  if (county) {
+    const byCountyName = PUBLIC_RECORD_SOURCE_REGISTRY.find(
+      (source) =>
+        source.status === "active" &&
+        source.state === state &&
+        source.sourceLevel === "county" &&
+        Boolean(source.countyName) &&
+        normalizeCounty(source.countyName ?? "") === county,
+    );
 
-    if (
-      byCountyName
-    ) {
+    if (byCountyName) {
       return {
         ...byCountyName,
       };
     }
   }
 
-  const stateLevel =
-    PUBLIC_RECORD_SOURCE_REGISTRY.find(
-      (source) =>
-        source.status ===
-          "active" &&
-        source.state ===
-          state &&
-        source.sourceLevel ===
-          "state",
-    );
+  const stateLevel = PUBLIC_RECORD_SOURCE_REGISTRY.find(
+    (source) =>
+      source.status === "active" &&
+      source.state === state &&
+      source.sourceLevel === "state",
+  );
 
   return stateLevel
     ? {
@@ -465,12 +350,7 @@ export function resolvePublicRecordSource(
 export function publicRecordBulkPullAvailable(
   lookup: PublicRecordJurisdictionLookup,
 ): boolean {
-  const source =
-    resolvePublicRecordSource(
-      lookup,
-    );
+  const source = resolvePublicRecordSource(lookup);
 
-  return Boolean(
-    source?.supportsBulkPull,
-  );
+  return Boolean(source?.supportsBulkPull);
 }

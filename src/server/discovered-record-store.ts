@@ -50,9 +50,20 @@ export interface DiscoveredRecord {
 
   propertyId?: string;
 
-  addressLine1: string;
+  /**
+   * Source-published property/situs address.
+   *
+   * Optional nationally. Some legitimate government surplus lists identify the
+   * property only by parcel, account or case number.
+   */
+  addressLine1?: string;
 
-  city: string;
+  /**
+   * Source-published city/locality.
+   *
+   * Optional. DueQuity does not substitute the county name for a missing city.
+   */
+  city?: string;
 
   county: string;
 
@@ -62,7 +73,27 @@ export interface DiscoveredRecord {
 
   saleType: SaleType;
 
-  saleDate: IsoDate;
+  /**
+   * Exact sale date only when the government source publishes day precision.
+   */
+  saleDate?: IsoDate;
+
+  /**
+   * Government-published month/year timing normalized to YYYY-MM when no exact
+   * sale day is available.
+   */
+  saleMonthYear?: string;
+
+  /**
+   * Original source-native sale timing text.
+   *
+   * Examples:
+   *
+   *   08/2024
+   *   August 2024
+   *   2024-08
+   */
+  sourceSaleTimingText?: string;
 
   dateTransferred?: IsoDate;
 
@@ -124,9 +155,9 @@ export interface SaveDiscoveredRecordInput {
 
   propertyId?: string;
 
-  addressLine1: string;
+  addressLine1?: string;
 
-  city: string;
+  city?: string;
 
   county: string;
 
@@ -136,7 +167,11 @@ export interface SaveDiscoveredRecordInput {
 
   saleType: SaleType;
 
-  saleDate: IsoDate;
+  saleDate?: IsoDate;
+
+  saleMonthYear?: string;
+
+  sourceSaleTimingText?: string;
 
   dateTransferred?: IsoDate;
 
@@ -204,13 +239,13 @@ interface DiscoveredRecordRow {
 
   source_reference: string | null;
 
-  former_owner_name: string;
+  former_owner_name: string | null;
 
   property_id: string | null;
 
-  address_line1: string;
+  address_line1: string | null;
 
-  city: string;
+  city: string | null;
 
   county: string;
 
@@ -224,7 +259,7 @@ interface DiscoveredRecordRow {
 
   sale_type: string;
 
-  sale_date: string;
+  sale_date: string | null;
 
   case_number: string | null;
 
@@ -269,6 +304,10 @@ interface DiscoveredRecordRow {
 interface DiscoveredRecordSourceSnapshot {
   currentOwnerName?: string;
 
+  saleMonthYear?: string;
+
+  sourceSaleTimingText?: string;
+
   dateTransferred?: IsoDate;
 
   mapNumber?: string;
@@ -301,22 +340,31 @@ function sourceSnapshotFromUnknown(
 function optionalSnapshotString(
   value: unknown,
 ): string | undefined {
-  if (typeof value !== "string") {
+  if (
+    typeof value !==
+    "string"
+  ) {
     return undefined;
   }
 
-  const trimmed = value.trim();
+  const trimmed =
+    value.trim();
 
-  return trimmed || undefined;
+  return trimmed ||
+    undefined;
 }
 
 function optionalSnapshotMoney(
   value: unknown,
 ): number | undefined {
   if (
-    typeof value !== "number" ||
-    !Number.isInteger(value) ||
-    value < 0
+    typeof value !==
+      "number" ||
+    !Number.isInteger(
+      value,
+    ) ||
+    value <
+      0
   ) {
     return undefined;
   }
@@ -329,22 +377,36 @@ function buildSourceSnapshot(
 ): DiscoveredRecordSourceSnapshot {
   return {
     currentOwnerName:
-      input.currentOwnerName?.trim() ||
+      input.currentOwnerName
+        ?.trim() ||
+      undefined,
+
+    saleMonthYear:
+      input.saleMonthYear
+        ?.trim() ||
+      undefined,
+
+    sourceSaleTimingText:
+      input.sourceSaleTimingText
+        ?.trim() ||
       undefined,
 
     dateTransferred:
       input.dateTransferred,
 
     mapNumber:
-      input.mapNumber?.trim() ||
+      input.mapNumber
+        ?.trim() ||
       undefined,
 
     gridNumber:
-      input.gridNumber?.trim() ||
+      input.gridNumber
+        ?.trim() ||
       undefined,
 
     legalDescription:
-      input.legalDescription?.trim() ||
+      input.legalDescription
+        ?.trim() ||
       undefined,
 
     sourceListedBidCents:
@@ -363,19 +425,28 @@ function buildSourceSnapshot(
 /* ========================================================================== */
 
 function nowIsoInstant(): IsoInstant {
-  return new Date().toISOString() as IsoInstant;
+  return new Date()
+    .toISOString() as IsoInstant;
 }
 
 export function discoveredRecordId(
   adapterKey: string,
   recordKey: string,
 ): string {
-  const digest = createHash("sha256")
-    .update(
-      `${adapterKey.trim()}:${recordKey.trim()}`,
+  const digest =
+    createHash(
+      "sha256",
     )
-    .digest("hex")
-    .slice(0, 24);
+      .update(
+        `${adapterKey.trim()}:${recordKey.trim()}`,
+      )
+      .digest(
+        "hex",
+      )
+      .slice(
+        0,
+        24,
+      );
 
   return `dr-${digest}`;
 }
@@ -384,9 +455,16 @@ function requiredInteger(
   value: number | string,
   fieldName: string,
 ): number {
-  const number = Number(value);
+  const number =
+    Number(
+      value,
+    );
 
-  if (!Number.isInteger(number)) {
+  if (
+    !Number.isInteger(
+      number,
+    )
+  ) {
     throw new Error(
       `Discovered record ${fieldName} is invalid.`,
     );
@@ -396,15 +474,28 @@ function requiredInteger(
 }
 
 function optionalInteger(
-  value: number | string | null,
+  value:
+    | number
+    | string
+    | null,
 ): number | undefined {
-  if (value === null) {
+  if (
+    value ===
+    null
+  ) {
     return undefined;
   }
 
-  const number = Number(value);
+  const number =
+    Number(
+      value,
+    );
 
-  if (!Number.isInteger(number)) {
+  if (
+    !Number.isInteger(
+      number,
+    )
+  ) {
     return undefined;
   }
 
@@ -414,12 +505,16 @@ function optionalInteger(
 function rowVersion(
   row: DiscoveredRecordRow,
 ): number {
-  const version = requiredInteger(
-    row.row_version,
-    "row version",
-  );
+  const version =
+    requiredInteger(
+      row.row_version,
+      "row version",
+    );
 
-  if (version < 1) {
+  if (
+    version <
+    1
+  ) {
     throw new Error(
       "Discovered record row version must be positive.",
     );
@@ -433,9 +528,15 @@ function assertOptionalMoney(
   fieldName: string,
 ): void {
   if (
-    value !== undefined &&
-    (!Number.isInteger(value) ||
-      value < 0)
+    value !==
+      undefined &&
+    (
+      !Number.isInteger(
+        value,
+      ) ||
+      value <
+        0
+    )
   ) {
     throw new Error(
       `Discovered record ${fieldName} must be a non-negative integer.`,
@@ -443,62 +544,130 @@ function assertOptionalMoney(
   }
 }
 
+function assertSaleMonthYear(
+  value: string | undefined,
+): void {
+  if (
+    value ===
+    undefined
+  ) {
+    return;
+  }
+
+  if (
+    !/^\d{4}-(0[1-9]|1[0-2])$/.test(
+      value,
+    )
+  ) {
+    throw new Error(
+      "Discovered record saleMonthYear must use YYYY-MM format.",
+    );
+  }
+}
+
 function assertInput(
   input: SaveDiscoveredRecordInput,
 ): void {
-  if (!input.adapterKey.trim()) {
+  if (
+    !input.adapterKey.trim()
+  ) {
     throw new Error(
       "Discovered record adapterKey is required.",
     );
   }
 
-  if (!input.recordKey.trim()) {
+  if (
+    !input.recordKey.trim()
+  ) {
     throw new Error(
       "Discovered record recordKey is required.",
     );
   }
 
-  if (!input.sourceName.trim()) {
+  if (
+    !input.sourceName.trim()
+  ) {
     throw new Error(
       "Discovered record sourceName is required.",
     );
   }
 
-  if (!input.sourceUrl.trim()) {
+  if (
+    !input.sourceUrl.trim()
+  ) {
     throw new Error(
       "Discovered record sourceUrl is required.",
     );
   }
 
-  if (!input.formerOwnerName.trim()) {
-    throw new Error(
-      "Discovered record formerOwnerName is required.",
-    );
-  }
-
-  if (!input.addressLine1.trim()) {
-    throw new Error(
-      "Discovered record addressLine1 is required.",
-    );
-  }
-
-  if (!input.city.trim()) {
-    throw new Error(
-      "Discovered record city is required.",
-    );
-  }
-
-  if (!input.county.trim()) {
+  if (
+    !input.county.trim()
+  ) {
     throw new Error(
       "Discovered record county is required.",
     );
   }
 
-  if (!input.agencyName.trim()) {
+  if (
+    !input.agencyName.trim()
+  ) {
     throw new Error(
       "Discovered record agencyName is required.",
     );
   }
+
+  /*
+   * Preserve real property identity without forcing every jurisdiction to
+   * publish a situs street address.
+   */
+  const hasPropertyIdentity =
+    Boolean(
+      input.propertyId
+        ?.trim(),
+    ) ||
+    Boolean(
+      input.parcelNumber
+        ?.trim(),
+    ) ||
+    Boolean(
+      input.addressLine1
+        ?.trim(),
+    ) ||
+    Boolean(
+      input.caseNumber
+        ?.trim(),
+    ) ||
+    Boolean(
+      input.legalDescription
+        ?.trim(),
+    ) ||
+    Boolean(
+      input.mapNumber
+        ?.trim(),
+    ) ||
+    Boolean(
+      input.gridNumber
+        ?.trim(),
+    );
+
+  if (
+    !hasPropertyIdentity
+  ) {
+    throw new Error(
+      "Discovered record requires at least one source-native property, parcel, address, case or legal-description identifier.",
+    );
+  }
+
+  /*
+   * Sale timing is optional at discovery.
+   *
+   * Some official surplus lists publish only a parcel/account and an excess
+   * amount. DueQuity preserves that source evidence without inventing a sale
+   * date. When month/year is present, its precision is still validated.
+   */
+  assertSaleMonthYear(
+    input.saleMonthYear,
+  );
 
   assertOptionalMoney(
     input.sourceListedBidCents,
@@ -524,21 +693,27 @@ function assertInput(
 function assertReviewInput(
   input: ReviewDiscoveredRecordInput,
 ): void {
-  if (!input.id.trim()) {
+  if (
+    !input.id.trim()
+  ) {
     throw new Error(
       "Discovered record id is required.",
     );
   }
 
-  if (!input.actorUserId.trim()) {
+  if (
+    !input.actorUserId.trim()
+  ) {
     throw new Error(
       "Discovered record review actorUserId is required.",
     );
   }
 
   if (
-    input.decision !== "reviewed" &&
-    input.decision !== "dismissed"
+    input.decision !==
+      "reviewed" &&
+    input.decision !==
+      "dismissed"
   ) {
     throw new Error(
       "Discovered record review decision must be reviewed or dismissed.",
@@ -546,10 +721,12 @@ function assertReviewInput(
   }
 
   const note =
-    input.reviewNote?.trim();
+    input.reviewNote
+      ?.trim();
 
   if (
-    input.decision === "dismissed" &&
+    input.decision ===
+      "dismissed" &&
     !note
   ) {
     throw new Error(
@@ -561,13 +738,17 @@ function assertReviewInput(
 function assertPromotionInput(
   input: PromoteDiscoveredRecordInput,
 ): void {
-  if (!input.id.trim()) {
+  if (
+    !input.id.trim()
+  ) {
     throw new Error(
       "Discovered record id is required.",
     );
   }
 
-  if (!input.opportunityId.trim()) {
+  if (
+    !input.opportunityId.trim()
+  ) {
     throw new Error(
       "Promoted opportunity id is required.",
     );
@@ -585,6 +766,18 @@ function discoveredRecordFromRow(
     sourceSnapshotFromUnknown(
       row.source_snapshot,
     );
+
+  const saleMonthYear =
+    optionalSnapshotString(
+      snapshot.saleMonthYear,
+    );
+
+  const sourceSaleTimingText =
+    optionalSnapshotString(
+      snapshot.sourceSaleTimingText,
+    ) ??
+    row.sale_date ??
+    saleMonthYear;
 
   return {
     id:
@@ -613,7 +806,8 @@ function discoveredRecordFromRow(
       undefined,
 
     formerOwnerName:
-      row.former_owner_name,
+      row.former_owner_name ??
+      "",
 
     currentOwnerName:
       optionalSnapshotString(
@@ -625,10 +819,12 @@ function discoveredRecordFromRow(
       undefined,
 
     addressLine1:
-      row.address_line1,
+      row.address_line1 ??
+      undefined,
 
     city:
-      row.city,
+      row.city ??
+      undefined,
 
     county:
       row.county,
@@ -644,7 +840,13 @@ function discoveredRecordFromRow(
       row.sale_type as SaleType,
 
     saleDate:
-      row.sale_date as IsoDate,
+      row.sale_date
+        ? row.sale_date as IsoDate
+        : undefined,
+
+    saleMonthYear,
+
+    sourceSaleTimingText,
 
     dateTransferred:
       optionalSnapshotString(
@@ -714,9 +916,11 @@ function discoveredRecordFromRow(
       row.source_retrieved_at as IsoInstant,
 
     reviewedAt:
-      (row.reviewed_at as
-        | IsoInstant
-        | null) ??
+      (
+        row.reviewed_at as
+          | IsoInstant
+          | null
+      ) ??
       undefined,
 
     reviewedByUserId:
@@ -762,7 +966,9 @@ async function getDiscoveredRecordRowById(
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read discovered record: ${error.message}`,
     );
@@ -793,10 +999,12 @@ async function updateDiscoveredRecordWithVersion(
         ...values,
 
         row_version:
-          expectedRowVersion + 1,
+          expectedRowVersion +
+          1,
 
         updated_at:
-          new Date().toISOString(),
+          new Date()
+            .toISOString(),
       })
       .eq(
         "id",
@@ -809,13 +1017,17 @@ async function updateDiscoveredRecordWithVersion(
       .select("*")
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to update discovered record: ${error.message}`,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "Discovered record changed while this request was being processed. Reload and try again.",
     );
@@ -846,17 +1058,23 @@ export async function listDiscoveredRecords(): Promise<
       .order(
         "last_seen_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to list discovered records: ${error.message}`,
     );
   }
 
-  return (data ?? []).map(
+  return (
+    data ??
+    []
+  ).map(
     (row) =>
       discoveredRecordFromRow(
         row as DiscoveredRecordRow,
@@ -909,7 +1127,9 @@ export async function getDiscoveredRecordBySourceKey(
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read discovered record by source key: ${error.message}`,
     );
@@ -951,11 +1171,8 @@ export async function saveDiscoveredRecord(
    * The government-source snapshot on discovered_records is immutable.
    *
    * Re-harvesting an already staged source record therefore means only that
-   * Duequity observed the same record again at the activated official source.
+   * DueQuity observed the same record again at the activated official source.
    * Preserve the original source evidence and advance last_seen_at only.
-   *
-   * This also preserves review status, promotion state, enrichment links and
-   * every other workflow fact already attached to the discovery record.
    */
   if (
     existingRow
@@ -986,66 +1203,85 @@ export async function saveDiscoveredRecord(
 
   const payload = {
     adapter_key:
-      input.adapterKey.trim(),
+      input.adapterKey
+        .trim(),
 
     record_key:
-      input.recordKey.trim(),
+      input.recordKey
+        .trim(),
 
     source_kind:
       input.sourceKind,
 
     source_name:
-      input.sourceName.trim(),
+      input.sourceName
+        .trim(),
 
     source_url:
-      input.sourceUrl.trim(),
+      input.sourceUrl
+        .trim(),
 
     source_reference:
-      input.sourceReference?.trim() ||
+      input.sourceReference
+        ?.trim() ||
       null,
 
     former_owner_name:
-      input.formerOwnerName.trim(),
+      input.formerOwnerName
+        .trim() ||
+      null,
 
     property_id:
-      input.propertyId?.trim() ||
+      input.propertyId
+        ?.trim() ||
       null,
 
     address_line1:
-      input.addressLine1.trim(),
+      input.addressLine1
+        ?.trim() ||
+      null,
 
     city:
-      input.city.trim(),
+      input.city
+        ?.trim() ||
+      null,
 
     county:
-      input.county.trim(),
+      input.county
+        .trim(),
 
     state_code:
       input.state,
 
     postal_code:
-      input.postalCode?.trim() ||
+      input.postalCode
+        ?.trim() ||
       null,
 
     sale_type:
       input.saleType,
 
     sale_date:
-      input.saleDate,
+      input.saleDate ??
+      null,
 
     case_number:
-      input.caseNumber?.trim() ||
+      input.caseNumber
+        ?.trim() ||
       null,
 
     parcel_number:
-      input.parcelNumber?.trim() ||
+      input.parcelNumber
+        ?.trim() ||
       null,
 
     agency_name:
-      input.agencyName.trim(),
+      input.agencyName
+        .trim(),
 
     agency_phone:
-      input.agencyPhone?.trim() ||
+      input.agencyPhone
+        ?.trim() ||
       null,
 
     custodian:
@@ -1111,7 +1347,9 @@ export async function saveDiscoveredRecord(
       .select("*")
       .single();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to save discovered record: ${error.message}`,
     );
@@ -1141,7 +1379,9 @@ export async function reviewDiscoveredRecord(
       id,
     );
 
-  if (!currentRow) {
+  if (
+    !currentRow
+  ) {
     throw new Error(
       "Discovered record not found.",
     );
@@ -1153,7 +1393,8 @@ export async function reviewDiscoveredRecord(
     );
 
   if (
-    current.status === "promoted" ||
+    current.status ===
+      "promoted" ||
     current.promotedOpportunityId
   ) {
     throw new Error(
@@ -1180,11 +1421,13 @@ export async function reviewDiscoveredRecord(
           reviewedAt,
 
         review_note:
-          input.reviewNote?.trim() ||
+          input.reviewNote
+            ?.trim() ||
           null,
 
         updated_by_user_id:
-          input.actorUserId.trim(),
+          input.actorUserId
+            .trim(),
       },
     );
 
@@ -1208,14 +1451,17 @@ export async function promoteDiscoveredRecord(
     input.id.trim();
 
   const opportunityId =
-    input.opportunityId.trim();
+    input.opportunityId
+      .trim();
 
   const currentRow =
     await getDiscoveredRecordRowById(
       id,
     );
 
-  if (!currentRow) {
+  if (
+    !currentRow
+  ) {
     throw new Error(
       "Discovered record not found.",
     );
@@ -1231,7 +1477,8 @@ export async function promoteDiscoveredRecord(
    * Opportunity.
    */
   if (
-    current.status === "promoted" &&
+    current.status ===
+      "promoted" &&
     current.promotedOpportunityId ===
       opportunityId
   ) {
@@ -1239,7 +1486,8 @@ export async function promoteDiscoveredRecord(
   }
 
   if (
-    current.status === "promoted" ||
+    current.status ===
+      "promoted" ||
     current.promotedOpportunityId
   ) {
     throw new Error(
@@ -1248,11 +1496,34 @@ export async function promoteDiscoveredRecord(
   }
 
   if (
-    current.status !== "reviewed" ||
+    current.status !==
+      "reviewed" ||
     !current.reviewedAt
   ) {
     throw new Error(
       "Discovered record must complete operational review before promotion.",
+    );
+  }
+
+  /*
+   * Discovery may intentionally retain an unresolved official surplus row.
+   * Promotion is stricter: a claimant identity and exact sale date must exist
+   * before this record can become an Opportunity.
+   */
+  if (
+    !current.formerOwnerName
+      .trim()
+  ) {
+    throw new Error(
+      "Discovered record requires a resolved former-owner identity before promotion.",
+    );
+  }
+
+  if (
+    !current.saleDate
+  ) {
+    throw new Error(
+      "Discovered record requires an exact source-supported sale date before promotion.",
     );
   }
 

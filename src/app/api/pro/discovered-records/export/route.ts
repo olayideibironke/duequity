@@ -69,7 +69,11 @@ interface ExportRow {
 
   email: string;
 
+  additionalEmails: string;
+
   mostRecentMailingAddress: string;
+
+  additionalMailingAddresses: string;
 
   associatedContact: string;
 
@@ -79,6 +83,8 @@ interface ExportRow {
 
   associatedEmail: string;
 
+  additionalAssociatedContacts: string;
+
   county: string;
 
   state: string;
@@ -87,7 +93,7 @@ interface ExportRow {
 
   caseParcelPropertyId: string;
 
-  saleDate: string;
+  saleTiming: string;
 
   sourceListedAmountCents?: number;
 
@@ -172,12 +178,11 @@ function sourcePersonalLastName(
   sourceRecord: OfficialPublicRecord | undefined,
 ): string {
   /*
-   * The Carroll source labels its second name field "Last Name / Company".
+   * A source-native Last Name / Company field is treated as a person's last
+   * name only when that same government source also supplied a first name.
    *
-   * Only treat that value as a person's last name when the source also supplied
-   * a First Name. If First Name is absent, the second field may be a company,
-   * trust, estate or another non-person owner and must not be placed into the
-   * Excel Last Name column.
+   * This prevents companies, estates and trusts from being silently converted
+   * into individual claimant names.
    */
   if (
     !sourceRecord
@@ -222,7 +227,27 @@ function sourceTimestamp(
     : 0;
 }
 
-function newestFirst<
+function findingStatusRank(
+  status: string,
+): number {
+  switch (
+    status
+  ) {
+    case "verified":
+      return 3;
+
+    case "candidate":
+      return 2;
+
+    case "rejected":
+      return 0;
+
+    default:
+      return 1;
+  }
+}
+
+function bestFirst<
   T extends {
     source: ClaimantLocatorSource;
 
@@ -245,15 +270,33 @@ function newestFirst<
       (
         left,
         right,
-      ) =>
-        sourceTimestamp(
-          right.source.sourceDate,
-          right.foundAt,
-        ) -
-        sourceTimestamp(
-          left.source.sourceDate,
-          left.foundAt,
-        ),
+      ) => {
+        const statusDifference =
+          findingStatusRank(
+            right.status,
+          ) -
+          findingStatusRank(
+            left.status,
+          );
+
+        if (
+          statusDifference !==
+          0
+        ) {
+          return statusDifference;
+        }
+
+        return (
+          sourceTimestamp(
+            right.source.sourceDate,
+            right.foundAt,
+          ) -
+          sourceTimestamp(
+            left.source.sourceDate,
+            left.foundAt,
+          )
+        );
+      },
     );
 }
 
@@ -264,7 +307,7 @@ function contactCandidatesOfKind(
     | "email"
     | "mailing_address",
 ): ClaimantLocatorCandidate[] {
-  return newestFirst(
+  return bestFirst(
     (
       enrichment
         ?.claimantLocator
@@ -285,7 +328,7 @@ function identitiesOfKind(
     | "last_name"
     | "alias",
 ): ClaimantLocatorIdentityCandidate[] {
-  return newestFirst(
+  return bestFirst(
     (
       enrichment
         ?.claimantLocator
@@ -302,7 +345,7 @@ function identitiesOfKind(
 function associatedContacts(
   enrichment: DiscoveredRecordEnrichment | undefined,
 ): ClaimantLocatorAssociatedContact[] {
-  return newestFirst(
+  return bestFirst(
     enrichment
       ?.claimantLocator
       ?.associatedContacts ??
@@ -369,11 +412,13 @@ function selectedSources(
     return [];
   }
 
-  const sources: ClaimantLocatorSource[] =
+  const sources:
+    ClaimantLocatorSource[] =
     [];
 
   for (
-    const candidate of locator.candidates
+    const candidate of
+    locator.candidates
   ) {
     if (
       candidate.status !==
@@ -386,7 +431,8 @@ function selectedSources(
   }
 
   for (
-    const identity of locator.identities ??
+    const identity of
+    locator.identities ??
     []
   ) {
     if (
@@ -400,7 +446,8 @@ function selectedSources(
   }
 
   for (
-    const contact of locator.associatedContacts ??
+    const contact of
+    locator.associatedContacts ??
     []
   ) {
     if (
@@ -437,16 +484,26 @@ function provenanceLabel(
 function contactVerificationStatus(
   enrichment: DiscoveredRecordEnrichment | undefined,
 ): string {
-  const directContacts =
+  const locator =
     enrichment
-      ?.claimantLocator
-      ?.candidates ??
-      [];
+      ?.claimantLocator;
 
   if (
-    directContacts.some(
-      (candidate) =>
-        candidate.status ===
+    !locator
+  ) {
+    return "No contact data";
+  }
+
+  const findings = [
+    ...(locator.candidates ?? []),
+    ...(locator.identities ?? []),
+    ...(locator.associatedContacts ?? []),
+  ];
+
+  if (
+    findings.some(
+      (finding) =>
+        finding.status ===
         "verified",
     )
   ) {
@@ -454,9 +511,9 @@ function contactVerificationStatus(
   }
 
   if (
-    directContacts.some(
-      (candidate) =>
-        candidate.status ===
+    findings.some(
+      (finding) =>
+        finding.status ===
         "candidate",
     )
   ) {
@@ -479,71 +536,54 @@ function locatorStatus(
     return "Not started";
   }
 
-  const direct =
-    locator.candidates ??
-    [];
+  const findings = [
+    ...(locator.candidates ?? []),
+    ...(locator.identities ?? []),
+    ...(locator.associatedContacts ?? []),
+  ];
 
   if (
-    direct.some(
-      (candidate) =>
-        candidate.status ===
+    findings.some(
+      (finding) =>
+        finding.status ===
         "verified",
     )
   ) {
-    return "Verified contact available";
+    return "Verified locator data available";
   }
-
-  const activeFindingCount =
-    [
-      ...direct,
-      ...(locator.identities ?? []),
-      ...(locator.associatedContacts ?? []),
-    ].filter(
-      (finding) =>
-        finding.status !==
-        "rejected",
-    ).length;
 
   if (
-    activeFindingCount > 0
+    findings.some(
+      (finding) =>
+        finding.status ===
+        "candidate",
+    )
   ) {
-    return "Research findings available";
+    return "Locator candidates available";
   }
 
-  const totalFindingCount =
-    direct.length +
-    (
-      locator.identities
-        ?.length ??
-      0
-    ) +
-    (
-      locator.associatedContacts
-        ?.length ??
-      0
-    );
+  if (
+    findings.length >
+    0
+  ) {
+    return "Research findings rejected";
+  }
 
-  return totalFindingCount > 0
-    ? "Research findings rejected"
-    : "Not started";
+  return "Not started";
 }
 
 function propertyAddress(
   record: DiscoveredRecord,
 ): string {
-  return [
+  return uniqueValues([
     record.addressLine1,
     record.city,
     record.county,
     record.state,
     record.postalCode,
-  ]
-    .filter(
-      Boolean,
-    )
-    .join(
-      ", ",
-    );
+  ]).join(
+    ", ",
+  );
 }
 
 function recordIdentifiers(
@@ -561,12 +601,86 @@ function recordIdentifiers(
     record.propertyId
       ? `Property ID ${record.propertyId}`
       : undefined,
+
+    record.mapNumber
+      ? `Map ${record.mapNumber}`
+      : undefined,
+
+    record.gridNumber
+      ? `Grid ${record.gridNumber}`
+      : undefined,
   ]
     .filter(
-      Boolean,
+      (
+        value,
+      ): value is string =>
+        Boolean(
+          value,
+        ),
     )
     .join(
       "; ",
+    );
+}
+
+function saleTiming(
+  record: DiscoveredRecord,
+): string {
+  if (
+    record.saleDate
+  ) {
+    return record.saleDate;
+  }
+
+  if (
+    record.sourceSaleTimingText
+      ?.trim()
+  ) {
+    return record
+      .sourceSaleTimingText
+      .trim();
+  }
+
+  if (
+    record.saleMonthYear
+      ?.trim()
+  ) {
+    return record
+      .saleMonthYear
+      .trim();
+  }
+
+  return "";
+}
+
+function associatedContactSummary(
+  contact: ClaimantLocatorAssociatedContact,
+): string {
+  return [
+    contact.name?.trim(),
+
+    contact.relationship?.trim()
+      ? `Relationship: ${contact.relationship.trim()}`
+      : undefined,
+
+    contact.phone?.trim()
+      ? `Phone: ${contact.phone.trim()}`
+      : undefined,
+
+    contact.email?.trim()
+      ? `Email: ${contact.email.trim()}`
+      : undefined,
+  ]
+    .filter(
+      (
+        value,
+      ): value is string =>
+        Boolean(
+          value,
+        ),
+    )
+    .join(
+      " | ",
     );
 }
 
@@ -616,15 +730,13 @@ function exportRow(
       enrichment,
     );
 
-  const mostRecentAssociate =
+  const primaryAssociate =
     associates[0];
 
   /*
-   * Researched claimant identity takes precedence if Duequity has a non-rejected
-   * identity finding. Otherwise use the exact separate name fields supplied by
-   * the activated official county source.
+   * Researched identity takes precedence over source-native split name fields.
    *
-   * We never split formerOwnerName ourselves.
+   * DueQuity never guesses first/last names by splitting formerOwnerName.
    */
   const sourceFirstName =
     sourcePersonalFirstName(
@@ -684,30 +796,71 @@ function exportRow(
         ?.value ??
       "",
 
+    additionalEmails:
+      uniqueValues(
+        emails
+          .slice(
+            1,
+          )
+          .map(
+            (candidate) =>
+              candidate.value,
+          ),
+      ).join(
+        "; ",
+      ),
+
     mostRecentMailingAddress:
       mailingAddresses[0]
         ?.value ??
       "",
 
+    additionalMailingAddresses:
+      uniqueValues(
+        mailingAddresses
+          .slice(
+            1,
+          )
+          .map(
+            (candidate) =>
+              candidate.value,
+          ),
+      ).join(
+        "; ",
+      ),
+
     associatedContact:
-      mostRecentAssociate
+      primaryAssociate
         ?.name ??
       "",
 
     relationship:
-      mostRecentAssociate
+      primaryAssociate
         ?.relationship ??
       "",
 
     associatedPhone:
-      mostRecentAssociate
+      primaryAssociate
         ?.phone ??
       "",
 
     associatedEmail:
-      mostRecentAssociate
+      primaryAssociate
         ?.email ??
       "",
+
+    additionalAssociatedContacts:
+      uniqueValues(
+        associates
+          .slice(
+            1,
+          )
+          .map(
+            associatedContactSummary,
+          ),
+      ).join(
+        "; ",
+      ),
 
     county:
       record.county,
@@ -725,10 +878,13 @@ function exportRow(
         record,
       ),
 
-    saleDate:
-      record.saleDate,
+    saleTiming:
+      saleTiming(
+        record,
+      ),
 
     sourceListedAmountCents:
+      record.sourceListedSurplusCents ??
       record.sourceListedBalanceCents,
 
     officialSourceName:
@@ -753,9 +909,10 @@ function exportRow(
       ),
 
     /*
-     * Duequity currently has no implemented outreach-attempt store in the
-     * application layer and has sent no outreach. Do not infer an attempt from
-     * locator research or promotion status.
+     * Locator research is not outreach.
+     *
+     * This stays "Not started" until DueQuity has a persisted outreach-attempt
+     * workflow.
      */
     outreachStatus:
       "Not started",
@@ -909,7 +1066,8 @@ export async function GET(
     );
 
   if (
-    records.length === 0
+    records.length ===
+    0
   ) {
     return errorResponse(
       "No discovered records are available for the selected county.",
@@ -928,16 +1086,10 @@ export async function GET(
     );
 
   /*
-   * Re-read the activated official county source only to recover source-native
-   * fields that were not part of older immutable staged snapshots.
+   * Re-read the activated official source only to recover source-native fields
+   * that were not included in older immutable staged snapshots.
    *
-   * The match is exact by adapterKey + recordKey. We never match by name,
-   * address, amount or another heuristic.
-   *
-   * If the live source is unsupported or temporarily unavailable, the export
-   * still succeeds. Existing immutable staged evidence remains the source of
-   * truth and the separate name columns simply remain blank unless Claimant
-   * Locator research has established them.
+   * Matching is exact by adapterKey + recordKey only.
    */
   const officialDiscovery =
     await discoverOfficialPublicRecords({
@@ -959,7 +1111,8 @@ export async function GET(
     "supported"
   ) {
     for (
-      const sourceRecord of officialDiscovery.records
+      const sourceRecord of
+      officialDiscovery.records
     ) {
       officialRecordBySourceKey.set(
         sourceRecordMapKey(
@@ -1025,7 +1178,7 @@ export async function GET(
     );
 
   worksheet.mergeCells(
-    "A1:Y1",
+    "A1:AB1",
   );
 
   const titleCell =
@@ -1060,7 +1213,7 @@ export async function GET(
     26;
 
   worksheet.mergeCells(
-    "A2:Y2",
+    "A2:AB2",
   );
 
   const subtitleCell =
@@ -1069,7 +1222,7 @@ export async function GET(
     );
 
   subtitleCell.value =
-    `${rows.length} discovery lead${rows.length === 1 ? "" : "s"} exported ${new Date().toLocaleString("en-US")}. Blank locator fields mean the information has not been established in DueQuity research.`;
+    `${rows.length} discovery lead${rows.length === 1 ? "" : "s"} exported ${new Date().toLocaleString("en-US")}. Blank locator fields mean the information has not yet been established by DueQuity research.`;
 
   subtitleCell.font = {
     size:
@@ -1085,7 +1238,7 @@ export async function GET(
   };
 
   worksheet.mergeCells(
-    "A3:Y3",
+    "A3:AB3",
   );
 
   const warningCell =
@@ -1094,7 +1247,7 @@ export async function GET(
     );
 
   warningCell.value =
-    "Discovery leads are not automatically claimants or clients. Located data is distinct from verified data. Outreach status remains Not started until a real outreach attempt is persisted.";
+    "Discovery leads are not automatically claimants or clients. Candidate locator data must be distinguished from verified data. Outreach status remains Not started until an actual outreach attempt is persisted.";
 
   warningCell.font = {
     size:
@@ -1124,19 +1277,22 @@ export async function GET(
     "Last Name",
     "Full Name as Listed by Source",
     "Aliases / Alternate Names",
-    "Most Recent Located Phone",
+    "Best Located Phone",
     "Additional Phone Numbers",
-    "Email Address",
-    "Most Recent Located Mailing Address",
-    "Relative / Associated Contact",
+    "Best Located Email",
+    "Additional Email Addresses",
+    "Best / Most Recent Located Mailing Address",
+    "Additional Located Mailing Addresses",
+    "Primary Relative / Associated Contact",
     "Relationship",
     "Associated Contact Phone",
     "Associated Contact Email",
+    "Additional Relatives / Associated Contacts",
     "County",
     "State",
     "Property Address",
     "Case / Parcel / Property ID",
-    "Sale Date",
+    "Sale Date / Source Sale Month-Year",
     "Available Surplus / Source-Listed Amount",
     "Official Source",
     "Contact Data Source / Provenance",
@@ -1218,16 +1374,19 @@ export async function GET(
         row.mostRecentPhone,
         row.additionalPhones,
         row.email,
+        row.additionalEmails,
         row.mostRecentMailingAddress,
+        row.additionalMailingAddresses,
         row.associatedContact,
         row.relationship,
         row.associatedPhone,
         row.associatedEmail,
+        row.additionalAssociatedContacts,
         row.county,
         row.state,
         row.propertyAddress,
         row.caseParcelPropertyId,
-        row.saleDate,
+        row.saleTiming,
         row.sourceListedAmountCents ===
         undefined
           ? null
@@ -1275,133 +1434,51 @@ export async function GET(
     },
   };
 
-  worksheet.getColumn(
-    1,
-  ).width =
-    16;
-
-  worksheet.getColumn(
-    2,
-  ).width =
-    18;
-
-  worksheet.getColumn(
-    3,
-  ).width =
-    30;
-
-  worksheet.getColumn(
-    4,
-  ).width =
-    28;
-
-  worksheet.getColumn(
-    5,
-  ).width =
-    22;
-
-  worksheet.getColumn(
-    6,
-  ).width =
-    28;
-
-  worksheet.getColumn(
-    7,
-  ).width =
-    28;
-
-  worksheet.getColumn(
-    8,
-  ).width =
-    38;
-
-  worksheet.getColumn(
-    9,
-  ).width =
-    28;
-
-  worksheet.getColumn(
-    10,
-  ).width =
-    18;
-
-  worksheet.getColumn(
-    11,
-  ).width =
-    22;
-
-  worksheet.getColumn(
-    12,
-  ).width =
-    28;
-
-  worksheet.getColumn(
-    13,
-  ).width =
-    20;
-
-  worksheet.getColumn(
-    14,
-  ).width =
-    10;
-
-  worksheet.getColumn(
-    15,
-  ).width =
-    38;
-
-  worksheet.getColumn(
+  const widths = [
     16,
-  ).width =
-    34;
-
-  worksheet.getColumn(
-    17,
-  ).width =
-    14;
-
-  worksheet.getColumn(
     18,
-  ).width =
-    22;
-
-  worksheet.getColumn(
-    19,
-  ).width =
-    36;
-
-  worksheet.getColumn(
+    30,
+    28,
+    22,
+    28,
+    28,
+    30,
+    40,
+    40,
+    30,
+    18,
+    22,
+    28,
+    48,
     20,
-  ).width =
-    40;
+    10,
+    38,
+    36,
+    24,
+    22,
+    36,
+    42,
+    22,
+    28,
+    18,
+    30,
+    45,
+  ];
+
+  widths.forEach(
+    (
+      width,
+      index,
+    ) => {
+      worksheet.getColumn(
+        index + 1,
+      ).width =
+        width;
+    },
+  );
 
   worksheet.getColumn(
     21,
-  ).width =
-    22;
-
-  worksheet.getColumn(
-    22,
-  ).width =
-    26;
-
-  worksheet.getColumn(
-    23,
-  ).width =
-    18;
-
-  worksheet.getColumn(
-    24,
-  ).width =
-    30;
-
-  worksheet.getColumn(
-    25,
-  ).width =
-    45;
-
-  worksheet.getColumn(
-    18,
   ).numFmt =
     "$#,##0.00";
 
@@ -1417,7 +1494,7 @@ export async function GET(
       );
 
     row.height =
-      34;
+      38;
 
     row.eachCell(
       (cell) => {

@@ -28,7 +28,10 @@ import { resolveStaffSession } from "@/server/staff-session";
 
 import { StaffAuthenticationRequired } from "@/components/ui/authentication-required";
 
-import { getDiscoveredRecordById } from "@/server/discovered-record-store";
+import {
+  getDiscoveredRecordById,
+  type DiscoveredRecord,
+} from "@/server/discovered-record-store";
 
 import {
   evaluateDiscoveredRecordEnrichmentReadiness,
@@ -53,7 +56,9 @@ const USD = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
-function normalizeCounty(value: string): string {
+function normalizeCounty(
+  value: string,
+): string {
   return value
     .toLowerCase()
     .replace(/\bcounty\b/g, "")
@@ -62,32 +67,144 @@ function normalizeCounty(value: string): string {
     .trim();
 }
 
-function formatBalance(cents: number | undefined): string | undefined {
-  if (cents === undefined) {
+function formatBalance(
+  cents: number | undefined,
+): string | undefined {
+  if (
+    cents ===
+    undefined
+  ) {
     return undefined;
   }
 
-  return USD.format(cents / 100);
+  return USD.format(
+    cents /
+      100,
+  );
 }
 
-function phoneHref(value: string): string {
-  const digits = value.replace(/\D/g, "");
+function phoneHref(
+  value: string,
+): string {
+  const digits =
+    value.replace(
+      /\D/g,
+      "",
+    );
 
-  if (digits.length === 10) {
+  if (
+    digits.length ===
+    10
+  ) {
     return `tel:+1${digits}`;
   }
 
   return `tel:${digits}`;
 }
 
-function humanize(value: string): string {
+function humanize(
+  value: string,
+): string {
   return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+    .replaceAll(
+      "_",
+      " ",
+    )
+    .replace(
+      /\b\w/g,
+      (character) =>
+        character.toUpperCase(),
+    );
 }
 
-function webSearchHref(query: string): string {
-  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+function webSearchHref(
+  query: string,
+): string {
+  return `https://www.google.com/search?q=${encodeURIComponent(
+    query,
+  )}`;
+}
+
+function propertyAddressLabel(
+  record: DiscoveredRecord,
+): string | undefined {
+  const parts = [
+    record.addressLine1,
+    record.city,
+    record.county,
+    record.state,
+    record.postalCode,
+  ]
+    .map(
+      (value) =>
+        value
+          ?.trim(),
+    )
+    .filter(
+      (
+        value,
+      ): value is string =>
+        Boolean(
+          value,
+        ),
+    );
+
+  if (
+    !record.addressLine1 &&
+    !record.city &&
+    !record.postalCode
+  ) {
+    return undefined;
+  }
+
+  return parts.join(
+    ", ",
+  );
+}
+
+function saleTimingLabel(
+  record: DiscoveredRecord,
+): string | undefined {
+  if (
+    record.saleDate
+  ) {
+    return formatDate(
+      record.saleDate,
+    );
+  }
+
+  const sourceTiming =
+    record.sourceSaleTimingText
+      ?.trim();
+
+  if (
+    sourceTiming
+  ) {
+    return `${sourceTiming} (month-level source timing)`;
+  }
+
+  const monthYear =
+    record.saleMonthYear
+      ?.trim();
+
+  if (
+    monthYear
+  ) {
+    return `${monthYear} (month-level source timing)`;
+  }
+
+  return undefined;
+}
+
+function quotedSearchTerm(
+  value: string | undefined,
+): string | undefined {
+  const trimmed =
+    value?.trim();
+
+  return trimmed
+    ? `"${trimmed}"`
+    : undefined;
 }
 
 /* ========================================================================== */
@@ -101,119 +218,292 @@ export default async function DiscoveredRecordDetailPage({
     id: string;
   }>;
 }) {
-  const session = await resolveStaffSession();
+  const session =
+    await resolveStaffSession();
 
-  if (!session) {
-    return <StaffAuthenticationRequired />;
+  if (
+    !session
+  ) {
+    return (
+      <StaffAuthenticationRequired />
+    );
   }
 
-  const { id } = await params;
+  const {
+    id,
+  } =
+    await params;
 
-  const [record, rulePackages, enrichment] = await Promise.all([
-    getDiscoveredRecordById(id),
+  const [
+    record,
+    rulePackages,
+    enrichment,
+  ] =
+    await Promise.all([
+      getDiscoveredRecordById(
+        id,
+      ),
 
-    listJurisdictionRulePackages(),
+      listJurisdictionRulePackages(),
 
-    getDiscoveredRecordEnrichment(id),
-  ]);
+      getDiscoveredRecordEnrichment(
+        id,
+      ),
+    ]);
 
-  if (!record) {
+  if (
+    !record
+  ) {
     notFound();
   }
 
   const isPromoted =
-    record.status === "promoted" ||
-    Boolean(record.promotedOpportunityId);
+    record.status ===
+      "promoted" ||
+    Boolean(
+      record.promotedOpportunityId,
+    );
 
   const canLocate =
-    can(session, "opportunity.write") &&
-    clearedForState(session, record.state);
+    can(
+      session,
+      "opportunity.write",
+    ) &&
+    clearedForState(
+      session,
+      record.state,
+    );
 
   const canReview =
     canLocate &&
     !isPromoted;
 
-  const approvedJurisdiction = rulePackages.find(
-    (rulePackage) =>
-      rulePackage.status === "approved" &&
-      Boolean(rulePackage.rule) &&
-      rulePackage.rule?.state === record.state &&
-      normalizeCounty(rulePackage.rule?.county ?? "") ===
-        normalizeCounty(record.county),
-  )?.rule;
+  const approvedJurisdiction =
+    rulePackages.find(
+      (rulePackage) =>
+        rulePackage.status ===
+          "approved" &&
+        Boolean(
+          rulePackage.rule,
+        ) &&
+        rulePackage.rule
+          ?.state ===
+          record.state &&
+        normalizeCounty(
+          rulePackage.rule
+            ?.county ??
+            "",
+        ) ===
+          normalizeCounty(
+            record.county,
+          ),
+    )?.rule;
 
-  const balance = formatBalance(record.sourceListedBalanceCents);
+  const sourceListedAmount =
+    formatBalance(
+      record.sourceListedSurplusCents ??
+      record.sourceListedBalanceCents,
+    );
 
-  const enrichmentReadiness = evaluateDiscoveredRecordEnrichmentReadiness(
-    enrichment,
-    {
-      hasSourceListedBalance: record.sourceListedBalanceCents !== undefined,
-    },
+  const enrichmentReadiness =
+    evaluateDiscoveredRecordEnrichmentReadiness(
+      enrichment,
+      {
+        hasSourceListedBalance:
+          (
+            record.sourceListedSurplusCents ??
+            record.sourceListedBalanceCents
+          ) !==
+          undefined,
+      },
+    );
+
+  /*
+   * Discovery is intentionally allowed to preserve incomplete government
+   * records. Opportunity promotion is not.
+   *
+   * Keep these requirements aligned with the promotion API boundary.
+   */
+  const promotionDataBlockers = [
+    !record.addressLine1
+      ?.trim()
+      ? "A verified property street address is required before promotion."
+      : undefined,
+
+    !record.city
+      ?.trim()
+      ? "A verified property city is required before promotion."
+      : undefined,
+
+    !record.postalCode
+      ?.trim()
+      ? "A verified postal code is required before promotion."
+      : undefined,
+
+    !record.saleDate
+      ? "An exact verified sale date is required before promotion. Month/year-only source timing remains valid discovery evidence but is not sufficient for the Opportunity model."
+      : undefined,
+  ].filter(
+    (
+      value,
+    ): value is string =>
+      Boolean(
+        value,
+      ),
   );
 
   const workflowReady =
     !isPromoted &&
-    record.status === "reviewed" &&
-    Boolean(approvedJurisdiction) &&
-    enrichmentReadiness.ready;
+    record.status ===
+      "reviewed" &&
+    Boolean(
+      approvedJurisdiction,
+    ) &&
+    enrichmentReadiness.ready &&
+    promotionDataBlockers.length ===
+      0;
 
-  const promotionBlockers = isPromoted
-    ? []
-    : [
-        record.status !== "reviewed"
-          ? "The discovered record must complete operational review."
-          : undefined,
+  const promotionBlockers =
+    isPromoted
+      ? []
+      : [
+          record.status !==
+            "reviewed"
+            ? "The discovered record must complete operational review."
+            : undefined,
 
-        !approvedJurisdiction
-          ? "No approved Duequity jurisdiction rule is available for this county."
-          : undefined,
+          !approvedJurisdiction
+            ? "No approved Duequity jurisdiction rule is available for this county."
+            : undefined,
 
-        ...enrichmentReadiness.missing,
-      ].filter((value): value is string => Boolean(value));
+          ...promotionDataBlockers,
+
+          ...enrichmentReadiness.missing,
+        ].filter(
+          (
+            value,
+          ): value is string =>
+            Boolean(
+              value,
+            ),
+        );
+
+  const displayPropertyAddress =
+    propertyAddressLabel(
+      record,
+    );
+
+  const displaySaleTiming =
+    saleTimingLabel(
+      record,
+    );
 
   const ownerLocationResearchUrl =
     webSearchHref(
       [
-        `"${record.formerOwnerName}"`,
-        `"${record.county}"`,
+        quotedSearchTerm(
+          record.formerOwnerName,
+        ),
+
+        quotedSearchTerm(
+          record.county,
+        ),
+
         record.state,
+
         "address phone email",
-      ].join(" "),
+      ]
+        .filter(
+          (
+            value,
+          ): value is string =>
+            Boolean(
+              value,
+            ),
+        )
+        .join(
+          " ",
+        ),
     );
 
-  const ownerPropertyResearchUrl =
-    webSearchHref(
-      [
-        `"${record.formerOwnerName}"`,
-        `"${record.addressLine1}"`,
-        record.city,
-        record.state,
-      ].join(" "),
-    );
+  const ownerPropertyResearchTerms = [
+    quotedSearchTerm(
+      record.formerOwnerName,
+    ),
 
-  const identifierResearchTerms = [
-    record.caseNumber
-      ? `"${record.caseNumber}"`
-      : undefined,
+    quotedSearchTerm(
+      record.addressLine1,
+    ),
 
-    record.propertyId
-      ? `"${record.propertyId}"`
-      : undefined,
+    quotedSearchTerm(
+      record.city,
+    ),
 
-    record.parcelNumber
-      ? `"${record.parcelNumber}"`
-      : undefined,
+    quotedSearchTerm(
+      record.parcelNumber,
+    ),
 
-    `"${record.formerOwnerName}"`,
+    quotedSearchTerm(
+      record.propertyId,
+    ),
+
+    quotedSearchTerm(
+      record.caseNumber,
+    ),
 
     record.county,
 
     record.state,
-  ].filter((value): value is string => Boolean(value));
+  ].filter(
+    (
+      value,
+    ): value is string =>
+      Boolean(
+        value,
+      ),
+  );
+
+  const ownerPropertyResearchUrl =
+    webSearchHref(
+      ownerPropertyResearchTerms.join(
+        " ",
+      ),
+    );
+
+  const identifierResearchTerms = [
+    quotedSearchTerm(
+      record.caseNumber,
+    ),
+
+    quotedSearchTerm(
+      record.propertyId,
+    ),
+
+    quotedSearchTerm(
+      record.parcelNumber,
+    ),
+
+    quotedSearchTerm(
+      record.formerOwnerName,
+    ),
+
+    record.county,
+
+    record.state,
+  ].filter(
+    (
+      value,
+    ): value is string =>
+      Boolean(
+        value,
+      ),
+  );
 
   const identifierResearchUrl =
     webSearchHref(
-      identifierResearchTerms.join(" "),
+      identifierResearchTerms.join(
+        " ",
+      ),
     );
 
   return (
@@ -222,13 +512,16 @@ export default async function DiscoveredRecordDetailPage({
       <Breadcrumbs
         trail={[
           {
-            href: "/pro/discovered-records",
+            href:
+              "/pro/discovered-records",
 
-            label: "Discovered Records",
+            label:
+              "Discovered Records",
           },
 
           {
-            label: record.formerOwnerName,
+            label:
+              record.formerOwnerName,
           },
         ]}
       />
@@ -236,13 +529,17 @@ export default async function DiscoveredRecordDetailPage({
       {/* ================================================================ header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="eyebrow text-ink-500">Discovered record</p>
+          <p className="eyebrow text-ink-500">
+            Discovered record
+          </p>
 
-          <h1 className="mt-1.5 text-2xl">{record.formerOwnerName}</h1>
+          <h1 className="mt-1.5 text-2xl">
+            {record.formerOwnerName}
+          </h1>
 
           <p className="mt-1 text-sm text-ink-600">
-            {record.addressLine1}, {record.city}, {record.state}{" "}
-            {record.postalCode}
+            {displayPropertyAddress ??
+              `${record.county}, ${record.state} · Property address not published by source`}
           </p>
         </div>
 
@@ -253,7 +550,10 @@ export default async function DiscoveredRecordDetailPage({
 
       {/* ========================================================== operational gate */}
       {isPromoted ? (
-        <Callout tone="positive" title="Promoted to operational workflow">
+        <Callout
+          tone="positive"
+          title="Promoted to operational workflow"
+        >
           <p>
             This discovery record has already been promoted to an Opportunity.
             Discovery review and promotion are now closed for this record.
@@ -262,20 +562,27 @@ export default async function DiscoveredRecordDetailPage({
           </p>
         </Callout>
       ) : workflowReady ? (
-        <Callout tone="positive" title="Enrichment requirements complete">
+        <Callout
+          tone="positive"
+          title="Promotion requirements complete"
+        >
           <p>
-            The discovery record has completed review, verified enrichment is
-            complete, and an approved jurisdiction rule is available. This means
-            the record has satisfied the current promotion prerequisites. It has
-            not been promoted automatically.
+            The discovery record has completed review, required source/property
+            facts are present, verified enrichment is complete, and an approved
+            jurisdiction rule is available. It has not been promoted
+            automatically.
           </p>
         </Callout>
       ) : (
-        <Callout tone="caution" title="Not ready for operational promotion">
+        <Callout
+          tone="caution"
+          title="Not ready for operational promotion"
+        >
           <p>
-            This record remains in the discovery layer. Duequity will not create
-            an Opportunity until the required review, verified enrichment, and
-            jurisdiction clearance are complete.
+            This record remains in the discovery layer. Duequity can retain and
+            enrich incomplete government records, but it will not create an
+            Opportunity until the required exact property, sale, enrichment,
+            review, and jurisdiction facts are complete.
           </p>
         </Callout>
       )}
@@ -305,17 +612,38 @@ export default async function DiscoveredRecordDetailPage({
                   )}
                 </DataItem>
 
-                <DataItem label="Property address" span>
-                  {record.addressLine1}, {record.city}, {record.county},{" "}
-                  {record.state} {record.postalCode}
+                <DataItem
+                  label="Property address"
+                  span
+                >
+                  {displayPropertyAddress ? (
+                    displayPropertyAddress
+                  ) : (
+                    <NotRecorded />
+                  )}
                 </DataItem>
 
-                <DataItem label="Sale date">
-                  {formatDate(record.saleDate)}
+                <DataItem label="Sale timing">
+                  {displaySaleTiming ? (
+                    displaySaleTiming
+                  ) : (
+                    <NotRecorded />
+                  )}
+                </DataItem>
+
+                <DataItem label="Sale precision">
+                  {record.saleDate
+                    ? "Exact date"
+                    : record.saleMonthYear ||
+                        record.sourceSaleTimingText
+                      ? "Month / year only"
+                      : "Not recorded"}
                 </DataItem>
 
                 <DataItem label="Sale type">
-                  {humanize(record.saleType)}
+                  {humanize(
+                    record.saleType,
+                  )}
                 </DataItem>
 
                 <DataItem label="Case number">
@@ -328,7 +656,7 @@ export default async function DiscoveredRecordDetailPage({
                   )}
                 </DataItem>
 
-                <DataItem label="Parcel / property ID">
+                <DataItem label="Parcel number">
                   {record.parcelNumber ? (
                     <span className="font-mono text-xs">
                       {record.parcelNumber}
@@ -338,11 +666,39 @@ export default async function DiscoveredRecordDetailPage({
                   )}
                 </DataItem>
 
-                <DataItem label="Source-listed balance" span>
-                  {balance ? (
+                <DataItem label="Map / grid">
+                  {record.mapNumber ||
+                  record.gridNumber ? (
+                    <span className="font-mono text-xs">
+                      {[
+                        record.mapNumber
+                          ? `Map ${record.mapNumber}`
+                          : undefined,
+
+                        record.gridNumber
+                          ? `Grid ${record.gridNumber}`
+                          : undefined,
+                      ]
+                        .filter(
+                          Boolean,
+                        )
+                        .join(
+                          " · ",
+                        )}
+                    </span>
+                  ) : (
+                    <NotRecorded />
+                  )}
+                </DataItem>
+
+                <DataItem
+                  label="Source-listed surplus / balance"
+                  span
+                >
+                  {sourceListedAmount ? (
                     <div>
                       <span className="tnum text-lg font-semibold text-ink-900">
-                        {balance}
+                        {sourceListedAmount}
                       </span>
 
                       <p className="mt-1 max-w-2xl text-xs leading-relaxed text-ink-500">
@@ -376,12 +732,17 @@ export default async function DiscoveredRecordDetailPage({
                   {enrichment?.propertyType ? (
                     <>
                       <p className="mt-1 text-sm font-semibold text-positive-800">
-                        {humanize(enrichment.propertyType.value)}
+                        {humanize(
+                          enrichment.propertyType.value,
+                        )}
                       </p>
 
                       <p className="mt-1 text-2xs text-ink-500">
                         Verified from{" "}
-                        {enrichment.propertyType.provenance.sourceName}
+                        {
+                          enrichment.propertyType.provenance
+                            .sourceName
+                        }
                       </p>
                     </>
                   ) : (
@@ -399,11 +760,16 @@ export default async function DiscoveredRecordDetailPage({
                   {enrichment?.salePrice ? (
                     <>
                       <p className="tnum mt-1 text-sm font-semibold text-positive-800">
-                        {formatBalance(enrichment.salePrice.fact.amount)}
+                        {formatBalance(
+                          enrichment.salePrice.fact.amount,
+                        )}
                       </p>
 
                       <p className="mt-1 text-2xs text-ink-500">
-                        {enrichment.salePrice.provenance.sourceName}
+                        {
+                          enrichment.salePrice.provenance
+                            .sourceName
+                        }
                       </p>
                     </>
                   ) : (
@@ -421,11 +787,16 @@ export default async function DiscoveredRecordDetailPage({
                   {enrichment?.debtSatisfied ? (
                     <>
                       <p className="tnum mt-1 text-sm font-semibold text-positive-800">
-                        {formatBalance(enrichment.debtSatisfied.fact.amount)}
+                        {formatBalance(
+                          enrichment.debtSatisfied.fact.amount,
+                        )}
                       </p>
 
                       <p className="mt-1 text-2xs text-ink-500">
-                        {enrichment.debtSatisfied.provenance.sourceName}
+                        {
+                          enrichment.debtSatisfied.provenance
+                            .sourceName
+                        }
                       </p>
                     </>
                   ) : (
@@ -443,11 +814,16 @@ export default async function DiscoveredRecordDetailPage({
                   {enrichment?.estimatedSurplus ? (
                     <>
                       <p className="tnum mt-1 text-sm font-semibold text-positive-800">
-                        {formatBalance(enrichment.estimatedSurplus.fact.amount)}
+                        {formatBalance(
+                          enrichment.estimatedSurplus.fact.amount,
+                        )}
                       </p>
 
                       <p className="mt-1 text-2xs text-ink-500">
-                        {enrichment.estimatedSurplus.provenance.sourceName}
+                        {
+                          enrichment.estimatedSurplus.provenance
+                            .sourceName
+                        }
                       </p>
                     </>
                   ) : (
@@ -465,11 +841,16 @@ export default async function DiscoveredRecordDetailPage({
                   {enrichment?.sellingEntity ? (
                     <>
                       <p className="mt-1 text-sm font-semibold text-positive-800">
-                        {enrichment.sellingEntity.value}
+                        {
+                          enrichment.sellingEntity.value
+                        }
                       </p>
 
                       <p className="mt-1 text-2xs text-ink-500">
-                        {enrichment.sellingEntity.provenance.sourceName}
+                        {
+                          enrichment.sellingEntity.provenance
+                            .sourceName
+                        }
                       </p>
                     </>
                   ) : (
@@ -487,24 +868,33 @@ export default async function DiscoveredRecordDetailPage({
                   {enrichment?.sourceBalanceInterpretation ? (
                     <>
                       <p className="mt-1 text-sm font-semibold text-positive-800">
-                        {humanize(enrichment.sourceBalanceInterpretation.value)}
+                        {humanize(
+                          enrichment
+                            .sourceBalanceInterpretation
+                            .value,
+                        )}
                       </p>
 
                       <p className="mt-1 text-2xs text-ink-500">
                         {
-                          enrichment.sourceBalanceInterpretation.provenance
-                            .sourceName
+                          enrichment.sourceBalanceInterpretation
+                            .provenance.sourceName
                         }
                       </p>
                     </>
-                  ) : record.sourceListedBalanceCents !== undefined ? (
-                    <p className="mt-1 text-sm font-medium text-caution-800">
-                      Verification required
-                    </p>
                   ) : (
-                    <p className="mt-1 text-sm text-ink-500">
-                      No source balance supplied
-                    </p>
+                    (
+                      record.sourceListedSurplusCents ??
+                      record.sourceListedBalanceCents
+                    ) !== undefined ? (
+                      <p className="mt-1 text-sm font-medium text-caution-800">
+                        Verification required
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-sm text-ink-500">
+                        No source balance supplied
+                      </p>
+                    )
                   )}
                 </div>
               </div>
@@ -516,28 +906,36 @@ export default async function DiscoveredRecordDetailPage({
                   </p>
 
                   <p className="tnum mt-1 text-lg font-semibold text-positive-900">
-                    {formatBalance(enrichment.confirmedSurplus.fact.amount)}
+                    {formatBalance(
+                      enrichment.confirmedSurplus.fact.amount,
+                    )}
                   </p>
 
                   <p className="mt-1 text-xs text-positive-800">
                     Verified from{" "}
-                    {enrichment.confirmedSurplus.provenance.sourceName}
+                    {
+                      enrichment.confirmedSurplus.provenance
+                        .sourceName
+                    }
                   </p>
                 </div>
               )}
 
-              {enrichmentReadiness.cautions.length > 0 && (
+              {enrichmentReadiness.cautions.length >
+                0 && (
                 <div className="mt-4 space-y-2">
-                  {enrichmentReadiness.cautions.map((caution) => (
-                    <div
-                      key={caution}
-                      className="rounded-md border border-caution-200 bg-caution-50 px-3.5 py-3"
-                    >
-                      <p className="text-sm leading-relaxed text-caution-800">
-                        {caution}
-                      </p>
-                    </div>
-                  ))}
+                  {enrichmentReadiness.cautions.map(
+                    (caution) => (
+                      <div
+                        key={caution}
+                        className="rounded-md border border-caution-200 bg-caution-50 px-3.5 py-3"
+                      >
+                        <p className="text-sm leading-relaxed text-caution-800">
+                          {caution}
+                        </p>
+                      </div>
+                    ),
+                  )}
                 </div>
               )}
 
@@ -545,7 +943,11 @@ export default async function DiscoveredRecordDetailPage({
                 <p className="text-xs text-ink-500">
                   Last enrichment update:{" "}
                   {enrichment
-                    ? new Date(enrichment.updatedAt).toLocaleString("en-US")
+                    ? new Date(
+                        enrichment.updatedAt,
+                      ).toLocaleString(
+                        "en-US",
+                      )
                     : "No verified enrichment recorded"}
                 </p>
               </div>
@@ -579,7 +981,9 @@ export default async function DiscoveredRecordDetailPage({
 
                     <div className="mt-4 flex flex-wrap gap-2">
                       <a
-                        href={ownerLocationResearchUrl}
+                        href={
+                          ownerLocationResearchUrl
+                        }
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex min-h-9 items-center justify-center rounded-md border border-line bg-paper px-3.5 py-2 text-sm font-semibold text-ink-700 transition hover:border-accent-300 hover:bg-accent-50 hover:text-accent-800"
@@ -588,7 +992,9 @@ export default async function DiscoveredRecordDetailPage({
                       </a>
 
                       <a
-                        href={ownerPropertyResearchUrl}
+                        href={
+                          ownerPropertyResearchUrl
+                        }
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex min-h-9 items-center justify-center rounded-md border border-line bg-paper px-3.5 py-2 text-sm font-semibold text-ink-700 transition hover:border-accent-300 hover:bg-accent-50 hover:text-accent-800"
@@ -597,7 +1003,9 @@ export default async function DiscoveredRecordDetailPage({
                       </a>
 
                       <a
-                        href={identifierResearchUrl}
+                        href={
+                          identifierResearchUrl
+                        }
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex min-h-9 items-center justify-center rounded-md border border-line bg-paper px-3.5 py-2 text-sm font-semibold text-ink-700 transition hover:border-accent-300 hover:bg-accent-50 hover:text-accent-800"
@@ -617,46 +1025,73 @@ export default async function DiscoveredRecordDetailPage({
                       <p>
                         Jurisdiction:{" "}
                         <span className="font-medium text-ink-700">
-                          {record.county}, {record.state}
+                          {record.county},{" "}
+                          {record.state}
                         </span>
                       </p>
 
                       <p className="sm:col-span-2">
                         Property:{" "}
                         <span className="font-medium text-ink-700">
-                          {record.addressLine1}, {record.city}, {record.state}{" "}
-                          {record.postalCode}
+                          {displayPropertyAddress ??
+                            "Property address not recorded"}
+                        </span>
+                      </p>
+
+                      <p>
+                        Sale timing:{" "}
+                        <span className="font-medium text-ink-700">
+                          {displaySaleTiming ??
+                            "Not recorded"}
                         </span>
                       </p>
 
                       <p>
                         Case:{" "}
                         <span className="font-mono text-ink-700">
-                          {record.caseNumber ?? "Not recorded"}
+                          {record.caseNumber ??
+                            "Not recorded"}
                         </span>
                       </p>
 
                       <p>
                         Property ID:{" "}
                         <span className="font-mono text-ink-700">
-                          {record.propertyId ?? "Not recorded"}
+                          {record.propertyId ??
+                            "Not recorded"}
+                        </span>
+                      </p>
+
+                      <p>
+                        Parcel:{" "}
+                        <span className="font-mono text-ink-700">
+                          {record.parcelNumber ??
+                            "Not recorded"}
                         </span>
                       </p>
                     </div>
                   </div>
 
                   <ClaimantLocatorControls
-                    recordId={record.id}
+                    recordId={
+                      record.id
+                    }
                     candidates={
-                      enrichment?.claimantLocator?.candidates ??
+                      enrichment
+                        ?.claimantLocator
+                        ?.candidates ??
                       []
                     }
                     identities={
-                      enrichment?.claimantLocator?.identities ??
+                      enrichment
+                        ?.claimantLocator
+                        ?.identities ??
                       []
                     }
                     associatedContacts={
-                      enrichment?.claimantLocator?.associatedContacts ??
+                      enrichment
+                        ?.claimantLocator
+                        ?.associatedContacts ??
                       []
                     }
                   />
@@ -688,12 +1123,18 @@ export default async function DiscoveredRecordDetailPage({
               <CardBody>
                 <DataList columns={2}>
                   <DataItem label="Review status">
-                    <span className="capitalize">{record.status}</span>
+                    <span className="capitalize">
+                      {record.status}
+                    </span>
                   </DataItem>
 
                   <DataItem label="Reviewed at">
                     {record.reviewedAt ? (
-                      new Date(record.reviewedAt).toLocaleString("en-US")
+                      new Date(
+                        record.reviewedAt,
+                      ).toLocaleString(
+                        "en-US",
+                      )
                     ) : (
                       <NotRecorded />
                     )}
@@ -702,14 +1143,19 @@ export default async function DiscoveredRecordDetailPage({
                   <DataItem label="Reviewed by">
                     {record.reviewedByUserId ? (
                       <span className="font-mono text-xs">
-                        {record.reviewedByUserId}
+                        {
+                          record.reviewedByUserId
+                        }
                       </span>
                     ) : (
                       <NotRecorded />
                     )}
                   </DataItem>
 
-                  <DataItem label="Review note" span>
+                  <DataItem
+                    label="Review note"
+                    span
+                  >
                     {record.reviewNote ? (
                       <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink-700">
                         {record.reviewNote}
@@ -751,22 +1197,31 @@ export default async function DiscoveredRecordDetailPage({
                     </p>
                   )}
                 </div>
-              ) : promotionBlockers.length > 0 ? (
+              ) : promotionBlockers.length >
+                0 ? (
                 <ol className="space-y-3">
-                  {promotionBlockers.map((blocker, index) => (
-                    <li
-                      key={blocker}
-                      className="flex gap-3 rounded-md border border-line bg-inset px-3.5 py-3"
-                    >
-                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-line-strong bg-paper font-mono text-2xs text-ink-500">
-                        {index + 1}
-                      </span>
+                  {promotionBlockers.map(
+                    (
+                      blocker,
+                      index,
+                    ) => (
+                      <li
+                        key={
+                          blocker
+                        }
+                        className="flex gap-3 rounded-md border border-line bg-inset px-3.5 py-3"
+                      >
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-line-strong bg-paper font-mono text-2xs text-ink-500">
+                          {index +
+                            1}
+                        </span>
 
-                      <p className="text-sm leading-relaxed text-ink-700">
-                        {blocker}
-                      </p>
-                    </li>
-                  ))}
+                        <p className="text-sm leading-relaxed text-ink-700">
+                          {blocker}
+                        </p>
+                      </li>
+                    ),
+                  )}
                 </ol>
               ) : (
                 <div className="space-y-4">
@@ -781,9 +1236,12 @@ export default async function DiscoveredRecordDetailPage({
                     </p>
                   </div>
 
-                  {canReview && workflowReady ? (
+                  {canReview &&
+                  workflowReady ? (
                     <DiscoveredRecordPromotionControl
-                      recordId={record.id}
+                      recordId={
+                        record.id
+                      }
                     />
                   ) : null}
                 </div>
@@ -798,27 +1256,39 @@ export default async function DiscoveredRecordDetailPage({
 
             <CardBody>
               <DataList>
-                <DataItem label="Source name">{record.sourceName}</DataItem>
+                <DataItem label="Source name">
+                  {record.sourceName}
+                </DataItem>
 
                 <DataItem label="Reference">
                   {record.sourceReference ? (
                     <span className="font-mono text-xs">
-                      {record.sourceReference}
+                      {
+                        record.sourceReference
+                      }
                     </span>
                   ) : (
                     <NotRecorded />
                   )}
                 </DataItem>
 
-                <DataItem label="Agency">{record.agencyName}</DataItem>
+                <DataItem label="Agency">
+                  {record.agencyName}
+                </DataItem>
 
                 <DataItem label="Agency phone">
                   {record.agencyPhone ? (
                     <a
-                      href={phoneHref(record.agencyPhone)}
+                      href={
+                        phoneHref(
+                          record.agencyPhone,
+                        )
+                      }
                       className="text-accent-700 underline decoration-accent-300 underline-offset-2 hover:text-accent-800"
                     >
-                      {formatPhone(record.agencyPhone)}
+                      {formatPhone(
+                        record.agencyPhone,
+                      )}
                     </a>
                   ) : (
                     <NotRecorded />
@@ -826,16 +1296,29 @@ export default async function DiscoveredRecordDetailPage({
                 </DataItem>
 
                 <DataItem label="First discovered">
-                  {new Date(record.discoveredAt).toLocaleString("en-US")}
+                  {new Date(
+                    record.discoveredAt,
+                  ).toLocaleString(
+                    "en-US",
+                  )}
                 </DataItem>
 
                 <DataItem label="Last seen">
-                  {new Date(record.lastSeenAt).toLocaleString("en-US")}
+                  {new Date(
+                    record.lastSeenAt,
+                  ).toLocaleString(
+                    "en-US",
+                  )}
                 </DataItem>
               </DataList>
 
               <p className="mt-4 text-sm">
-                <TextLink href={record.sourceUrl} external>
+                <TextLink
+                  href={
+                    record.sourceUrl
+                  }
+                  external
+                >
                   Open official source
                 </TextLink>
               </p>
@@ -853,8 +1336,13 @@ export default async function DiscoveredRecordDetailPage({
                   </p>
 
                   <p className="mt-1 text-sm leading-relaxed text-ink-600">
-                    {approvedJurisdiction.county},{" "}
-                    {approvedJurisdiction.stateName}
+                    {
+                      approvedJurisdiction.county
+                    }
+                    ,{" "}
+                    {
+                      approvedJurisdiction.stateName
+                    }
                   </p>
 
                   <p className="mt-3 text-sm">
@@ -907,15 +1395,21 @@ export default async function DiscoveredRecordDetailPage({
                 </div>
               ) : canReview ? (
                 <DiscoveredRecordReviewControls
-                  recordId={record.id}
+                  recordId={
+                    record.id
+                  }
                   currentStatus={
-                    record.status === "dismissed"
+                    record.status ===
+                    "dismissed"
                       ? "dismissed"
-                      : record.status === "reviewed"
+                      : record.status ===
+                          "reviewed"
                         ? "reviewed"
                         : "new"
                   }
-                  existingNote={record.reviewNote}
+                  existingNote={
+                    record.reviewNote
+                  }
                 />
               ) : (
                 <div className="rounded-md border border-line bg-inset px-3.5 py-3">

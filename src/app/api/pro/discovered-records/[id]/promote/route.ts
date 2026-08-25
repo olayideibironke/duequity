@@ -389,6 +389,29 @@ export async function POST(
     );
   }
 
+  /*
+   * Discovery intentionally permits unresolved claimant identity.
+   *
+   * An official source may publish a parcel/account and excess proceeds without
+   * publishing the former owner. That record may remain staged for later
+   * identity research, but it must never become an Opportunity until the
+   * former-owner identity has been resolved and verified.
+   *
+   * This guard occurs before any Opportunity persistence.
+   */
+  const promotionFormerOwnerName =
+    record.formerOwnerName
+      .trim();
+
+  if (
+    !promotionFormerOwnerName
+  ) {
+    return errorResponse(
+      "A verified former-owner identity is required before this record can become an Opportunity.",
+      409,
+    );
+  }
+
   const readiness =
     evaluateDiscoveredRecordEnrichmentReadiness(
       enrichment,
@@ -425,11 +448,68 @@ export async function POST(
     );
   }
 
+  /*
+   * Discovery records are intentionally allowed to preserve incomplete
+   * government source data.
+   *
+   * Opportunity creation is stricter.
+   *
+   * A record may remain staged with only parcel/case identity and published
+   * surplus evidence, but it cannot enter the Opportunity domain until
+   * DueQuity has the complete property address and exact sale date required by
+   * Property and SaleRecord.
+   *
+   * These values may eventually come from verified enrichment rather than the
+   * original surplus list. Until that enrichment exists, promotion fails
+   * closed instead of manufacturing missing facts.
+   */
+  const promotionAddressLine1 =
+    record.addressLine1
+      ?.trim();
+
   if (
-    !record.postalCode?.trim()
+    !promotionAddressLine1
+  ) {
+    return errorResponse(
+      "A verified property street address is required before this record can become an Opportunity.",
+      409,
+    );
+  }
+
+  const promotionCity =
+    record.city
+      ?.trim();
+
+  if (
+    !promotionCity
+  ) {
+    return errorResponse(
+      "A verified property city is required before this record can become an Opportunity.",
+      409,
+    );
+  }
+
+  const promotionPostalCode =
+    record.postalCode
+      ?.trim();
+
+  if (
+    !promotionPostalCode
   ) {
     return errorResponse(
       "A verified postal code is required before this record can become an Opportunity.",
+      409,
+    );
+  }
+
+  const promotionSaleDate =
+    record.saleDate;
+
+  if (
+    !promotionSaleDate
+  ) {
+    return errorResponse(
+      "An exact verified sale date is required before this record can become an Opportunity.",
       409,
     );
   }
@@ -496,10 +576,10 @@ export async function POST(
         ),
 
       line1:
-        record.addressLine1,
+        promotionAddressLine1,
 
       city:
-        record.city,
+        promotionCity,
 
       county:
         record.county,
@@ -508,7 +588,7 @@ export async function POST(
         record.state,
 
       postalCode:
-        record.postalCode.trim(),
+        promotionPostalCode,
     },
 
     propertyType:
@@ -531,7 +611,7 @@ export async function POST(
     reference:
       opportunityReferenceForRecord(
         record.id,
-        record.saleDate,
+        promotionSaleDate,
       ),
 
     propertyId:
@@ -545,7 +625,7 @@ export async function POST(
         record.saleType,
 
       saleDate:
-        record.saleDate,
+        promotionSaleDate,
 
       salePrice:
         enrichment.salePrice.fact,
@@ -580,7 +660,7 @@ export async function POST(
           ),
 
         nameOnRecord:
-          record.formerOwnerName,
+          promotionFormerOwnerName,
 
         ownerKind:
           "individual",
@@ -603,7 +683,7 @@ export async function POST(
       jurisdiction.claimDeadlineDays !==
       undefined
         ? addDays(
-            record.saleDate,
+            promotionSaleDate,
             jurisdiction.claimDeadlineDays,
           )
         : undefined,

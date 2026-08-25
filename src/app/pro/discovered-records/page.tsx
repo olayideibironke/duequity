@@ -78,7 +78,8 @@ function formatSourceBalance(
   }
 
   return USD.format(
-    cents / 100,
+    cents /
+      100,
   );
 }
 
@@ -91,8 +92,111 @@ function locationLabel(
     record.state,
     record.postalCode,
   ]
-    .filter(Boolean)
-    .join(", ");
+    .map(
+      (value) =>
+        value?.trim(),
+    )
+    .filter(
+      (
+        value,
+      ): value is string =>
+        Boolean(
+          value,
+        ),
+    )
+    .join(
+      ", ",
+    );
+}
+
+function propertyAddressLabel(
+  record: DiscoveredRecord,
+): string {
+  const address =
+    record.addressLine1
+      ?.trim();
+
+  if (
+    address
+  ) {
+    return address;
+  }
+
+  if (
+    record.parcelNumber
+      ?.trim()
+  ) {
+    return `Parcel ${record.parcelNumber.trim()}`;
+  }
+
+  if (
+    record.propertyId
+      ?.trim()
+  ) {
+    return `Property ID ${record.propertyId.trim()}`;
+  }
+
+  if (
+    record.caseNumber
+      ?.trim()
+  ) {
+    return `Case ${record.caseNumber.trim()}`;
+  }
+
+  return "Property address not published";
+}
+
+function saleTimingLabel(
+  record: DiscoveredRecord,
+): string {
+  if (
+    record.saleDate
+  ) {
+    return formatDate(
+      record.saleDate,
+    );
+  }
+
+  const sourceTiming =
+    record.sourceSaleTimingText
+      ?.trim();
+
+  if (
+    sourceTiming
+  ) {
+    return sourceTiming;
+  }
+
+  const monthYear =
+    record.saleMonthYear
+      ?.trim();
+
+  if (
+    monthYear
+  ) {
+    return monthYear;
+  }
+
+  return "Not recorded";
+}
+
+function saleTimingPrecision(
+  record: DiscoveredRecord,
+): string | undefined {
+  if (
+    record.saleDate
+  ) {
+    return undefined;
+  }
+
+  if (
+    record.saleMonthYear ||
+    record.sourceSaleTimingText
+  ) {
+    return "Month / year";
+  }
+
+  return undefined;
 }
 
 function statusLabel(
@@ -168,14 +272,18 @@ export default async function ProDiscoveredRecordsPage() {
    * Server-side session gate.
    *
    * Resolved before any operational store read. The layout also withholds the
-   * operations shell, but the page must independently refuse unauthorized
+   * operations shell, but the page independently refuses unauthorized
    * operational data access.
    */
   const session =
     await resolveStaffSession();
 
-  if (!session) {
-    return <StaffAuthenticationRequired />;
+  if (
+    !session
+  ) {
+    return (
+      <StaffAuthenticationRequired />
+    );
   }
 
   const [
@@ -209,12 +317,14 @@ export default async function ProDiscoveredRecordsPage() {
    *   - opportunity.write permission
    *   - state clearance
    *   - valid national geography
-   *   - activated official source
+   *   - activated or validated official source
    *
-   * A state or county appearing here therefore does not mean its source has
-   * been activated or that the current staff user may harvest it.
+   * A state or county appearing here therefore does not mean the current staff
+   * user may harvest it or that a usable official source will necessarily be
+   * available online.
    */
-  const harvestStates: StateHarvestOption[] =
+  const harvestStates:
+    StateHarvestOption[] =
     canHarvest
       ? geography.states.map(
           (state) => ({
@@ -241,19 +351,22 @@ export default async function ProDiscoveredRecordsPage() {
   const newCount =
     records.filter(
       (record) =>
-        record.status === "new",
+        record.status ===
+        "new",
     ).length;
 
   const reviewedCount =
     records.filter(
       (record) =>
-        record.status === "reviewed",
+        record.status ===
+        "reviewed",
     ).length;
 
   const promotedCount =
     records.filter(
       (record) =>
-        record.status === "promoted",
+        record.status ===
+        "promoted",
     ).length;
 
   return (
@@ -270,12 +383,14 @@ export default async function ProDiscoveredRecordsPage() {
           </h1>
 
           <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-600">
-            Pull official county surplus records, stage discovery leads, and
-            prepare them for claimant-location research and operational review.
+            Pull official county surplus records, preserve the government facts
+            actually published, and prepare each lead for claimant-location
+            research, enrichment, and operational review.
           </p>
         </div>
 
-        {records.length > 0 && (
+        {records.length >
+          0 && (
           <div className="flex flex-wrap gap-2 text-xs">
             <span className="rounded-md border border-line bg-paper px-2.5 py-1.5 text-ink-600">
               New{" "}
@@ -305,12 +420,13 @@ export default async function ProDiscoveredRecordsPage() {
       <Card>
         <CardHeader
           title="County Surplus Discovery"
-          description="Select a state and county to pull available records from an activated official government source."
+          description="Select a state and county to search for available surplus records from an official government source."
         />
 
         <CardBody>
           {canHarvest &&
-          harvestStates.length > 0 ? (
+          harvestStates.length >
+            0 ? (
             <CountySurplusHarvestControls
               states={
                 harvestStates
@@ -333,22 +449,35 @@ export default async function ProDiscoveredRecordsPage() {
 
       <Callout
         tone="neutral"
+        title="Discovery records may be incomplete"
+      >
+        <p>
+          County sources do not all publish the same fields. Duequity preserves
+          legitimate records even when a source provides only parcel identity,
+          month/year sale timing, or other partial government evidence. Missing
+          fields remain missing until verified enrichment establishes them.
+        </p>
+      </Callout>
+
+      <Callout
+        tone="neutral"
         title="Discovery is not an opportunity"
       >
         <p>
-          County pulls create discovery leads only. A former owner appearing
-          in an official surplus source is not automatically a claimant or
-          client. Duequity does not authorize outreach, create an Opportunity,
-          create a Claim, create a claimant account, or begin onboarding from
-          the county pull alone.
+          County pulls create discovery leads only. A former owner appearing in
+          an official surplus source is not automatically a claimant or client.
+          Duequity does not authorize outreach, create an Opportunity, create a
+          Claim, create a claimant account, or begin onboarding from the county
+          pull alone.
         </p>
       </Callout>
 
       {/* ========================================================== record queue */}
-      {records.length === 0 ? (
+      {records.length ===
+      0 ? (
         <EmptyState
           title="No discovered records yet"
-          description="Select a supported state and county above, then pull available surplus records from the activated official source."
+          description="Select a state and county above, then pull available surplus records from the official-source discovery engine."
         />
       ) : (
         <Card className="overflow-hidden">
@@ -383,14 +512,14 @@ export default async function ProDiscoveredRecordsPage() {
                   </TH>
 
                   <TH width="10%">
-                    Sale date
+                    Sale timing
                   </TH>
 
                   <TH
                     width="12%"
                     align="right"
                   >
-                    Source-listed balance
+                    Source-listed amount
                   </TH>
 
                   <TH width="12%">
@@ -407,7 +536,23 @@ export default async function ProDiscoveredRecordsPage() {
                     (record) => {
                       const balance =
                         formatSourceBalance(
+                          record.sourceListedSurplusCents ??
                           record.sourceListedBalanceCents,
+                        );
+
+                      const location =
+                        locationLabel(
+                          record,
+                        );
+
+                      const timing =
+                        saleTimingLabel(
+                          record,
+                        );
+
+                      const precision =
+                        saleTimingPrecision(
+                          record,
                         );
 
                       return (
@@ -421,7 +566,9 @@ export default async function ProDiscoveredRecordsPage() {
                             secondary={
                               record.propertyId
                                 ? `Property ID ${record.propertyId}`
-                                : "No property identifier recorded"
+                                : record.parcelNumber
+                                  ? `Parcel ${record.parcelNumber}`
+                                  : "No property identifier recorded"
                             }
                           >
                             {
@@ -431,17 +578,14 @@ export default async function ProDiscoveredRecordsPage() {
 
                           <TD>
                             <p className="text-xs font-medium text-ink-800">
-                              {
-                                record.addressLine1
-                              }
+                              {propertyAddressLabel(
+                                record,
+                              )}
                             </p>
 
                             <p className="mt-0.5 text-2xs text-ink-500">
-                              {
-                                locationLabel(
-                                  record,
-                                )
-                              }
+                              {location ||
+                                "Location not published"}
                             </p>
                           </TD>
 
@@ -458,6 +602,7 @@ export default async function ProDiscoveredRecordsPage() {
 
                             {record.parcelNumber && (
                               <span className="mt-1 block break-all font-mono text-2xs text-ink-400">
+                                Parcel{" "}
                                 {
                                   record.parcelNumber
                                 }
@@ -467,12 +612,14 @@ export default async function ProDiscoveredRecordsPage() {
 
                           <TD>
                             <span className="text-xs text-ink-700">
-                              {
-                                formatDate(
-                                  record.saleDate,
-                                )
-                              }
+                              {timing}
                             </span>
+
+                            {precision && (
+                              <span className="mt-0.5 block text-2xs text-ink-400">
+                                {precision}
+                              </span>
+                            )}
                           </TD>
 
                           <TD align="right">
@@ -538,7 +685,23 @@ export default async function ProDiscoveredRecordsPage() {
               (record) => {
                 const balance =
                   formatSourceBalance(
+                    record.sourceListedSurplusCents ??
                     record.sourceListedBalanceCents,
+                  );
+
+                const location =
+                  locationLabel(
+                    record,
+                  );
+
+                const timing =
+                  saleTimingLabel(
+                    record,
+                  );
+
+                const precision =
+                  saleTimingPrecision(
+                    record,
                   );
 
                 return (
@@ -558,17 +721,14 @@ export default async function ProDiscoveredRecordsPage() {
                         </p>
 
                         <p className="mt-1 text-sm text-ink-700">
-                          {
-                            record.addressLine1
-                          }
+                          {propertyAddressLabel(
+                            record,
+                          )}
                         </p>
 
                         <p className="mt-0.5 text-xs text-ink-500">
-                          {
-                            locationLabel(
-                              record,
-                            )
-                          }
+                          {location ||
+                            "Location not published"}
                         </p>
                       </div>
 
@@ -595,15 +755,19 @@ export default async function ProDiscoveredRecordsPage() {
 
                       <div>
                         <dt className="text-2xs font-medium uppercase tracking-wide text-ink-400">
-                          Sale date
+                          Sale timing
                         </dt>
 
                         <dd className="mt-1 text-xs text-ink-700">
-                          {
-                            formatDate(
-                              record.saleDate,
-                            )
-                          }
+                          {timing}
+
+                          {precision && (
+                            <span className="mt-0.5 block text-2xs text-ink-400">
+                              {
+                                precision
+                              }
+                            </span>
+                          )}
                         </dd>
                       </div>
 
@@ -615,6 +779,7 @@ export default async function ProDiscoveredRecordsPage() {
                         <dd className="mt-1 font-mono text-xs text-ink-700">
                           {
                             record.propertyId ??
+                            record.parcelNumber ??
                             "Not recorded"
                           }
                         </dd>
@@ -622,7 +787,7 @@ export default async function ProDiscoveredRecordsPage() {
 
                       <div>
                         <dt className="text-2xs font-medium uppercase tracking-wide text-ink-400">
-                          Source-listed balance
+                          Source-listed amount
                         </dt>
 
                         <dd className="tnum mt-1 text-xs font-semibold text-ink-900">
@@ -641,16 +806,17 @@ export default async function ProDiscoveredRecordsPage() {
         </Card>
       )}
 
-      {records.length > 0 && (
+      {records.length >
+        0 && (
         <Card>
           <CardBody>
             <p className="text-sm leading-relaxed text-ink-600">
-              A source-listed balance is preserved exactly as a financial value
-              reported by the official source adapter. Duequity does not
-              automatically treat that value as an operational recovery amount.
-              Each discovery lead must continue through the applicable review,
-              claimant-location, verification, jurisdiction, and engagement
-              workflow.
+              A source-listed surplus or balance is preserved exactly as a
+              financial value reported by the official source. Duequity does
+              not automatically treat that value as an operational recovery
+              amount. Each discovery lead must continue through claimant
+              location, contact enrichment, verification, jurisdiction review,
+              and engagement controls.
             </p>
           </CardBody>
         </Card>

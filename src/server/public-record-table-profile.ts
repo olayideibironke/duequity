@@ -24,8 +24,18 @@ import type {
  *   Source parser:
  *     Convert the mapped values into normalized records.
  *
- * This keeps common tabular sources configuration driven instead of requiring
- * a new county-specific parser function for every jurisdiction.
+ * National sources are allowed to publish facts at different levels of
+ * completeness and precision.
+ *
+ * In particular:
+ *
+ *   - an exact sale date may be absent
+ *   - a source may publish only sale month/year
+ *   - a property street address may be absent
+ *   - parcel/property identity may still make the record usable
+ *
+ * Profiles describe source evidence. They must not force the parser to invent
+ * missing facts.
  */
 
 /* ========================================================================== */
@@ -35,6 +45,24 @@ import type {
 export type PublicRecordTableDateFormat =
   | "us_slash_date"
   | "iso_date";
+
+/**
+ * Precision-preserving formats for sources that publish only a month/year.
+ *
+ * These are deliberately separate from PublicRecordTableDateFormat because:
+ *
+ *   08/2024
+ *
+ * is not:
+ *
+ *   08/01/2024
+ *
+ * and Duequity must never manufacture an exact day.
+ */
+export type PublicRecordTableMonthYearFormat =
+  | "us_slash_month_year"
+  | "iso_month"
+  | "month_name_year";
 
 export type PublicRecordRecordKeyField =
   | "property_id"
@@ -66,27 +94,66 @@ export interface PublicRecordTableOwnerColumns {
 
 export interface PublicRecordTableDateColumns {
   /**
-   * Primary source date used as the normalized sale date.
+   * Exact primary sale-date column when the source publishes day precision.
+   *
+   * Optional because many legitimate government surplus sources publish only
+   * sale month/year.
    */
-  saleDate: number;
+  saleDate?: number;
 
   /**
-   * Optional fallback date when saleDate is blank.
+   * Optional fallback exact-date column when saleDate is blank.
    */
   saleDateFallback?: number;
+
+  /**
+   * Source column containing sale timing at month/year precision.
+   *
+   * Example:
+   *
+   *   08/2024
+   *   2024-08
+   *   August 2024
+   *
+   * This must not be converted into an invented first or last day.
+   */
+  saleMonthYear?: number;
+
+  /**
+   * Optional fallback month/year column.
+   */
+  saleMonthYearFallback?: number;
 
   /**
    * Optional independent transfer date.
    */
   transferredDate?: number;
 
+  /**
+   * Exact-date parsing format.
+   *
+   * Existing configured profiles depend on this field. For a source that has
+   * only month/year timing, the exact-date columns are simply absent and this
+   * value is not used for sale timing.
+   */
   format: PublicRecordTableDateFormat;
+
+  /**
+   * Month/year parsing format when saleMonthYear is configured.
+   */
+  monthYearFormat?: PublicRecordTableMonthYearFormat;
 }
 
 export interface PublicRecordStructuredAddressColumns {
   mode: "structured";
 
-  addressLine1: number;
+  /**
+   * Property/situs street-address column when the source publishes one.
+   *
+   * Optional because a government surplus list may identify the property by
+   * parcel number without publishing a street address.
+   */
+  addressLine1?: number;
 
   city?: number;
 
@@ -103,7 +170,13 @@ export interface PublicRecordCombinedAddressColumns {
    */
   mode: "combined_us_premise";
 
-  premise: number;
+  /**
+   * Combined premise column when supplied.
+   *
+   * Optional so a profile may preserve the shape of a source even when
+   * property-location evidence is absent.
+   */
+  premise?: number;
 
   /**
    * Known locality suffixes published by the source.
@@ -204,8 +277,19 @@ export interface PublicRecordTableProfile {
 
   owner: PublicRecordTableOwnerColumns;
 
+  /**
+   * Government-published sale timing.
+   *
+   * The profile may contain an exact date, month/year timing, or both.
+   */
   dates: PublicRecordTableDateColumns;
 
+  /**
+   * Property-location mapping.
+   *
+   * The address object remains present so existing configured profiles remain
+   * structurally compatible, but its source columns may be absent.
+   */
   address: PublicRecordTableAddressColumns;
 
   money?: PublicRecordTableMoneyColumns;
@@ -219,6 +303,9 @@ export interface PublicRecordTableProfile {
    *
    * Missing optional fields are represented by an empty token rather than
    * guessed.
+   *
+   * Automatic profiles are not required to include sale_date when the source
+   * publishes only month/year timing.
    */
   recordKey: readonly PublicRecordRecordKeyField[];
 

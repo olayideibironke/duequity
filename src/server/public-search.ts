@@ -21,7 +21,10 @@ import { countySlug } from "@/lib/slug";
 
 import { listOpportunityConversions } from "@/server/opportunity-conversion-store";
 
-import { listOpportunities, listProperties } from "@/server/opportunity-store";
+import {
+  listOpportunities,
+  listProperties,
+} from "@/server/opportunity-store";
 
 import { listJurisdictionRulePackages } from "@/server/jurisdiction-intelligence";
 
@@ -64,7 +67,10 @@ export interface PublicMatch {
 
   custodian: SurplusCustodian;
 
-  surplusStatus: "confirmed_by_agency" | "possible" | "under_research";
+  surplusStatus:
+    | "confirmed_by_agency"
+    | "possible"
+    | "under_research";
 
   sourceName: string;
 
@@ -72,7 +78,10 @@ export interface PublicMatch {
 
   sourceUrl?: string;
 
-  intake: "open" | "attorney_required" | "closed";
+  intake:
+    | "open"
+    | "attorney_required"
+    | "closed";
 
   intakeExplanation: string;
 
@@ -103,93 +112,235 @@ export interface SearchQuery {
 
 export type SearchOutcome =
   | {
-      kind: "empty_query";
+      kind:
+        "empty_query";
     }
   | {
-      kind: "no_match";
+      kind:
+        "no_match";
 
-      query: SearchQuery;
+      query:
+        SearchQuery;
     }
   | {
-      kind: "coverage_unavailable";
+      kind:
+        "coverage_unavailable";
 
-      query: SearchQuery;
+      query:
+        SearchQuery;
 
-      message: string;
+      message:
+        string;
     }
   | {
-      kind: "source_unavailable";
+      kind:
+        "source_unavailable";
 
-      query: SearchQuery;
+      query:
+        SearchQuery;
 
-      sourceName: string;
+      sourceName:
+        string;
 
-      message: string;
+      message:
+        string;
     }
   | {
-      kind: "matches";
+      kind:
+        "matches";
 
-      matches: PublicMatch[];
+      matches:
+        PublicMatch[];
 
-      query: SearchQuery;
+      query:
+        SearchQuery;
     };
+
+/* ========================================================================== */
+/* Publicly projectable official record                                        */
+/* ========================================================================== */
+
+/**
+ * Discovery intentionally accepts incomplete official records.
+ *
+ * Public search is stricter.
+ *
+ * A government record may remain useful to DueQuity staff with only parcel,
+ * case, owner and month/year evidence. But claimant-facing public search still
+ * requires enough source-backed facts to safely construct a PublicMatch.
+ *
+ * We therefore require:
+ *
+ *   - source-published street address
+ *   - source-published city
+ *   - exact source-published sale date
+ *
+ * Missing facts are never manufactured merely to make a record searchable.
+ */
+type PubliclyProjectableOfficialRecord =
+  OfficialPublicRecord & {
+    addressLine1:
+      string;
+
+    city:
+      string;
+
+    saleDate:
+      IsoDate;
+  };
+
+function officialRecordIsPubliclyProjectable(
+  record: OfficialPublicRecord,
+): record is PubliclyProjectableOfficialRecord {
+  return (
+    Boolean(
+      record.addressLine1
+        ?.trim(),
+    ) &&
+    Boolean(
+      record.city
+        ?.trim(),
+    ) &&
+    Boolean(
+      record.saleDate,
+    )
+  );
+}
 
 /* ========================================================================== */
 /* Helpers                                                                     */
 /* ========================================================================== */
 
-function normalizedTokens(value: string): string[] {
+function normalizedTokens(
+  value: string,
+): string[] {
   return value
     .trim()
     .toLowerCase()
-    .split(/\s+/)
-    .map((token) => token.replace(/[^a-z0-9]/g, ""))
-    .filter((token) => token.length > 1);
+    .split(
+      /\s+/,
+    )
+    .map(
+      (token) =>
+        token.replace(
+          /[^a-z0-9]/g,
+          "",
+        ),
+    )
+    .filter(
+      (token) =>
+        token.length >
+        1,
+    );
 }
 
-function normalizedCounty(value: string): string {
+function normalizedCounty(
+  value: string,
+): string {
   return value
     .toLowerCase()
-    .replace(/\bcounty\b/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(
+      /\bcounty\b/g,
+      "",
+    )
+    .replace(
+      /[^a-z0-9]+/g,
+      " ",
+    )
+    .replace(
+      /\s+/g,
+      " ",
+    )
     .trim();
 }
 
-function opaquePublicToken(seed: string): string {
-  const digest = createHash("sha256")
-    .update(`duequity-public-v2:${seed}`)
-    .digest("hex")
-    .slice(0, 16)
-    .toUpperCase();
+function opaquePublicToken(
+  seed: string,
+): string {
+  const digest =
+    createHash(
+      "sha256",
+    )
+      .update(
+        `duequity-public-v2:${seed}`,
+      )
+      .digest(
+        "hex",
+      )
+      .slice(
+        0,
+        16,
+      )
+      .toUpperCase();
 
   return `DQ${digest}`;
 }
 
-export function publicToken(opportunityId: string, propertyId: string): string {
-  return opaquePublicToken(`opportunity:${opportunityId}:${propertyId}`);
+export function publicToken(
+  opportunityId: string,
+  propertyId: string,
+): string {
+  return opaquePublicToken(
+    `opportunity:${opportunityId}:${propertyId}`,
+  );
 }
 
-function officialPublicToken(record: OfficialPublicRecord): string {
-  return opaquePublicToken(`official:${record.adapterKey}:${record.recordKey}`);
+function officialPublicToken(
+  record: OfficialPublicRecord,
+): string {
+  return opaquePublicToken(
+    `official:${record.adapterKey}:${record.recordKey}`,
+  );
 }
 
-function addDays(date: IsoDate, days: number): IsoDate {
-  const value = new Date(`${date}T00:00:00.000Z`);
+function addDays(
+  date: IsoDate,
+  days: number,
+): IsoDate {
+  const value =
+    new Date(
+      `${date}T00:00:00.000Z`,
+    );
 
-  value.setUTCDate(value.getUTCDate() + days);
+  value.setUTCDate(
+    value.getUTCDate() +
+      days,
+  );
 
-  return value.toISOString().slice(0, 10) as IsoDate;
+  return value
+    .toISOString()
+    .slice(
+      0,
+      10,
+    ) as IsoDate;
 }
 
 function buildApprovedJurisdictionMap(
-  packages: Awaited<ReturnType<typeof listJurisdictionRulePackages>>,
+  packages: Awaited<
+    ReturnType<
+      typeof listJurisdictionRulePackages
+    >
+  >,
 ): Map<string, Jurisdiction> {
-  const map = new Map<string, Jurisdiction>();
+  const map =
+    new Map<
+      string,
+      Jurisdiction
+    >();
 
-  for (const rulePackage of packages) {
-    if (rulePackage.status === "approved" && rulePackage.rule) {
-      map.set(rulePackage.rule.id, rulePackage.rule);
+  for (
+    const rulePackage of
+    packages
+  ) {
+    if (
+      rulePackage.status ===
+        "approved" &&
+      rulePackage.rule
+    ) {
+      map.set(
+        rulePackage.rule.id,
+        rulePackage.rule,
+      );
     }
   }
 
@@ -200,14 +351,25 @@ function findApprovedJurisdictionForOfficialRecord(
   record: OfficialPublicRecord,
   jurisdictions: Iterable<Jurisdiction>,
 ): Jurisdiction | undefined {
-  for (const jurisdiction of jurisdictions) {
-    if (jurisdiction.state !== record.state) {
+  for (
+    const jurisdiction of
+    jurisdictions
+  ) {
+    if (
+      jurisdiction.state !==
+      record.state
+    ) {
       continue;
     }
 
     if (
-      normalizedCounty(jurisdiction.county ?? "") !==
-      normalizedCounty(record.county)
+      normalizedCounty(
+        jurisdiction.county ??
+          "",
+      ) !==
+      normalizedCounty(
+        record.county,
+      )
     ) {
       continue;
     }
@@ -222,17 +384,29 @@ function searchableOpportunity(
   opportunity: Opportunity,
   convertedOpportunityIds: Set<string>,
 ): boolean {
-  if (convertedOpportunityIds.has(opportunity.id)) {
-    return false;
-  }
-
-  if (opportunity.convertedClaimId) {
+  if (
+    convertedOpportunityIds.has(
+      opportunity.id,
+    )
+  ) {
     return false;
   }
 
   if (
-    String(opportunity.status) === "converted" ||
-    String(opportunity.status) === "disqualified"
+    opportunity.convertedClaimId
+  ) {
+    return false;
+  }
+
+  if (
+    String(
+      opportunity.status,
+    ) ===
+      "converted" ||
+    String(
+      opportunity.status,
+    ) ===
+      "disqualified"
   ) {
     return false;
   }
@@ -240,14 +414,25 @@ function searchableOpportunity(
   return true;
 }
 
-function addressMatches(property: Property, rawAddress: string): boolean {
-  if (!rawAddress.trim()) {
+function addressMatches(
+  property: Property,
+  rawAddress: string,
+): boolean {
+  if (
+    !rawAddress.trim()
+  ) {
     return true;
   }
 
-  const tokens = normalizedTokens(rawAddress);
+  const tokens =
+    normalizedTokens(
+      rawAddress,
+    );
 
-  if (tokens.length === 0) {
+  if (
+    tokens.length ===
+    0
+  ) {
     return false;
   }
 
@@ -257,50 +442,100 @@ function addressMatches(property: Property, rawAddress: string): boolean {
     property.address.county,
     property.address.state,
     property.address.postalCode,
-    property.parcelNumber ?? "",
-    property.taxAccountNumber ?? "",
+    property.parcelNumber ??
+      "",
+    property.taxAccountNumber ??
+      "",
   ]
-    .join(" ")
+    .join(
+      " ",
+    )
     .toLowerCase();
 
-  return tokens.some((token) => haystack.includes(token));
+  return tokens.some(
+    (token) =>
+      haystack.includes(
+        token,
+      ),
+  );
 }
 
-function ownerMatches(opportunity: Opportunity, rawOwnerName: string): boolean {
-  if (!rawOwnerName.trim()) {
+function ownerMatches(
+  opportunity: Opportunity,
+  rawOwnerName: string,
+): boolean {
+  if (
+    !rawOwnerName.trim()
+  ) {
     return true;
   }
 
-  const tokens = normalizedTokens(rawOwnerName);
+  const tokens =
+    normalizedTokens(
+      rawOwnerName,
+    );
 
-  if (tokens.length === 0) {
+  if (
+    tokens.length ===
+    0
+  ) {
     return false;
   }
 
-  return opportunity.priorOwners.some((owner) => {
-    const name = owner.nameOnRecord.toLowerCase();
+  return opportunity.priorOwners.some(
+    (owner) => {
+      const name =
+        owner.nameOnRecord
+          .toLowerCase();
 
-    return tokens.some((token) => name.includes(token));
-  });
+      return tokens.some(
+        (token) =>
+          name.includes(
+            token,
+          ),
+      );
+    },
+  );
 }
 
-function stateMatches(property: Property, rawState: string): boolean {
-  const state = rawState.trim().toUpperCase();
+function stateMatches(
+  property: Property,
+  rawState: string,
+): boolean {
+  const state =
+    rawState
+      .trim()
+      .toUpperCase();
 
-  if (!state) {
-    return true;
-  }
-
-  return property.address.state === state;
-}
-
-function countyMatches(property: Property, rawCounty: string): boolean {
-  if (!rawCounty.trim()) {
+  if (
+    !state
+  ) {
     return true;
   }
 
   return (
-    normalizedCounty(property.address.county) === normalizedCounty(rawCounty)
+    property.address.state ===
+    state
+  );
+}
+
+function countyMatches(
+  property: Property,
+  rawCounty: string,
+): boolean {
+  if (
+    !rawCounty.trim()
+  ) {
+    return true;
+  }
+
+  return (
+    normalizedCounty(
+      property.address.county,
+    ) ===
+    normalizedCounty(
+      rawCounty,
+    )
   );
 }
 
@@ -313,76 +548,125 @@ function toPersistedPublicMatch(
   property: Property,
   jurisdiction: Jurisdiction,
 ): PublicMatch {
-  const gate = evaluateIntakeGate(jurisdiction);
+  const gate =
+    evaluateIntakeGate(
+      jurisdiction,
+    );
 
-  const blockingReview = opportunity.flags.some(
-    (flag) => flag.severity === "blocking" && !flag.resolvedAt,
-  );
+  const blockingReview =
+    opportunity.flags.some(
+      (flag) =>
+        flag.severity ===
+          "blocking" &&
+        !flag.resolvedAt,
+    );
 
-  const intake: PublicMatch["intake"] = blockingReview
-    ? "closed"
-    : gate.outcome === "permitted"
-      ? "open"
-      : gate.outcome === "conditional"
-        ? "attorney_required"
-        : "closed";
+  const intake:
+    PublicMatch["intake"] =
+    blockingReview
+      ? "closed"
+      : gate.outcome ===
+          "permitted"
+        ? "open"
+        : gate.outcome ===
+            "conditional"
+          ? "attorney_required"
+          : "closed";
 
   return {
-    token: publicToken(opportunity.id, property.id),
+    token:
+      publicToken(
+        opportunity.id,
+        property.id,
+      ),
 
-    addressMasked: maskStreetAddress(property.address.line1),
+    addressMasked:
+      maskStreetAddress(
+        property.address.line1,
+      ),
 
-    city: property.address.city,
+    city:
+      property.address.city,
 
-    county: property.address.county,
+    county:
+      property.address.county,
 
-    state: property.address.state,
+    state:
+      property.address.state,
 
-    postalCodePrefix: property.address.postalCode.slice(0, 3),
+    postalCodePrefix:
+      property.address.postalCode.slice(
+        0,
+        3,
+      ),
 
-    saleType: opportunity.sale.saleType,
+    saleType:
+      opportunity.sale.saleType,
 
-    saleDate: opportunity.sale.saleDate,
+    saleDate:
+      opportunity.sale.saleDate,
 
-    caseNumber: opportunity.sale.caseNumber,
+    caseNumber:
+      opportunity.sale.caseNumber,
 
-    parcelNumber: property.parcelNumber,
+    parcelNumber:
+      property.parcelNumber,
 
-    agencyName: jurisdiction.agencyName,
+    agencyName:
+      jurisdiction.agencyName,
 
-    agencyPhone: jurisdiction.agencyPhone,
+    agencyPhone:
+      jurisdiction.agencyPhone,
 
-    agencyWebsite: jurisdiction.agencyWebsite,
+    agencyWebsite:
+      jurisdiction.agencyWebsite,
 
-    custodian: opportunity.custodian,
+    custodian:
+      opportunity.custodian,
 
-    surplusStatus: opportunity.confirmedSurplus
-      ? "confirmed_by_agency"
-      : opportunity.estimatedSurplus.quality === "unverified"
-        ? "under_research"
-        : "possible",
+    surplusStatus:
+      opportunity.confirmedSurplus
+        ? "confirmed_by_agency"
+        : opportunity.estimatedSurplus
+              .quality ===
+            "unverified"
+          ? "under_research"
+          : "possible",
 
-    sourceName: opportunity.provenance.sourceName,
+    sourceName:
+      opportunity.provenance.sourceName,
 
-    sourceReference: opportunity.provenance.sourceReference,
+    sourceReference:
+      opportunity.provenance
+        .sourceReference,
 
-    sourceUrl: opportunity.provenance.sourceUrl,
+    sourceUrl:
+      opportunity.provenance.sourceUrl,
 
     intake,
 
-    intakeExplanation: blockingReview
-      ? "This record remains under internal review, so Duequity intake is not currently available."
-      : gate.reason,
+    intakeExplanation:
+      blockingReview
+        ? "This record remains under internal review, so Duequity intake is not currently available."
+        : gate.reason,
 
     jurisdictionSlug: {
-      state: jurisdiction.state.toLowerCase(),
+      state:
+        jurisdiction.state
+          .toLowerCase(),
 
-      county: countySlug(jurisdiction.county ?? "statewide"),
+      county:
+        countySlug(
+          jurisdiction.county ??
+            "statewide",
+        ),
     },
 
-    claimDeadline: opportunity.claimDeadline,
+    claimDeadline:
+      opportunity.claimDeadline,
 
-    complianceStatus: jurisdiction.complianceStatus,
+    complianceStatus:
+      jurisdiction.complianceStatus,
   };
 }
 
@@ -391,128 +675,209 @@ function toPersistedPublicMatch(
 /* ========================================================================== */
 
 function toOfficialPublicMatch(
-  record: OfficialPublicRecord,
+  record: PubliclyProjectableOfficialRecord,
   jurisdiction: Jurisdiction | undefined,
 ): PublicMatch {
-  if (!jurisdiction) {
+  if (
+    !jurisdiction
+  ) {
     return {
-      token: officialPublicToken(record),
+      token:
+        officialPublicToken(
+          record,
+        ),
 
-      addressMasked: maskStreetAddress(record.addressLine1),
+      addressMasked:
+        maskStreetAddress(
+          record.addressLine1,
+        ),
 
-      city: record.city,
+      city:
+        record.city,
 
-      county: record.county,
+      county:
+        record.county,
 
-      state: record.state,
+      state:
+        record.state,
 
-      postalCodePrefix: record.postalCode?.slice(0, 3) ?? "",
+      postalCodePrefix:
+        record.postalCode
+          ?.slice(
+            0,
+            3,
+          ) ??
+        "",
 
-      saleType: record.saleType,
+      saleType:
+        record.saleType,
 
-      saleDate: record.saleDate,
+      saleDate:
+        record.saleDate,
 
-      caseNumber: record.caseNumber,
+      caseNumber:
+        record.caseNumber,
 
-      parcelNumber: record.parcelNumber,
+      parcelNumber:
+        record.parcelNumber,
 
-      agencyName: record.agencyName,
+      agencyName:
+        record.agencyName,
 
-      agencyPhone: record.agencyPhone,
+      agencyPhone:
+        record.agencyPhone,
 
-      custodian: record.custodian,
+      custodian:
+        record.custodian,
 
-      surplusStatus: record.confirmedSurplus
-        ? "confirmed_by_agency"
-        : "under_research",
+      surplusStatus:
+        record.confirmedSurplus
+          ? "confirmed_by_agency"
+          : "under_research",
 
-      sourceName: record.sourceName,
+      sourceName:
+        record.sourceName,
 
-      sourceReference: record.sourceReference,
+      sourceReference:
+        record.sourceReference,
 
-      sourceUrl: record.sourceUrl,
+      sourceUrl:
+        record.sourceUrl,
 
-      intake: "closed",
+      intake:
+        "closed",
 
       intakeExplanation:
         "An official surplus record was found, but Duequity has not yet approved the legal and compliance rules required to accept this jurisdiction for claimant intake. You can still verify the record directly with the government source.",
 
       jurisdictionSlug: {
-        state: record.state.toLowerCase(),
+        state:
+          record.state
+            .toLowerCase(),
 
-        county: countySlug(record.county),
+        county:
+          countySlug(
+            record.county,
+          ),
       },
 
-      complianceStatus: "research_required",
+      complianceStatus:
+        "research_required",
     };
   }
 
-  const gate = evaluateIntakeGate(jurisdiction);
+  const gate =
+    evaluateIntakeGate(
+      jurisdiction,
+    );
 
-  const intake: PublicMatch["intake"] =
-    gate.outcome === "permitted"
+  const intake:
+    PublicMatch["intake"] =
+    gate.outcome ===
+      "permitted"
       ? "open"
-      : gate.outcome === "conditional"
+      : gate.outcome ===
+          "conditional"
         ? "attorney_required"
         : "closed";
 
   const claimDeadline =
-    jurisdiction.claimDeadlineDays !== undefined
-      ? addDays(record.saleDate, jurisdiction.claimDeadlineDays)
+    jurisdiction.claimDeadlineDays !==
+    undefined
+      ? addDays(
+          record.saleDate,
+          jurisdiction.claimDeadlineDays,
+        )
       : undefined;
 
   return {
-    token: officialPublicToken(record),
+    token:
+      officialPublicToken(
+        record,
+      ),
 
-    addressMasked: maskStreetAddress(record.addressLine1),
+    addressMasked:
+      maskStreetAddress(
+        record.addressLine1,
+      ),
 
-    city: record.city,
+    city:
+      record.city,
 
-    county: record.county,
+    county:
+      record.county,
 
-    state: record.state,
+    state:
+      record.state,
 
-    postalCodePrefix: record.postalCode?.slice(0, 3) ?? "",
+    postalCodePrefix:
+      record.postalCode
+        ?.slice(
+          0,
+          3,
+        ) ??
+      "",
 
-    saleType: record.saleType,
+    saleType:
+      record.saleType,
 
-    saleDate: record.saleDate,
+    saleDate:
+      record.saleDate,
 
-    caseNumber: record.caseNumber,
+    caseNumber:
+      record.caseNumber,
 
-    parcelNumber: record.parcelNumber,
+    parcelNumber:
+      record.parcelNumber,
 
-    agencyName: jurisdiction.agencyName,
+    agencyName:
+      jurisdiction.agencyName,
 
-    agencyPhone: jurisdiction.agencyPhone ?? record.agencyPhone,
+    agencyPhone:
+      jurisdiction.agencyPhone ??
+      record.agencyPhone,
 
-    agencyWebsite: jurisdiction.agencyWebsite,
+    agencyWebsite:
+      jurisdiction.agencyWebsite,
 
-    custodian: jurisdiction.custodian,
+    custodian:
+      jurisdiction.custodian,
 
-    surplusStatus: record.confirmedSurplus
-      ? "confirmed_by_agency"
-      : "under_research",
+    surplusStatus:
+      record.confirmedSurplus
+        ? "confirmed_by_agency"
+        : "under_research",
 
-    sourceName: record.sourceName,
+    sourceName:
+      record.sourceName,
 
-    sourceReference: record.sourceReference,
+    sourceReference:
+      record.sourceReference,
 
-    sourceUrl: record.sourceUrl,
+    sourceUrl:
+      record.sourceUrl,
 
     intake,
 
-    intakeExplanation: gate.reason,
+    intakeExplanation:
+      gate.reason,
 
     jurisdictionSlug: {
-      state: jurisdiction.state.toLowerCase(),
+      state:
+        jurisdiction.state
+          .toLowerCase(),
 
-      county: countySlug(jurisdiction.county ?? record.county),
+      county:
+        countySlug(
+          jurisdiction.county ??
+            record.county,
+        ),
     },
 
     claimDeadline,
 
-    complianceStatus: jurisdiction.complianceStatus,
+    complianceStatus:
+      jurisdiction.complianceStatus,
   };
 }
 
@@ -520,18 +885,38 @@ function toOfficialPublicMatch(
 /* Public search                                                               */
 /* ========================================================================== */
 
-export async function searchPublic(query: SearchQuery): Promise<SearchOutcome> {
-  const address = query.address?.trim() ?? "";
+export async function searchPublic(
+  query: SearchQuery,
+): Promise<SearchOutcome> {
+  const address =
+    query.address
+      ?.trim() ??
+    "";
 
-  const ownerName = query.ownerName?.trim() ?? "";
+  const ownerName =
+    query.ownerName
+      ?.trim() ??
+    "";
 
-  const state = query.state?.trim() ?? "";
+  const state =
+    query.state
+      ?.trim() ??
+    "";
 
-  const county = query.county?.trim() ?? "";
+  const county =
+    query.county
+      ?.trim() ??
+    "";
 
-  if (!address && !ownerName && !state && !county) {
+  if (
+    !address &&
+    !ownerName &&
+    !state &&
+    !county
+  ) {
     return {
-      kind: "empty_query",
+      kind:
+        "empty_query",
     };
   }
 
@@ -541,106 +926,217 @@ export async function searchPublic(query: SearchQuery): Promise<SearchOutcome> {
     rulePackages,
     conversions,
     officialDiscovery,
-  ] = await Promise.all([
-    listOpportunities(),
-    listProperties(),
-    listJurisdictionRulePackages(),
-    listOpportunityConversions(),
-    discoverOfficialPublicRecords(query),
-  ]);
+  ] =
+    await Promise.all([
+      listOpportunities(),
 
-  const propertyById = new Map<string, Property>(
-    properties.map((property) => [property.id, property]),
-  );
+      listProperties(),
 
-  const jurisdictionById = buildApprovedJurisdictionMap(rulePackages);
+      listJurisdictionRulePackages(),
 
-  const convertedOpportunityIds = new Set(
-    conversions.map((conversion) => conversion.opportunityId),
-  );
+      listOpportunityConversions(),
 
-  const matches: PublicMatch[] = [];
+      discoverOfficialPublicRecords(
+        query,
+      ),
+    ]);
 
-  for (const opportunity of opportunities) {
-    if (!searchableOpportunity(opportunity, convertedOpportunityIds)) {
-      continue;
-    }
+  const propertyById =
+    new Map<
+      string,
+      Property
+    >(
+      properties.map(
+        (property) => [
+          property.id,
+          property,
+        ],
+      ),
+    );
 
-    const property = propertyById.get(opportunity.propertyId);
+  const jurisdictionById =
+    buildApprovedJurisdictionMap(
+      rulePackages,
+    );
 
-    if (!property) {
-      continue;
-    }
+  const convertedOpportunityIds =
+    new Set(
+      conversions.map(
+        (conversion) =>
+          conversion.opportunityId,
+      ),
+    );
 
-    const jurisdiction = jurisdictionById.get(opportunity.jurisdictionId);
+  const matches:
+    PublicMatch[] =
+    [];
 
-    if (!jurisdiction) {
-      continue;
-    }
-
+  for (
+    const opportunity of
+    opportunities
+  ) {
     if (
-      !addressMatches(property, address) ||
-      !ownerMatches(opportunity, ownerName) ||
-      !stateMatches(property, state) ||
-      !countyMatches(property, county)
+      !searchableOpportunity(
+        opportunity,
+        convertedOpportunityIds,
+      )
     ) {
       continue;
     }
 
-    matches.push(toPersistedPublicMatch(opportunity, property, jurisdiction));
-  }
-
-  if (officialDiscovery.status === "supported") {
-    const approvedJurisdictions = jurisdictionById.values();
-
-    for (const record of officialDiscovery.records) {
-      const jurisdiction = findApprovedJurisdictionForOfficialRecord(
-        record,
-        approvedJurisdictions,
+    const property =
+      propertyById.get(
+        opportunity.propertyId,
       );
 
-      matches.push(toOfficialPublicMatch(record, jurisdiction));
+    if (
+      !property
+    ) {
+      continue;
+    }
+
+    const jurisdiction =
+      jurisdictionById.get(
+        opportunity.jurisdictionId,
+      );
+
+    if (
+      !jurisdiction
+    ) {
+      continue;
+    }
+
+    if (
+      !addressMatches(
+        property,
+        address,
+      ) ||
+      !ownerMatches(
+        opportunity,
+        ownerName,
+      ) ||
+      !stateMatches(
+        property,
+        state,
+      ) ||
+      !countyMatches(
+        property,
+        county,
+      )
+    ) {
+      continue;
+    }
+
+    matches.push(
+      toPersistedPublicMatch(
+        opportunity,
+        property,
+        jurisdiction,
+      ),
+    );
+  }
+
+  if (
+    officialDiscovery.status ===
+    "supported"
+  ) {
+    const approvedJurisdictions =
+      jurisdictionById.values();
+
+    for (
+      const record of
+      officialDiscovery.records
+    ) {
+      /*
+       * Partial official records remain internal discovery/enrichment leads.
+       *
+       * Do not coerce them into the claimant-facing PublicMatch contract.
+       */
+      if (
+        !officialRecordIsPubliclyProjectable(
+          record,
+        )
+      ) {
+        continue;
+      }
+
+      const jurisdiction =
+        findApprovedJurisdictionForOfficialRecord(
+          record,
+          approvedJurisdictions,
+        );
+
+      matches.push(
+        toOfficialPublicMatch(
+          record,
+          jurisdiction,
+        ),
+      );
     }
   }
 
   const deduplicated = [
-    ...new Map(matches.map((match) => [match.token, match])).values(),
+    ...new Map(
+      matches.map(
+        (match) => [
+          match.token,
+          match,
+        ],
+      ),
+    ).values(),
   ];
 
-  if (deduplicated.length > 0) {
+  if (
+    deduplicated.length >
+    0
+  ) {
     return {
-      kind: "matches",
+      kind:
+        "matches",
 
-      matches: deduplicated,
+      matches:
+        deduplicated,
 
       query,
     };
   }
 
-  if (officialDiscovery.status === "error") {
+  if (
+    officialDiscovery.status ===
+    "error"
+  ) {
     return {
-      kind: "source_unavailable",
+      kind:
+        "source_unavailable",
 
       query,
 
-      sourceName: officialDiscovery.sourceName,
+      sourceName:
+        officialDiscovery.sourceName,
 
-      message: officialDiscovery.message,
+      message:
+        officialDiscovery.message,
     };
   }
 
-  if (officialDiscovery.status === "unsupported") {
+  if (
+    officialDiscovery.status ===
+    "unsupported"
+  ) {
     return {
-      kind: "coverage_unavailable",
+      kind:
+        "coverage_unavailable",
 
       query,
 
-      message: officialDiscovery.message,
+      message:
+        officialDiscovery.message,
     };
   }
 
   return {
-    kind: "no_match",
+    kind:
+      "no_match",
 
     query,
   };
@@ -652,68 +1148,151 @@ export async function searchPublic(query: SearchQuery): Promise<SearchOutcome> {
 
 export async function getPublicMatch(
   token: string,
-): Promise<PublicMatch | undefined> {
-  const normalized = token.trim().toUpperCase();
+): Promise<
+  PublicMatch | undefined
+> {
+  const normalized =
+    token
+      .trim()
+      .toUpperCase();
 
-  if (!normalized) {
+  if (
+    !normalized
+  ) {
     return undefined;
   }
 
-  const [opportunities, properties, rulePackages, conversions] =
+  const [
+    opportunities,
+    properties,
+    rulePackages,
+    conversions,
+  ] =
     await Promise.all([
       listOpportunities(),
+
       listProperties(),
+
       listJurisdictionRulePackages(),
+
       listOpportunityConversions(),
     ]);
 
-  const propertyById = new Map<string, Property>(
-    properties.map((property) => [property.id, property]),
-  );
+  const propertyById =
+    new Map<
+      string,
+      Property
+    >(
+      properties.map(
+        (property) => [
+          property.id,
+          property,
+        ],
+      ),
+    );
 
-  const jurisdictionById = buildApprovedJurisdictionMap(rulePackages);
+  const jurisdictionById =
+    buildApprovedJurisdictionMap(
+      rulePackages,
+    );
 
-  const convertedOpportunityIds = new Set(
-    conversions.map((conversion) => conversion.opportunityId),
-  );
+  const convertedOpportunityIds =
+    new Set(
+      conversions.map(
+        (conversion) =>
+          conversion.opportunityId,
+      ),
+    );
 
-  for (const opportunity of opportunities) {
-    if (!searchableOpportunity(opportunity, convertedOpportunityIds)) {
+  for (
+    const opportunity of
+    opportunities
+  ) {
+    if (
+      !searchableOpportunity(
+        opportunity,
+        convertedOpportunityIds,
+      )
+    ) {
       continue;
     }
 
-    const property = propertyById.get(opportunity.propertyId);
+    const property =
+      propertyById.get(
+        opportunity.propertyId,
+      );
 
-    if (!property) {
+    if (
+      !property
+    ) {
       continue;
     }
 
-    if (publicToken(opportunity.id, property.id) !== normalized) {
+    if (
+      publicToken(
+        opportunity.id,
+        property.id,
+      ) !==
+      normalized
+    ) {
       continue;
     }
 
-    const jurisdiction = jurisdictionById.get(opportunity.jurisdictionId);
+    const jurisdiction =
+      jurisdictionById.get(
+        opportunity.jurisdictionId,
+      );
 
-    if (!jurisdiction) {
+    if (
+      !jurisdiction
+    ) {
       return undefined;
     }
 
-    return toPersistedPublicMatch(opportunity, property, jurisdiction);
+    return toPersistedPublicMatch(
+      opportunity,
+      property,
+      jurisdiction,
+    );
   }
 
-  const officialRecords = await listSupportedOfficialPublicRecords();
+  const officialRecords =
+    await listSupportedOfficialPublicRecords();
 
-  for (const record of officialRecords) {
-    if (officialPublicToken(record) !== normalized) {
+  for (
+    const record of
+    officialRecords
+  ) {
+    if (
+      officialPublicToken(
+        record,
+      ) !==
+      normalized
+    ) {
       continue;
     }
 
-    const jurisdiction = findApprovedJurisdictionForOfficialRecord(
-      record,
-      jurisdictionById.values(),
-    );
+    /*
+     * A token must not bypass the public projection gate.
+     */
+    if (
+      !officialRecordIsPubliclyProjectable(
+        record,
+      )
+    ) {
+      return undefined;
+    }
 
-    return toOfficialPublicMatch(record, jurisdiction);
+    const jurisdiction =
+      findApprovedJurisdictionForOfficialRecord(
+        record,
+        jurisdictionById.values(),
+      );
+
+    return toOfficialPublicMatch(
+      record,
+      jurisdiction,
+    );
   }
 
   return undefined;
