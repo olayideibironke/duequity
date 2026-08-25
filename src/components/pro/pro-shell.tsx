@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useEffect,
   useState,
 } from "react";
 
@@ -33,6 +34,10 @@ import {
 } from "@/components/brand/logo";
 
 import {
+  StaffMailHeaderSearch,
+} from "@/components/pro/staff-mail-header-search";
+
+import {
   ProSearch,
 } from "./pro-search";
 
@@ -46,6 +51,7 @@ import {
   IconDashboard,
   IconDocument,
   IconJurisdiction,
+  IconMail,
   IconMenu,
   IconOpportunity,
   IconProperty,
@@ -78,6 +84,12 @@ interface NavGroup {
 
   items:
     NavItem[];
+}
+
+interface MailCountPayload {
+  counts?: {
+    unread?: number;
+  };
 }
 
 export function ProShell({
@@ -117,6 +129,9 @@ export function ProShell({
 
     complianceBlocked:
       number;
+
+    mailUnread:
+      number;
   };
 }) {
   const [
@@ -127,17 +142,130 @@ export function ProShell({
       false,
     );
 
+  const [
+    mailUnread,
+    setMailUnread,
+  ] =
+    useState(
+      counts.mailUnread,
+    );
+
   const pathname =
     usePathname();
+
+  const mailWorkspace =
+    pathname ===
+      "/pro/mail" ||
+    pathname.startsWith(
+      "/pro/mail/",
+    );
 
   const homeHref =
     staffLandingPath(
       operator.role,
     );
 
-  /*
-   * Type the raw navigation before applying authorization filtering.
-   */
+  useEffect(
+    () => {
+      setMailUnread(
+        counts.mailUnread,
+      );
+    },
+    [
+      counts.mailUnread,
+    ],
+  );
+
+  useEffect(
+    () => {
+      let cancelled =
+        false;
+
+      async function refreshMailUnread() {
+        if (
+          document.visibilityState !==
+          "visible"
+        ) {
+          return;
+        }
+
+        try {
+          const response =
+            await fetch(
+              "/api/pro/mail?folder=inbox",
+              {
+                cache:
+                  "no-store",
+              },
+            );
+
+          if (
+            !response.ok
+          ) {
+            return;
+          }
+
+          const data =
+            await response.json() as MailCountPayload;
+
+          const unread =
+            data.counts?.unread;
+
+          if (
+            !cancelled &&
+            typeof unread ===
+              "number"
+          ) {
+            setMailUnread(
+              unread,
+            );
+          }
+        } catch {
+          /*
+           * Badge refresh must never interrupt the staff workspace.
+           */
+        }
+      }
+
+      const timer =
+        window.setInterval(
+          () => {
+            void refreshMailUnread();
+          },
+          30_000,
+        );
+
+      function handleVisibilityChange() {
+        if (
+          document.visibilityState ===
+          "visible"
+        ) {
+          void refreshMailUnread();
+        }
+      }
+
+      document.addEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+      );
+
+      return () => {
+        cancelled =
+          true;
+
+        window.clearInterval(
+          timer,
+        );
+
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange,
+        );
+      };
+    },
+    [],
+  );
+
   const baseGroups:
     NavGroup[] = [
     {
@@ -216,6 +344,21 @@ export function ProShell({
         "Work",
 
       items: [
+        {
+          href:
+            "/pro/mail",
+
+          label:
+            "Mail",
+
+          icon:
+            IconMail,
+
+          badge:
+            mailUnread ||
+            undefined,
+        },
+
         {
           href:
             "/pro/tasks",
@@ -372,12 +515,16 @@ export function ProShell({
     NavGroup[] =
     baseGroups
       .map(
-        (group) => ({
+        (
+          group,
+        ) => ({
           ...group,
 
           items:
             group.items.filter(
-              (item) =>
+              (
+                item,
+              ) =>
                 canAccessProPath(
                   operator.role,
                   operator.permissions,
@@ -388,7 +535,9 @@ export function ProShell({
         }),
       )
       .filter(
-        (group) =>
+        (
+          group,
+        ) =>
           group.items.length >
           0,
       );
@@ -456,9 +605,7 @@ export function ProShell({
             className="inline-flex size-8 items-center justify-center rounded-md text-ink-300 hover:bg-ink-800 hover:text-white lg:hidden"
           >
             <IconClose
-              size={
-                18
-              }
+              size={18}
             />
           </button>
         </div>
@@ -468,7 +615,9 @@ export function ProShell({
           className="flex-1 overflow-y-auto px-2 py-3"
         >
           {groups.map(
-            (group) => (
+            (
+              group,
+            ) => (
               <div
                 key={
                   group.heading
@@ -524,9 +673,7 @@ export function ProShell({
                             )}
                           >
                             <Icon
-                              size={
-                                17
-                              }
+                              size={17}
                               className={
                                 active
                                   ? "text-accent-300"
@@ -651,13 +798,15 @@ export function ProShell({
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-ink-600 transition-colors hover:bg-ink-100 hover:text-ink-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500 lg:hidden"
           >
             <IconMenu
-              size={
-                19
-              }
+              size={19}
             />
           </button>
 
-          <ProSearch />
+          {mailWorkspace ? (
+            <StaffMailHeaderSearch />
+          ) : (
+            <ProSearch />
+          )}
 
           <Link
             href="/"

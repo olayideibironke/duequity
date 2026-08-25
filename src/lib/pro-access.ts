@@ -10,6 +10,8 @@ import type {
  *
  * Role + permissions determine ordinary workspace access.
  *
+ * DueQuity Mail is available to every authenticated operational staff role.
+ *
  * Discovered Records is intentionally different:
  *
  * - it is an owner/admin-only research workspace
@@ -45,6 +47,21 @@ const PRO_ROUTE_RULES: readonly ProRouteRule[] = [
       "/pro/discovered-records",
 
     roles: [
+      "super_admin",
+    ],
+  },
+
+  {
+    path:
+      "/pro/mail",
+
+    roles: [
+      "research_analyst",
+      "operations_specialist",
+      "claims_manager",
+      "compliance_officer",
+      "attorney_liaison",
+      "administrator",
       "super_admin",
     ],
   },
@@ -409,11 +426,6 @@ export function staffLandingPath(
     role
   ) {
     case "research_analyst":
-      /*
-       * Research analysts no longer work from the discovery queue.
-       *
-       * The administrator provides approved Excel worklists separately.
-       */
       return "/pro/opportunities";
 
     case "operations_specialist":

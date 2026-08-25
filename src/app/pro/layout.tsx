@@ -19,6 +19,10 @@ import {
 } from "@/server/operations-workload";
 
 import {
+  getStaffMailFolderCounts,
+} from "@/server/staff-mail-store";
+
+import {
   resolveStaffSession,
 } from "@/server/staff-session";
 
@@ -63,8 +67,17 @@ export default async function ProLayout({
     );
   }
 
-  const workload =
-    await resolveOperationsWorkload();
+  const [
+    workload,
+    mailCounts,
+  ] =
+    await Promise.all([
+      resolveOperationsWorkload(),
+
+      getStaffMailFolderCounts(
+        session.user.id,
+      ),
+    ]);
 
   return (
     <ProShell
@@ -100,6 +113,9 @@ export default async function ProLayout({
 
         complianceBlocked:
           workload.complianceBlockedCount,
+
+        mailUnread:
+          mailCounts.unread,
       }}
     >
       <IdleSessionGuard />
