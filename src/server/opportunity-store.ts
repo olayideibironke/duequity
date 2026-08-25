@@ -5,16 +5,21 @@ import type {
   Property,
 } from "@/domain/types";
 
-import { getSupabaseAdmin } from "@/server/supabase-admin";
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
 
 export interface SaveOpportunityRecordInput {
   opportunity: Opportunity;
+
   property: Property;
 }
 
 export interface OpportunityJurisdictionProvenanceInput {
   jurisdictionPackageId: string;
+
   jurisdictionPackageVersion: number;
+
   jurisdictionLegalRuleVersion: number;
 }
 
@@ -24,50 +29,115 @@ export interface OpportunityJurisdictionProvenanceInput {
 
 interface PropertyRow {
   id: string;
+
   property_snapshot: unknown;
+
   row_version: number | string;
 }
 
 interface OpportunityRow {
   id: string;
+
   reference: string;
+
   property_id: string;
+
   jurisdiction_id: string;
 
-  jurisdiction_package_id: string | null;
-  jurisdiction_package_version: number | string | null;
-  jurisdiction_legal_rule_version: number | string | null;
+  jurisdiction_package_id:
+    | string
+    | null;
+
+  jurisdiction_package_version:
+    | number
+    | string
+    | null;
+
+  jurisdiction_legal_rule_version:
+    | number
+    | string
+    | null;
 
   sale_snapshot: unknown;
+
   prior_owners: unknown;
 
   estimated_surplus_snapshot: unknown;
-  confirmed_surplus_snapshot: unknown | null;
+
+  confirmed_surplus_snapshot:
+    | unknown
+    | null;
 
   custodian: string;
-  claim_deadline: string | null;
 
-  status: Opportunity["status"];
-  owner_located: Opportunity["ownerLocated"];
-  contact_confidence: Opportunity["contactConfidence"];
+  claim_deadline:
+    | string
+    | null;
+
+  status:
+    Opportunity["status"];
+
+  owner_located:
+    Opportunity["ownerLocated"];
+
+  contact_confidence:
+    Opportunity["contactConfidence"];
 
   flags: unknown;
 
-  priority: 1 | 2 | 3;
+  priority:
+    | 1
+    | 2
+    | 3;
+
   risk_score: number;
 
-  active_commercial_fee_quote_id: string | null;
-  assigned_to_user_id: string | null;
-  converted_claim_id: string | null;
-  disqualified_reason: Opportunity["disqualifiedReason"] | null;
+  active_commercial_fee_quote_id:
+    | string
+    | null;
+
+  assigned_to_user_id:
+    | string
+    | null;
+
+  converted_claim_id:
+    | string
+    | null;
+
+  disqualified_reason:
+    | Opportunity["disqualifiedReason"]
+    | null;
 
   created_on: string;
+
   last_activity_on: string;
 
   provenance: unknown;
+
   notes: unknown;
 
-  row_version: number | string;
+  row_version:
+    | number
+    | string;
+}
+
+interface OperationalRecordDispositionRow {
+  record_type:
+    | "opportunity"
+    | "property";
+
+  record_id:
+    string;
+
+  purpose:
+    | "training"
+    | "retired_qa";
+
+  exclude_from_operational_lists:
+    boolean;
+
+  direct_access_allowed:
+    boolean;
 }
 
 /* ========================================================================== */
@@ -75,11 +145,21 @@ interface OpportunityRow {
 /* ========================================================================== */
 
 function rowVersion(
-  value: number | string,
+  value:
+    number | string,
 ): number {
-  const version = Number(value);
+  const version =
+    Number(
+      value,
+    );
 
-  if (!Number.isInteger(version) || version < 1) {
+  if (
+    !Number.isInteger(
+      version,
+    ) ||
+    version <
+      1
+  ) {
     throw new Error(
       "Stored record has an invalid database row version.",
     );
@@ -89,10 +169,18 @@ function rowVersion(
 }
 
 function requirePositiveInteger(
-  value: number,
-  label: string,
+  value:
+    number,
+  label:
+    string,
 ): number {
-  if (!Number.isInteger(value) || value < 1) {
+  if (
+    !Number.isInteger(
+      value,
+    ) ||
+    value <
+      1
+  ) {
     throw new Error(
       `${label} must be a positive integer.`,
     );
@@ -102,16 +190,32 @@ function requirePositiveInteger(
 }
 
 function optionalStoredPositiveInteger(
-  value: number | string | null,
-  label: string,
+  value:
+    | number
+    | string
+    | null,
+  label:
+    string,
 ): number | undefined {
-  if (value === null) {
+  if (
+    value ===
+    null
+  ) {
     return undefined;
   }
 
-  const parsed = Number(value);
+  const parsed =
+    Number(
+      value,
+    );
 
-  if (!Number.isInteger(parsed) || parsed < 1) {
+  if (
+    !Number.isInteger(
+      parsed,
+    ) ||
+    parsed <
+      1
+  ) {
     throw new Error(
       `${label} contains an invalid stored version.`,
     );
@@ -121,12 +225,15 @@ function optionalStoredPositiveInteger(
 }
 
 function normalizedJurisdictionProvenance(
-  input: OpportunityJurisdictionProvenanceInput,
+  input:
+    OpportunityJurisdictionProvenanceInput,
 ): OpportunityJurisdictionProvenanceInput {
   const jurisdictionPackageId =
     input.jurisdictionPackageId.trim();
 
-  if (!jurisdictionPackageId) {
+  if (
+    !jurisdictionPackageId
+  ) {
     throw new Error(
       "Jurisdiction package id is required before Opportunity provenance can be frozen.",
     );
@@ -150,13 +257,19 @@ function normalizedJurisdictionProvenance(
 }
 
 function requireObject<T>(
-  value: unknown,
-  label: string,
+  value:
+    unknown,
+  label:
+    string,
 ): T {
   if (
-    value === null ||
-    typeof value !== "object" ||
-    Array.isArray(value)
+    value ===
+      null ||
+    typeof value !==
+      "object" ||
+    Array.isArray(
+      value,
+    )
   ) {
     throw new Error(
       `${label} contains an invalid database snapshot.`,
@@ -167,10 +280,16 @@ function requireObject<T>(
 }
 
 function requireArray<T>(
-  value: unknown,
-  label: string,
+  value:
+    unknown,
+  label:
+    string,
 ): T[] {
-  if (!Array.isArray(value)) {
+  if (
+    !Array.isArray(
+      value,
+    )
+  ) {
     throw new Error(
       `${label} contains an invalid database snapshot.`,
     );
@@ -180,14 +299,19 @@ function requireArray<T>(
 }
 
 function propertyFromRow(
-  row: PropertyRow,
+  row:
+    PropertyRow,
 ): Property {
-  const property = requireObject<Property>(
-    row.property_snapshot,
-    "Property",
-  );
+  const property =
+    requireObject<Property>(
+      row.property_snapshot,
+      "Property",
+    );
 
-  if (property.id !== row.id) {
+  if (
+    property.id !==
+    row.id
+  ) {
     throw new Error(
       "Property snapshot does not match its database record.",
     );
@@ -197,40 +321,49 @@ function propertyFromRow(
 }
 
 function opportunityFromRow(
-  row: OpportunityRow,
+  row:
+    OpportunityRow,
 ): Opportunity {
   return {
-    id: row.id,
+    id:
+      row.id,
 
-    reference: row.reference,
+    reference:
+      row.reference,
 
-    propertyId: row.property_id,
+    propertyId:
+      row.property_id,
 
-    jurisdictionId: row.jurisdiction_id,
+    jurisdictionId:
+      row.jurisdiction_id,
 
-    sale: requireObject<
-      Opportunity["sale"]
-    >(
-      row.sale_snapshot,
-      "Opportunity sale",
-    ),
+    sale:
+      requireObject<
+        Opportunity["sale"]
+      >(
+        row.sale_snapshot,
+        "Opportunity sale",
+      ),
 
-    priorOwners: requireArray<
-      Opportunity["priorOwners"][number]
-    >(
-      row.prior_owners,
-      "Opportunity prior owners",
-    ),
+    priorOwners:
+      requireArray<
+        Opportunity["priorOwners"][number]
+      >(
+        row.prior_owners,
+        "Opportunity prior owners",
+      ),
 
-    estimatedSurplus: requireObject<
-      Opportunity["estimatedSurplus"]
-    >(
-      row.estimated_surplus_snapshot,
-      "Opportunity estimated surplus",
-    ),
+    estimatedSurplus:
+      requireObject<
+        Opportunity["estimatedSurplus"]
+      >(
+        row.estimated_surplus_snapshot,
+        "Opportunity estimated surplus",
+      ),
 
     confirmedSurplus:
-      row.confirmed_surplus_snapshot === null
+      row.confirmed_surplus_snapshot ===
+      null
         ? undefined
         : requireObject<
             NonNullable<
@@ -245,26 +378,33 @@ function opportunityFromRow(
       row.custodian as Opportunity["custodian"],
 
     claimDeadline:
-      row.claim_deadline ?? undefined,
+      row.claim_deadline ??
+      undefined,
 
-    status: row.status,
+    status:
+      row.status,
 
-    ownerLocated: row.owner_located,
+    ownerLocated:
+      row.owner_located,
 
     contactConfidence:
       row.contact_confidence,
 
-    flags: requireArray<
-      Opportunity["flags"][number]
-    >(
-      row.flags,
-      "Opportunity flags",
-    ),
+    flags:
+      requireArray<
+        Opportunity["flags"][number]
+      >(
+        row.flags,
+        "Opportunity flags",
+      ),
 
-    priority: row.priority,
+    priority:
+      row.priority,
 
     riskScore:
-      Number(row.risk_score),
+      Number(
+        row.risk_score,
+      ),
 
     activeCommercialFeeQuoteId:
       row.active_commercial_fee_quote_id ??
@@ -288,39 +428,49 @@ function opportunityFromRow(
     lastActivityAt:
       row.last_activity_on,
 
-    provenance: requireObject<
-      Opportunity["provenance"]
-    >(
-      row.provenance,
-      "Opportunity provenance",
-    ),
+    provenance:
+      requireObject<
+        Opportunity["provenance"]
+      >(
+        row.provenance,
+        "Opportunity provenance",
+      ),
 
-    notes: requireArray<
-      Opportunity["notes"][number]
-    >(
-      row.notes,
-      "Opportunity notes",
-    ),
+    notes:
+      requireArray<
+        Opportunity["notes"][number]
+      >(
+        row.notes,
+        "Opportunity notes",
+      ),
   };
 }
 
 function assertOpportunityRecord(
-  opportunity: Opportunity,
-  property: Property,
+  opportunity:
+    Opportunity,
+  property:
+    Property,
 ): void {
-  if (!opportunity.id.trim()) {
+  if (
+    !opportunity.id.trim()
+  ) {
     throw new Error(
       "Opportunity id is required.",
     );
   }
 
-  if (!opportunity.reference.trim()) {
+  if (
+    !opportunity.reference.trim()
+  ) {
     throw new Error(
       "Opportunity reference is required.",
     );
   }
 
-  if (!property.id.trim()) {
+  if (
+    !property.id.trim()
+  ) {
     throw new Error(
       "Property id is required.",
     );
@@ -345,56 +495,230 @@ function assertOpportunityRecord(
 }
 
 /* ========================================================================== */
+/* Production record disposition                                               */
+/* ========================================================================== */
+
+/**
+ * Production operational records may carry an explicit disposition.
+ *
+ * retired_qa
+ *   Historical development / staff QA evidence. Hidden from production lists
+ *   and blocked from direct operational access.
+ *
+ * training
+ *   Deliberately preserved claimant-training records. Hidden from production
+ *   Opportunity / Property aggregates, but available through direct claimant
+ *   training workflows.
+ *
+ * No disposition row means the record is an ordinary production record.
+ */
+
+async function listOperationallyExcludedRecordIds(
+  recordType:
+    "opportunity" | "property",
+): Promise<
+  Set<string>
+> {
+  const supabase =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "operational_record_dispositions",
+      )
+      .select(
+        "record_id",
+      )
+      .eq(
+        "record_type",
+        recordType,
+      )
+      .eq(
+        "exclude_from_operational_lists",
+        true,
+      );
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to resolve ${recordType} production dispositions: ${error.message}`,
+    );
+  }
+
+  return new Set(
+    (
+      data ??
+      []
+    ).map(
+      (
+        row,
+      ) =>
+        String(
+          row.record_id,
+        ),
+    ),
+  );
+}
+
+async function getOperationalRecordDisposition(
+  recordType:
+    "opportunity" | "property",
+  recordId:
+    string,
+): Promise<
+  OperationalRecordDispositionRow | undefined
+> {
+  const normalizedRecordId =
+    recordId.trim();
+
+  if (
+    !normalizedRecordId
+  ) {
+    return undefined;
+  }
+
+  const supabase =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "operational_record_dispositions",
+      )
+      .select(
+        "record_type, record_id, purpose, exclude_from_operational_lists, direct_access_allowed",
+      )
+      .eq(
+        "record_type",
+        recordType,
+      )
+      .eq(
+        "record_id",
+        normalizedRecordId,
+      )
+      .maybeSingle();
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to resolve ${recordType} record disposition: ${error.message}`,
+    );
+  }
+
+  return data
+    ? data as OperationalRecordDispositionRow
+    : undefined;
+}
+
+async function directRecordAccessAllowed(
+  recordType:
+    "opportunity" | "property",
+  recordId:
+    string,
+): Promise<boolean> {
+  const disposition =
+    await getOperationalRecordDisposition(
+      recordType,
+      recordId,
+    );
+
+  if (
+    !disposition
+  ) {
+    return true;
+  }
+
+  return disposition.direct_access_allowed;
+}
+
+/* ========================================================================== */
 /* Database helpers                                                            */
 /* ========================================================================== */
 
 async function getPropertyRow(
-  propertyId: string,
-): Promise<PropertyRow | undefined> {
+  propertyId:
+    string,
+): Promise<
+  PropertyRow | undefined
+> {
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("properties")
+      .from(
+        "properties",
+      )
       .select(
         "id, property_snapshot, row_version",
       )
-      .eq("id", propertyId)
+      .eq(
+        "id",
+        propertyId,
+      )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read property: ${error.message}`,
     );
   }
 
   return data
-    ? (data as PropertyRow)
+    ? data as PropertyRow
     : undefined;
 }
 
 async function getOpportunityRow(
-  opportunityId: string,
-): Promise<OpportunityRow | undefined> {
+  opportunityId:
+    string,
+): Promise<
+  OpportunityRow | undefined
+> {
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("opportunities")
-      .select("*")
-      .eq("id", opportunityId)
+      .from(
+        "opportunities",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "id",
+        opportunityId,
+      )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read opportunity: ${error.message}`,
     );
   }
 
   return data
-    ? (data as OpportunityRow)
+    ? data as OpportunityRow
     : undefined;
 }
 
@@ -408,37 +732,87 @@ export async function listOpportunities(): Promise<
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
-    await supabase
-      .from("opportunities")
-      .select("*")
-      .order("last_activity_on", {
-        ascending: false,
-      });
+  const [
+    opportunityResult,
+    excludedIds,
+  ] =
+    await Promise.all([
+      supabase
+        .from(
+          "opportunities",
+        )
+        .select(
+          "*",
+        )
+        .order(
+          "last_activity_on",
+          {
+            ascending:
+              false,
+          },
+        ),
 
-  if (error) {
+      listOperationallyExcludedRecordIds(
+        "opportunity",
+      ),
+    ]);
+
+  if (
+    opportunityResult.error
+  ) {
     throw new Error(
-      `Unable to list opportunities: ${error.message}`,
+      `Unable to list opportunities: ${opportunityResult.error.message}`,
     );
   }
 
-  return (data ?? []).map((row) =>
-    opportunityFromRow(
-      row as OpportunityRow,
-    ),
-  );
+  return (
+    opportunityResult.data ??
+    []
+  )
+    .filter(
+      (
+        row,
+      ) =>
+        !excludedIds.has(
+          String(
+            row.id,
+          ),
+        ),
+    )
+    .map(
+      (
+        row,
+      ) =>
+        opportunityFromRow(
+          row as OpportunityRow,
+        ),
+    );
 }
 
 export async function getOpportunityById(
-  opportunityId: string,
-): Promise<Opportunity | undefined> {
+  opportunityId:
+    string,
+): Promise<
+  Opportunity | undefined
+> {
+  if (
+    !await directRecordAccessAllowed(
+      "opportunity",
+      opportunityId,
+    )
+  ) {
+    return undefined;
+  }
+
   const row =
     await getOpportunityRow(
       opportunityId,
     );
 
   return row
-    ? opportunityFromRow(row)
+    ? opportunityFromRow(
+        row,
+      )
     : undefined;
 }
 
@@ -448,39 +822,87 @@ export async function listProperties(): Promise<
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
-    await supabase
-      .from("properties")
-      .select(
-        "id, property_snapshot, row_version",
-      )
-      .order("persisted_at", {
-        ascending: true,
-      });
+  const [
+    propertyResult,
+    excludedIds,
+  ] =
+    await Promise.all([
+      supabase
+        .from(
+          "properties",
+        )
+        .select(
+          "id, property_snapshot, row_version",
+        )
+        .order(
+          "persisted_at",
+          {
+            ascending:
+              true,
+          },
+        ),
 
-  if (error) {
+      listOperationallyExcludedRecordIds(
+        "property",
+      ),
+    ]);
+
+  if (
+    propertyResult.error
+  ) {
     throw new Error(
-      `Unable to list properties: ${error.message}`,
+      `Unable to list properties: ${propertyResult.error.message}`,
     );
   }
 
-  return (data ?? []).map((row) =>
-    propertyFromRow(
-      row as PropertyRow,
-    ),
-  );
+  return (
+    propertyResult.data ??
+    []
+  )
+    .filter(
+      (
+        row,
+      ) =>
+        !excludedIds.has(
+          String(
+            row.id,
+          ),
+        ),
+    )
+    .map(
+      (
+        row,
+      ) =>
+        propertyFromRow(
+          row as PropertyRow,
+        ),
+    );
 }
 
 export async function getPropertyById(
-  propertyId: string,
-): Promise<Property | undefined> {
+  propertyId:
+    string,
+): Promise<
+  Property | undefined
+> {
+  if (
+    !await directRecordAccessAllowed(
+      "property",
+      propertyId,
+    )
+  ) {
+    return undefined;
+  }
+
   const row =
     await getPropertyRow(
       propertyId,
     );
 
   return row
-    ? propertyFromRow(row)
+    ? propertyFromRow(
+        row,
+      )
     : undefined;
 }
 
@@ -489,13 +911,17 @@ export async function getPropertyById(
 /* ========================================================================== */
 
 export async function ensureOpportunityJurisdictionProvenance(
-  opportunityId: string,
-  input: OpportunityJurisdictionProvenanceInput,
+  opportunityId:
+    string,
+  input:
+    OpportunityJurisdictionProvenanceInput,
 ): Promise<void> {
   const normalizedOpportunityId =
     opportunityId.trim();
 
-  if (!normalizedOpportunityId) {
+  if (
+    !normalizedOpportunityId
+  ) {
     throw new Error(
       "Opportunity id is required before jurisdiction provenance can be frozen.",
     );
@@ -511,9 +937,28 @@ export async function ensureOpportunityJurisdictionProvenance(
       normalizedOpportunityId,
     );
 
-  if (!current) {
+  if (
+    !current
+  ) {
     throw new Error(
       "Opportunity not found while freezing jurisdiction provenance.",
+    );
+  }
+
+  /*
+   * A retired QA Opportunity may not be operationally reopened or rewritten.
+   *
+   * Training and normal production Opportunities may continue through the
+   * existing provenance-freezing workflow.
+   */
+  if (
+    !await directRecordAccessAllowed(
+      "opportunity",
+      normalizedOpportunityId,
+    )
+  ) {
+    throw new Error(
+      "Opportunity is retired from operational access.",
     );
   }
 
@@ -534,7 +979,8 @@ export async function ensureOpportunityJurisdictionProvenance(
     );
 
   if (
-    storedPackageId !== undefined &&
+    storedPackageId !==
+      undefined &&
     storedPackageId !==
       provenance.jurisdictionPackageId
   ) {
@@ -544,7 +990,8 @@ export async function ensureOpportunityJurisdictionProvenance(
   }
 
   if (
-    storedPackageVersion !== undefined &&
+    storedPackageVersion !==
+      undefined &&
     storedPackageVersion !==
       provenance.jurisdictionPackageVersion
   ) {
@@ -554,7 +1001,8 @@ export async function ensureOpportunityJurisdictionProvenance(
   }
 
   if (
-    storedLegalRuleVersion !== undefined &&
+    storedLegalRuleVersion !==
+      undefined &&
     storedLegalRuleVersion !==
       provenance.jurisdictionLegalRuleVersion
   ) {
@@ -582,9 +1030,14 @@ export async function ensureOpportunityJurisdictionProvenance(
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("opportunities")
+      .from(
+        "opportunities",
+      )
       .update({
         jurisdiction_package_id:
           provenance.jurisdictionPackageId,
@@ -596,10 +1049,12 @@ export async function ensureOpportunityJurisdictionProvenance(
           provenance.jurisdictionLegalRuleVersion,
 
         row_version:
-          expectedVersion + 1,
+          expectedVersion +
+          1,
 
         updated_at:
-          new Date().toISOString(),
+          new Date()
+            .toISOString(),
       })
       .eq(
         "id",
@@ -609,16 +1064,22 @@ export async function ensureOpportunityJurisdictionProvenance(
         "row_version",
         expectedVersion,
       )
-      .select("id")
+      .select(
+        "id",
+      )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to freeze Opportunity jurisdiction provenance: ${error.message}`,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "Opportunity changed while jurisdiction provenance was being frozen. Reload and try again.",
     );
@@ -630,7 +1091,8 @@ export async function ensureOpportunityJurisdictionProvenance(
 /* ========================================================================== */
 
 async function saveProperty(
-  property: Property,
+  property:
+    Property,
 ): Promise<void> {
   const supabase =
     getSupabaseAdmin();
@@ -700,23 +1162,32 @@ async function saveProperty(
       property,
   };
 
-  if (existing) {
+  if (
+    existing
+  ) {
     const expectedVersion =
       rowVersion(
         existing.row_version,
       );
 
-    const { data, error } =
+    const {
+      data,
+      error,
+    } =
       await supabase
-        .from("properties")
+        .from(
+          "properties",
+        )
         .update({
           ...payload,
 
           row_version:
-            expectedVersion + 1,
+            expectedVersion +
+            1,
 
           updated_at:
-            new Date().toISOString(),
+            new Date()
+              .toISOString(),
         })
         .eq(
           "id",
@@ -726,16 +1197,22 @@ async function saveProperty(
           "row_version",
           expectedVersion,
         )
-        .select("id")
+        .select(
+          "id",
+        )
         .maybeSingle();
 
-    if (error) {
+    if (
+      error
+    ) {
       throw new Error(
         `Unable to update property: ${error.message}`,
       );
     }
 
-    if (!data) {
+    if (
+      !data
+    ) {
       throw new Error(
         "Property changed while this request was being processed. Reload and try again.",
       );
@@ -744,19 +1221,26 @@ async function saveProperty(
     return;
   }
 
-  const { error } =
+  const {
+    error,
+  } =
     await supabase
-      .from("properties")
+      .from(
+        "properties",
+      )
       .insert({
         id:
           property.id,
 
         ...payload,
 
-        row_version: 1,
+        row_version:
+          1,
       });
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to save property: ${error.message}`,
     );
@@ -768,15 +1252,23 @@ async function saveProperty(
 /* ========================================================================== */
 
 async function assertReferenceAvailable(
-  opportunity: Opportunity,
+  opportunity:
+    Opportunity,
 ): Promise<void> {
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("opportunities")
-      .select("id")
+      .from(
+        "opportunities",
+      )
+      .select(
+        "id",
+      )
       .eq(
         "reference",
         opportunity.reference,
@@ -785,16 +1277,22 @@ async function assertReferenceAvailable(
         "id",
         opportunity.id,
       )
-      .limit(1)
+      .limit(
+        1,
+      )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to validate opportunity reference: ${error.message}`,
     );
   }
 
-  if (data) {
+  if (
+    data
+  ) {
     throw new Error(
       "Opportunity reference already exists.",
     );
@@ -802,12 +1300,44 @@ async function assertReferenceAvailable(
 }
 
 export async function saveOpportunityRecord(
-  input: SaveOpportunityRecordInput,
-): Promise<Opportunity> {
+  input:
+    SaveOpportunityRecordInput,
+): Promise<
+  Opportunity
+> {
   assertOpportunityRecord(
     input.opportunity,
     input.property,
   );
+
+  /*
+   * Retired QA identifiers cannot be silently reused by a future production
+   * promotion or save.
+   *
+   * Training records remain deliberately writable through their controlled
+   * training workflows.
+   */
+  if (
+    !await directRecordAccessAllowed(
+      "opportunity",
+      input.opportunity.id,
+    )
+  ) {
+    throw new Error(
+      "Opportunity identifier belongs to a retired QA record and cannot be reused.",
+    );
+  }
+
+  if (
+    !await directRecordAccessAllowed(
+      "property",
+      input.property.id,
+    )
+  ) {
+    throw new Error(
+      "Property identifier belongs to a retired QA record and cannot be reused.",
+    );
+  }
 
   await assertReferenceAvailable(
     input.opportunity,
@@ -917,23 +1447,32 @@ export async function saveOpportunityRecord(
       input.opportunity.notes,
   };
 
-  if (existing) {
+  if (
+    existing
+  ) {
     const expectedVersion =
       rowVersion(
         existing.row_version,
       );
 
-    const { data, error } =
+    const {
+      data,
+      error,
+    } =
       await supabase
-        .from("opportunities")
+        .from(
+          "opportunities",
+        )
         .update({
           ...payload,
 
           row_version:
-            expectedVersion + 1,
+            expectedVersion +
+            1,
 
           updated_at:
-            new Date().toISOString(),
+            new Date()
+              .toISOString(),
         })
         .eq(
           "id",
@@ -943,16 +1482,22 @@ export async function saveOpportunityRecord(
           "row_version",
           expectedVersion,
         )
-        .select("*")
+        .select(
+          "*",
+        )
         .maybeSingle();
 
-    if (error) {
+    if (
+      error
+    ) {
       throw new Error(
         `Unable to update opportunity: ${error.message}`,
       );
     }
 
-    if (!data) {
+    if (
+      !data
+    ) {
       throw new Error(
         "Opportunity changed while this request was being processed. Reload and try again.",
       );
@@ -963,9 +1508,14 @@ export async function saveOpportunityRecord(
     );
   }
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("opportunities")
+      .from(
+        "opportunities",
+      )
       .insert({
         id:
           input.opportunity.id,
@@ -981,13 +1531,21 @@ export async function saveOpportunityRecord(
         jurisdiction_legal_rule_version:
           null,
 
-        row_version: 1,
+        row_version:
+          1,
       })
-      .select("*")
+      .select(
+        "*",
+      )
       .single();
 
-  if (error) {
-    if (error.code === "23505") {
+  if (
+    error
+  ) {
+    if (
+      error.code ===
+      "23505"
+    ) {
       throw new Error(
         "Opportunity reference already exists.",
       );
