@@ -1,9 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
 
 import {
   calculateCommercialFeeQuote,
   type CommercialQuoteCalculation,
 } from "@/domain/commercial-pricing";
+
 import type {
   Cents,
   CommercialFeePolicy,
@@ -13,70 +17,130 @@ import type {
   Jurisdiction,
   Opportunity,
 } from "@/domain/types";
+
+import type {
+  StaffSession,
+} from "@/lib/session";
+
+import {
+  STAFF_AUTHENTICATION_REQUIRED_MESSAGE,
+} from "@/lib/session";
+
 import {
   approveCommercialQuote,
   getCommercialApprovalByQuoteId,
   saveCommercialQuote,
   verifyCommercialQuoteSnapshot,
 } from "@/server/commercial-approval-store";
-import { listCommercialFeePolicies } from "@/server/commercial-fee-policy-store";
-import { listJurisdictionRulePackages } from "@/server/jurisdiction-intelligence";
-import { getOpportunityById } from "@/server/opportunity-store";
-import { resolveStaffSession } from "@/server/staff-session";
-import { STAFF_AUTHENTICATION_REQUIRED_MESSAGE } from "@/lib/session";
+
+import {
+  listCommercialFeePolicies,
+} from "@/server/commercial-fee-policy-store";
+
+import {
+  listJurisdictionRulePackages,
+} from "@/server/jurisdiction-intelligence";
+
+import {
+  getOpportunityById,
+} from "@/server/opportunity-store";
+
+import {
+  resolveOpportunityStaffAccess,
+} from "@/server/opportunity-staff-access";
+
+import {
+  resolveStaffSession,
+} from "@/server/staff-session";
 
 interface ApprovalRequestBody {
-  action: "approve_staff" | "request_manager_review" | "approve_manager";
+  action:
+    | "approve_staff"
+    | "request_manager_review"
+    | "approve_manager";
 
   reason?: string;
 
   requestedPercentage?: number;
+
   requestedFlatAmount?: Cents;
 }
 
 interface PricingSuccess {
-  ok: true;
+  ok:
+    true;
 
-  opportunity: Opportunity;
-  jurisdiction: Jurisdiction;
-  policy: CommercialFeePolicy;
+  opportunity:
+    Opportunity;
 
-  calculation: CommercialQuoteCalculation;
-  quote: CommercialFeeQuote;
+  jurisdiction:
+    Jurisdiction;
+
+  policy:
+    CommercialFeePolicy;
+
+  calculation:
+    CommercialQuoteCalculation;
+
+  quote:
+    CommercialFeeQuote;
 }
 
 interface PricingFailure {
-  ok: false;
-  error: string;
-  status: number;
+  ok:
+    false;
+
+  error:
+    string;
+
+  status:
+    number;
 }
 
-type PricingResult = PricingSuccess | PricingFailure;
+type PricingResult =
+  | PricingSuccess
+  | PricingFailure;
 
 /* ========================================================================== */
 /* Helpers                                                                     */
 /* ========================================================================== */
 
 function currentIsoDate(): IsoDate {
-  return new Date().toISOString().slice(0, 10) as IsoDate;
+  return new Date()
+    .toISOString()
+    .slice(
+      0,
+      10,
+    ) as IsoDate;
 }
 
 function currentIsoInstant(): IsoInstant {
-  return new Date().toISOString() as IsoInstant;
+  return new Date()
+    .toISOString() as IsoInstant;
 }
 
 function quoteIdForOpportunity(
-  opportunityId: string,
-  policyVersion: number,
+  opportunityId:
+    string,
+  policyVersion:
+    number,
 ): string {
   return `fee-quote-${opportunityId}-v${policyVersion}`;
 }
 
-function errorResponse(message: string, status = 400) {
+function errorResponse(
+  message:
+    string,
+  status =
+    400,
+) {
   return NextResponse.json(
     {
-      ok: false,
-      error: message,
+      ok:
+        false,
+
+      error:
+        message,
     },
     {
       status,
@@ -84,25 +148,60 @@ function errorResponse(message: string, status = 400) {
   );
 }
 
-function validRequestedPercentage(value: number | undefined): boolean {
+function validRequestedPercentage(
+  value:
+    number | undefined,
+): boolean {
   return (
-    value === undefined || (Number.isFinite(value) && value >= 0 && value <= 1)
+    value ===
+      undefined ||
+    (
+      Number.isFinite(
+        value,
+      ) &&
+      value >=
+        0 &&
+      value <=
+        1
+    )
   );
 }
 
-function validRequestedFlatAmount(value: number | undefined): boolean {
-  return value === undefined || (Number.isInteger(value) && value >= 0);
+function validRequestedFlatAmount(
+  value:
+    number | undefined,
+): boolean {
+  return (
+    value ===
+      undefined ||
+    (
+      Number.isInteger(
+        value,
+      ) &&
+      value >=
+        0
+    )
+  );
 }
 
 function policyEffectiveOn(
-  policy: CommercialFeePolicy,
-  asOfDate: IsoDate,
+  policy:
+    CommercialFeePolicy,
+  asOfDate:
+    IsoDate,
 ): boolean {
-  if (asOfDate < policy.effectiveFrom) {
+  if (
+    asOfDate <
+    policy.effectiveFrom
+  ) {
     return false;
   }
 
-  if (policy.effectiveThrough && asOfDate > policy.effectiveThrough) {
+  if (
+    policy.effectiveThrough &&
+    asOfDate >
+      policy.effectiveThrough
+  ) {
     return false;
   }
 
@@ -110,37 +209,70 @@ function policyEffectiveOn(
 }
 
 function policyCoversOpportunity(
-  policy: CommercialFeePolicy,
-  opportunity: Opportunity,
+  policy:
+    CommercialFeePolicy,
+  opportunity:
+    Opportunity,
 ): boolean {
   const saleTypeCovered =
     !policy.saleTypes ||
-    policy.saleTypes.length === 0 ||
-    policy.saleTypes.includes(opportunity.sale.saleType);
+    policy.saleTypes.length ===
+      0 ||
+    policy.saleTypes.includes(
+      opportunity.sale.saleType,
+    );
 
   const custodianCovered =
     !policy.custodians ||
-    policy.custodians.length === 0 ||
-    policy.custodians.includes(opportunity.custodian);
+    policy.custodians.length ===
+      0 ||
+    policy.custodians.includes(
+      opportunity.custodian,
+    );
 
-  return saleTypeCovered && custodianCovered;
+  return (
+    saleTypeCovered &&
+    custodianCovered
+  );
 }
 
 function selectCommercialPolicy(
-  policies: CommercialFeePolicy[],
-  opportunity: Opportunity,
-  asOfDate: IsoDate,
-): CommercialFeePolicy | undefined {
+  policies:
+    CommercialFeePolicy[],
+  opportunity:
+    Opportunity,
+  asOfDate:
+    IsoDate,
+):
+  | CommercialFeePolicy
+  | undefined {
   return policies
     .filter(
-      (policy) =>
-        policy.status === "approved" &&
-        policy.jurisdictionId === opportunity.jurisdictionId &&
-        policyEffectiveOn(policy, asOfDate) &&
-        policyCoversOpportunity(policy, opportunity),
+      (
+        policy,
+      ) =>
+        policy.status ===
+          "approved" &&
+        policy.jurisdictionId ===
+          opportunity.jurisdictionId &&
+        policyEffectiveOn(
+          policy,
+          asOfDate,
+        ) &&
+        policyCoversOpportunity(
+          policy,
+          opportunity,
+        ),
     )
     .slice()
-    .sort((left, right) => right.version - left.version)[0];
+    .sort(
+      (
+        left,
+        right,
+      ) =>
+        right.version -
+        left.version,
+    )[0];
 }
 
 /* ========================================================================== */
@@ -148,101 +280,197 @@ function selectCommercialPolicy(
 /* ========================================================================== */
 
 async function calculateOpportunityPricing(
-  opportunityId: string,
-  createdByUserId: string,
+  opportunityId:
+    string,
+  session:
+    StaffSession,
   options?: {
     requestedPercentage?: number;
+
     requestedFlatAmount?: Cents;
   },
 ): Promise<PricingResult> {
-  const opportunity = await getOpportunityById(opportunityId);
+  const opportunity =
+    await getOpportunityById(
+      opportunityId,
+    );
 
   if (!opportunity) {
     return {
-      ok: false,
-      error: "Opportunity not found.",
-      status: 404,
+      ok:
+        false,
+
+      error:
+        "Opportunity not found.",
+
+      status:
+        404,
     };
   }
 
-  const [rulePackages, policies] = await Promise.all([
-    listJurisdictionRulePackages(),
-    listCommercialFeePolicies(),
-  ]);
+  /*
+   * Stage 16 ownership is checked before commercial information is calculated
+   * or returned.
+   */
+  const access =
+    await resolveOpportunityStaffAccess(
+      session,
+      {
+        opportunityId:
+          opportunity.id,
 
-  const jurisdictionPackage = rulePackages.find(
-    (rulePackage) =>
-      rulePackage.status === "approved" &&
-      rulePackage.rule?.id === opportunity.jurisdictionId,
-  );
+        convertedClaimId:
+          opportunity.convertedClaimId,
+      },
+    );
 
-  const jurisdiction = jurisdictionPackage?.rule;
+  if (!access.accessible) {
+    return {
+      ok:
+        false,
+
+      error:
+        "Opportunity not found.",
+
+      status:
+        404,
+    };
+  }
+
+  const [
+    rulePackages,
+    policies,
+  ] =
+    await Promise.all([
+      listJurisdictionRulePackages(),
+
+      listCommercialFeePolicies(),
+    ]);
+
+  const jurisdictionPackage =
+    rulePackages.find(
+      (
+        rulePackage,
+      ) =>
+        rulePackage.status ===
+          "approved" &&
+        rulePackage.rule?.id ===
+          opportunity.jurisdictionId,
+    );
+
+  const jurisdiction =
+    jurisdictionPackage?.rule;
 
   if (!jurisdiction) {
     return {
-      ok: false,
-      error: "No approved jurisdiction rule is published for this opportunity.",
-      status: 409,
+      ok:
+        false,
+
+      error:
+        "No approved jurisdiction rule is published for this opportunity.",
+
+      status:
+        409,
     };
   }
 
-  const asOfDate = currentIsoDate();
+  const asOfDate =
+    currentIsoDate();
 
-  const policy = selectCommercialPolicy(policies, opportunity, asOfDate);
+  const policy =
+    selectCommercialPolicy(
+      policies,
+      opportunity,
+      asOfDate,
+    );
 
   if (!policy) {
     return {
-      ok: false,
+      ok:
+        false,
+
       error:
         "No current approved commercial fee policy applies to this opportunity.",
-      status: 409,
+
+      status:
+        409,
     };
   }
 
-  const calculation = calculateCommercialFeeQuote({
-    opportunity,
-    jurisdiction,
-    policy,
+  const calculation =
+    calculateCommercialFeeQuote({
+      opportunity,
 
-    quoteId: quoteIdForOpportunity(opportunity.id, policy.version),
+      jurisdiction,
 
-    createdByUserId,
+      policy,
 
-    createdAt: currentIsoInstant(),
+      quoteId:
+        quoteIdForOpportunity(
+          opportunity.id,
+          policy.version,
+        ),
 
-    asOfDate,
+      createdByUserId:
+        session.user.id,
 
-    requestedPercentage: options?.requestedPercentage,
+      createdAt:
+        currentIsoInstant(),
 
-    requestedFlatAmount: options?.requestedFlatAmount,
-  });
+      asOfDate,
 
-  const quote = calculation.quote;
+      requestedPercentage:
+        options?.requestedPercentage,
+
+      requestedFlatAmount:
+        options?.requestedFlatAmount,
+    });
+
+  const quote =
+    calculation.quote;
 
   if (!quote) {
     return {
-      ok: false,
+      ok:
+        false,
+
       error:
         calculation.gate.reason ||
         "Commercial pricing did not produce a quote.",
-      status: 409,
+
+      status:
+        409,
     };
   }
 
-  if (calculation.gate.outcome === "blocked") {
+  if (
+    calculation.gate.outcome ===
+    "blocked"
+  ) {
     return {
-      ok: false,
-      error: calculation.gate.reason,
-      status: 409,
+      ok:
+        false,
+
+      error:
+        calculation.gate.reason,
+
+      status:
+        409,
     };
   }
 
   return {
-    ok: true,
+    ok:
+      true,
+
     opportunity,
+
     jurisdiction,
+
     policy,
+
     calculation,
+
     quote,
   };
 }
@@ -252,29 +480,48 @@ async function calculateOpportunityPricing(
 /* ========================================================================== */
 
 function persistedQuoteStillMatches(
-  stored: Awaited<ReturnType<typeof getCommercialApprovalByQuoteId>>,
-  result: PricingSuccess,
-): string | undefined {
+  stored:
+    Awaited<
+      ReturnType<
+        typeof getCommercialApprovalByQuoteId
+      >
+    >,
+  result:
+    PricingSuccess,
+):
+  | string
+  | undefined {
   if (!stored) {
     return undefined;
   }
 
-  if (stored.opportunityId !== result.opportunity.id) {
+  if (
+    stored.opportunityId !==
+    result.opportunity.id
+  ) {
     return "The persisted commercial quote belongs to a different opportunity.";
   }
 
-  if (stored.jurisdictionId !== result.jurisdiction.id) {
+  if (
+    stored.jurisdictionId !==
+    result.jurisdiction.id
+  ) {
     return "The persisted commercial quote belongs to a different jurisdiction.";
   }
 
   if (
-    stored.commercialPolicyId !== result.policy.id ||
-    stored.commercialPolicyVersion !== result.policy.version
+    stored.commercialPolicyId !==
+      result.policy.id ||
+    stored.commercialPolicyVersion !==
+      result.policy.version
   ) {
     return "The commercial policy changed after this pricing record was created. Recalculate before approval.";
   }
 
-  if (stored.quoteSnapshot.recoveryAmount !== result.quote.recoveryAmount) {
+  if (
+    stored.quoteSnapshot.recoveryAmount !==
+    result.quote.recoveryAmount
+  ) {
     return "The recovery amount changed after this pricing record was created. Recalculate before approval.";
   }
 
@@ -286,69 +533,99 @@ function persistedQuoteStillMatches(
 /* ========================================================================== */
 
 export async function GET(
-  _request: NextRequest,
+  _request:
+    NextRequest,
   context: {
     params: Promise<{
       opportunityId: string;
     }>;
   },
 ) {
-  const { opportunityId } = await context.params;
+  const {
+    opportunityId,
+  } =
+    await context.params;
 
-  const session = await resolveStaffSession();
+  const session =
+    await resolveStaffSession();
 
   if (!session) {
-    return errorResponse(STAFF_AUTHENTICATION_REQUIRED_MESSAGE, 401);
+    return errorResponse(
+      STAFF_AUTHENTICATION_REQUIRED_MESSAGE,
+      401,
+    );
   }
 
-  const result = await calculateOpportunityPricing(
-    opportunityId,
-    session.user.id,
-  );
+  const result =
+    await calculateOpportunityPricing(
+      opportunityId,
+      session,
+    );
 
   if (!result.ok) {
-    return errorResponse(result.error, result.status);
+    return errorResponse(
+      result.error,
+      result.status,
+    );
   }
 
-  const persistedApproval = await getCommercialApprovalByQuoteId(
-    result.quote.id,
-  );
+  const persistedApproval =
+    await getCommercialApprovalByQuoteId(
+      result.quote.id,
+    );
 
-  const persistedMismatch = persistedQuoteStillMatches(
-    persistedApproval,
-    result,
-  );
+  const persistedMismatch =
+    persistedQuoteStillMatches(
+      persistedApproval,
+      result,
+    );
 
-  const usableApproval = persistedMismatch ? undefined : persistedApproval;
+  const usableApproval =
+    persistedMismatch
+      ? undefined
+      : persistedApproval;
 
   return NextResponse.json({
-    ok: true,
+    ok:
+      true,
 
     opportunityId,
 
     pricing: {
-      gate: result.calculation.gate,
+      gate:
+        result.calculation.gate,
 
-      legalMaximumFee: result.calculation.legalMaximumFee,
+      legalMaximumFee:
+        result.calculation.legalMaximumFee,
 
-      commercialMaximumFee: result.calculation.commercialMaximumFee,
+      commercialMaximumFee:
+        result.calculation.commercialMaximumFee,
 
-      quote: result.quote,
+      quote:
+        result.quote,
 
-      tier: result.calculation.tier,
+      tier:
+        result.calculation.tier,
 
       policy: {
-        id: result.policy.id,
+        id:
+          result.policy.id,
 
-        version: result.policy.version,
+        version:
+          result.policy.version,
 
-        status: result.policy.status,
+        status:
+          result.policy.status,
       },
     },
 
-    approval: usableApproval ?? null,
+    approval:
+      usableApproval ??
+      null,
 
-    approvalWarning: persistedMismatch ?? null,
+    approvalWarning:
+      persistedMismatch ??
+      null,
   });
 }
 
@@ -357,115 +634,169 @@ export async function GET(
 /* ========================================================================== */
 
 export async function POST(
-  request: NextRequest,
+  request:
+    NextRequest,
   context: {
     params: Promise<{
       opportunityId: string;
     }>;
   },
 ) {
-  const { opportunityId } = await context.params;
+  const {
+    opportunityId,
+  } =
+    await context.params;
 
-  let body: ApprovalRequestBody;
+  let body:
+    ApprovalRequestBody;
 
   try {
-    body = (await request.json()) as ApprovalRequestBody;
+    body =
+      (
+        await request.json()
+      ) as ApprovalRequestBody;
   } catch {
-    return errorResponse("Invalid JSON request.");
+    return errorResponse(
+      "Invalid JSON request.",
+    );
   }
 
   if (
-    body.action !== "approve_staff" &&
-    body.action !== "request_manager_review" &&
-    body.action !== "approve_manager"
+    body.action !==
+      "approve_staff" &&
+    body.action !==
+      "request_manager_review" &&
+    body.action !==
+      "approve_manager"
   ) {
-    return errorResponse("Unsupported approval action.");
+    return errorResponse(
+      "Unsupported approval action.",
+    );
   }
 
-  if (!validRequestedPercentage(body.requestedPercentage)) {
+  if (
+    !validRequestedPercentage(
+      body.requestedPercentage,
+    )
+  ) {
     return errorResponse(
       "Requested percentage must be a number between 0 and 1.",
     );
   }
 
-  if (!validRequestedFlatAmount(body.requestedFlatAmount)) {
+  if (
+    !validRequestedFlatAmount(
+      body.requestedFlatAmount,
+    )
+  ) {
     return errorResponse(
       "Requested flat amount must be a non-negative integer number of cents.",
     );
   }
 
-  const session = await resolveStaffSession();
+  const session =
+    await resolveStaffSession();
 
   if (!session) {
-    return errorResponse(STAFF_AUTHENTICATION_REQUIRED_MESSAGE, 401);
+    return errorResponse(
+      STAFF_AUTHENTICATION_REQUIRED_MESSAGE,
+      401,
+    );
   }
 
-  const actorUserId = session.user.id;
+  const actorUserId =
+    session.user.id;
 
-  const occurredAt = currentIsoInstant();
+  const occurredAt =
+    currentIsoInstant();
 
-  /* ======================================================================== */
-  /* Manager exception request                                                 */
-  /* ======================================================================== */
-
-  if (body.action === "request_manager_review") {
+  if (
+    body.action ===
+    "request_manager_review"
+  ) {
     if (
-      body.requestedPercentage === undefined &&
-      body.requestedFlatAmount === undefined
+      body.requestedPercentage ===
+        undefined &&
+      body.requestedFlatAmount ===
+        undefined
     ) {
       return errorResponse(
         "A manager-review request must include a requested percentage or flat fee.",
       );
     }
 
-    const exceptionResult = await calculateOpportunityPricing(
-      opportunityId,
-      actorUserId,
-      {
-        requestedPercentage: body.requestedPercentage,
+    const exceptionResult =
+      await calculateOpportunityPricing(
+        opportunityId,
+        session,
+        {
+          requestedPercentage:
+            body.requestedPercentage,
 
-        requestedFlatAmount: body.requestedFlatAmount,
-      },
-    );
+          requestedFlatAmount:
+            body.requestedFlatAmount,
+        },
+      );
 
     if (!exceptionResult.ok) {
-      return errorResponse(exceptionResult.error, exceptionResult.status);
+      return errorResponse(
+        exceptionResult.error,
+        exceptionResult.status,
+      );
     }
 
-    if (exceptionResult.calculation.gate.outcome !== "manager_review") {
-      if (exceptionResult.calculation.gate.outcome === "allowed") {
+    if (
+      exceptionResult.calculation.gate.outcome !==
+      "manager_review"
+    ) {
+      if (
+        exceptionResult.calculation.gate.outcome ===
+        "allowed"
+      ) {
         return errorResponse(
           "The requested pricing is within ordinary staff authority and does not require manager review.",
           409,
         );
       }
 
-      return errorResponse(exceptionResult.calculation.gate.reason, 409);
+      return errorResponse(
+        exceptionResult.calculation.gate.reason,
+        409,
+      );
     }
 
     try {
-      const stored = await saveCommercialQuote({
-        quote: exceptionResult.quote,
+      const stored =
+        await saveCommercialQuote({
+          quote:
+            exceptionResult.quote,
 
-        actorUserId,
+          actorUserId,
 
-        occurredAt,
-      });
+          occurredAt,
+        });
 
       return NextResponse.json({
-        ok: true,
+        ok:
+          true,
 
-        approval: stored,
+        approval:
+          stored,
 
-        managerReviewRequested: true,
+        managerReviewRequested:
+          true,
 
         pricing: {
-          gate: exceptionResult.calculation.gate,
+          gate:
+            exceptionResult.calculation.gate,
 
-          quote: exceptionResult.quote,
+          quote:
+            exceptionResult.quote,
         },
       });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       return errorResponse(
         error instanceof Error
           ? error.message
@@ -475,29 +806,41 @@ export async function POST(
     }
   }
 
-  /* ======================================================================== */
-  /* Standard pricing context                                                  */
-  /* ======================================================================== */
-
-  const result = await calculateOpportunityPricing(opportunityId, actorUserId);
+  const result =
+    await calculateOpportunityPricing(
+      opportunityId,
+      session,
+    );
 
   if (!result.ok) {
-    return errorResponse(result.error, result.status);
+    return errorResponse(
+      result.error,
+      result.status,
+    );
   }
 
-  let stored = await getCommercialApprovalByQuoteId(result.quote.id);
+  let stored =
+    await getCommercialApprovalByQuoteId(
+      result.quote.id,
+    );
 
-  const mismatch = persistedQuoteStillMatches(stored, result);
+  const mismatch =
+    persistedQuoteStillMatches(
+      stored,
+      result,
+    );
 
   if (mismatch) {
-    return errorResponse(mismatch, 409);
+    return errorResponse(
+      mismatch,
+      409,
+    );
   }
 
-  /* ======================================================================== */
-  /* Manager approval                                                          */
-  /* ======================================================================== */
-
-  if (body.action === "approve_manager") {
+  if (
+    body.action ===
+    "approve_manager"
+  ) {
     if (!stored) {
       return errorResponse(
         "No manager-review pricing request exists for this opportunity.",
@@ -505,7 +848,11 @@ export async function POST(
       );
     }
 
-    if (!verifyCommercialQuoteSnapshot(stored)) {
+    if (
+      !verifyCommercialQuoteSnapshot(
+        stored,
+      )
+    ) {
       return errorResponse(
         "Commercial quote snapshot integrity verification failed. Approval is blocked.",
         409,
@@ -513,9 +860,12 @@ export async function POST(
     }
 
     if (
-      stored.approvalStatus !== "manager_review" &&
-      stored.approvalStatus !== "manager_approved" &&
-      stored.approvalStatus !== "locked"
+      stored.approvalStatus !==
+        "manager_review" &&
+      stored.approvalStatus !==
+        "manager_approved" &&
+      stored.approvalStatus !==
+        "locked"
     ) {
       return errorResponse(
         "This pricing record is not awaiting manager approval.",
@@ -524,35 +874,54 @@ export async function POST(
     }
 
     if (
-      stored.approvalStatus === "manager_approved" ||
-      stored.approvalStatus === "locked"
+      stored.approvalStatus ===
+        "manager_approved" ||
+      stored.approvalStatus ===
+        "locked"
     ) {
       return NextResponse.json({
-        ok: true,
-        approval: stored,
-        alreadyApproved: true,
+        ok:
+          true,
+
+        approval:
+          stored,
+
+        alreadyApproved:
+          true,
       });
     }
 
     try {
-      const approved = await approveCommercialQuote({
-        quoteId: stored.quoteId,
+      const approved =
+        await approveCommercialQuote({
+          quoteId:
+            stored.quoteId,
 
-        actorUserId,
+          actorUserId,
 
-        approvalLevel: "manager",
+          approvalLevel:
+            "manager",
 
-        occurredAt,
+          occurredAt,
 
-        reason: body.reason?.trim() || "Manager pricing exception approved.",
-      });
+          reason:
+            body.reason?.trim() ||
+            "Manager pricing exception approved.",
+        });
 
       return NextResponse.json({
-        ok: true,
-        approval: approved,
-        alreadyApproved: false,
+        ok:
+          true,
+
+        approval:
+          approved,
+
+        alreadyApproved:
+          false,
       });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       return errorResponse(
         error instanceof Error
           ? error.message
@@ -562,20 +931,23 @@ export async function POST(
     }
   }
 
-  /* ======================================================================== */
-  /* Staff approval                                                            */
-  /* ======================================================================== */
-
-  if (result.calculation.gate.outcome !== "allowed") {
+  if (
+    result.calculation.gate.outcome !==
+    "allowed"
+  ) {
     return errorResponse(
-      result.calculation.gate.outcome === "manager_review"
+      result.calculation.gate.outcome ===
+      "manager_review"
         ? "This quote requires manager approval."
         : result.calculation.gate.reason,
       409,
     );
   }
 
-  if (stored?.approvalStatus === "manager_review") {
+  if (
+    stored?.approvalStatus ===
+    "manager_review"
+  ) {
     return errorResponse(
       "This pricing record requires manager approval and cannot be approved by staff.",
       409,
@@ -583,31 +955,38 @@ export async function POST(
   }
 
   if (
-    stored?.approvalStatus === "staff_approved" ||
-    stored?.approvalStatus === "manager_approved" ||
-    stored?.approvalStatus === "locked"
+    stored?.approvalStatus ===
+      "staff_approved" ||
+    stored?.approvalStatus ===
+      "manager_approved" ||
+    stored?.approvalStatus ===
+      "locked"
   ) {
     return NextResponse.json({
-      ok: true,
-      approval: stored,
-      alreadyApproved: true,
+      ok:
+        true,
+
+      approval:
+        stored,
+
+      alreadyApproved:
+        true,
     });
   }
 
-  /*
-   * A draft or rejected record is refreshed from the current server-side
-   * calculation before approval. This prevents stale pricing from surviving a
-   * recovery or policy change.
-   */
   try {
-    stored = await saveCommercialQuote({
-      quote: result.quote,
+    stored =
+      await saveCommercialQuote({
+        quote:
+          result.quote,
 
-      actorUserId,
+        actorUserId,
 
-      occurredAt,
-    });
-  } catch (error) {
+        occurredAt,
+      });
+  } catch (
+    error
+  ) {
     return errorResponse(
       error instanceof Error
         ? error.message
@@ -617,24 +996,36 @@ export async function POST(
   }
 
   try {
-    const approved = await approveCommercialQuote({
-      quoteId: stored.quoteId,
+    const approved =
+      await approveCommercialQuote({
+        quoteId:
+          stored.quoteId,
 
-      actorUserId,
+        actorUserId,
 
-      approvalLevel: "staff",
+        approvalLevel:
+          "staff",
 
-      occurredAt,
+        occurredAt,
 
-      reason: body.reason?.trim() || undefined,
-    });
+        reason:
+          body.reason?.trim() ||
+          undefined,
+      });
 
     return NextResponse.json({
-      ok: true,
-      approval: approved,
-      alreadyApproved: false,
+      ok:
+        true,
+
+      approval:
+        approved,
+
+      alreadyApproved:
+        false,
     });
-  } catch (error) {
+  } catch (
+    error
+  ) {
     return errorResponse(
       error instanceof Error
         ? error.message

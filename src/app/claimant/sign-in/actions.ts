@@ -1,26 +1,56 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import {
+  revalidatePath,
+} from "next/cache";
 
-import { resolveClaimantSession } from "@/server/claimant-session";
-import { getSupabaseServerAuth } from "@/server/supabase-auth";
+import {
+  redirect,
+} from "next/navigation";
 
-const CLAIMANT_SIGN_IN_PATH = "/claimant/sign-in";
+import {
+  resolveClaimantSession,
+} from "@/server/claimant-session";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+import {
+  getSupabaseServerAuth,
+} from "@/server/supabase-auth";
+
+const CLAIMANT_SIGN_IN_PATH =
+  "/claimant/sign-in";
+
+/* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
 
 function readFormValue(
-  formData: FormData,
-  name: string,
+  formData:
+    FormData,
+  name:
+    string,
 ): string {
-  const value = formData.get(name);
+  const value =
+    formData.get(
+      name,
+    );
 
-  return typeof value === "string"
+  return typeof value ===
+    "string"
     ? value.trim()
     : "";
 }
 
+/* ========================================================================== */
+/* Sign in                                                                     */
+/* ========================================================================== */
+
 export async function signInClaimant(
-  formData: FormData,
+  formData:
+    FormData,
 ) {
   const email =
     readFormValue(
@@ -49,12 +79,16 @@ export async function signInClaimant(
   const {
     error,
   } =
-    await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    await supabase.auth
+      .signInWithPassword({
+        email,
 
-  if (error) {
+        password,
+      });
+
+  if (
+    error
+  ) {
     redirect(
       `${CLAIMANT_SIGN_IN_PATH}?error=signin`,
     );
@@ -63,7 +97,42 @@ export async function signInClaimant(
   const claimantSession =
     await resolveClaimantSession();
 
-  if (!claimantSession) {
+  if (
+    !claimantSession
+  ) {
+    await supabase.auth.signOut();
+
+    redirect(
+      `${CLAIMANT_SIGN_IN_PATH}?error=signin`,
+    );
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data:
+      claimant,
+    error:
+      claimantError,
+  } =
+    await admin
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "identity_verification",
+      )
+      .eq(
+        "claimant_id",
+        claimantSession.claimantId,
+      )
+      .maybeSingle();
+
+  if (
+    claimantError ||
+    !claimant
+  ) {
     await supabase.auth.signOut();
 
     redirect(
@@ -76,5 +145,16 @@ export async function signInClaimant(
     "layout",
   );
 
-  redirect("/portal");
+  if (
+    claimant.identity_verification !==
+    "verified"
+  ) {
+    redirect(
+      "/portal/identity",
+    );
+  }
+
+  redirect(
+    "/portal",
+  );
 }

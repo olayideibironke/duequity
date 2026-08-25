@@ -23,10 +23,12 @@ import {
   acknowledgeClaimantDisclosures,
   claimantOnboardingStatus,
   getClaimantOnboarding,
+  getClaimantOnboardingForStaff,
   recordClaimantContactConsent,
   setClaimantContactVerification,
   setClaimantIdentityVerification,
   signClaimantServiceAgreement,
+  staffCanAccessClaimantOnboarding,
   startClaimantOnboarding,
   updateClaimantContactDetails,
 } from "@/server/claimant-onboarding-store";
@@ -87,6 +89,8 @@ export const dynamic = "force-dynamic";
  *   - jurisdiction
  *   - claim linkage
  *   - staff actor
+ *   - claimant staff assignment
+ *   - claimant business originator
  *   - jurisdiction legal-rule version
  *   - payment route
  *   - Startup Green Lane status
@@ -113,6 +117,25 @@ export const dynamic = "force-dynamic";
  *   fee_agreement.write
  *
  * State clearance is enforced separately from permissions.
+ *
+ * STAFF OWNERSHIP
+ *
+ * Once claimant onboarding exists:
+ *
+ *   - Super Admin may access every claimant.
+ *   - Ordinary staff may access only claimant records currently assigned to
+ *     their persisted public.staff_users UUID.
+ *
+ * The ownership rule is server enforced. A direct URL, handcrafted request or
+ * browser manipulation cannot bypass it.
+ *
+ * Claimants owned by another staff member are treated as unavailable rather
+ * than disclosing that the claimant exists.
+ *
+ * Starting onboarding establishes:
+ *
+ *   originating_staff_user_id = authenticated staff actor
+ *   assigned_staff_user_id    = authenticated staff actor
  *
  * OPERATIONAL GATE
  *
@@ -473,6 +496,40 @@ function assertOnboardingMayAdvance(
 }
 
 /* ========================================================================== */
+/* Staff ownership                                                            */
+/* ========================================================================== */
+
+/**
+ * Protect an already-created claimant before any staff-facing claimant data is
+ * returned or mutated.
+ *
+ * We intentionally inspect the persisted record server-side so we can
+ * distinguish:
+ *
+ *   no claimant exists yet
+ *   versus
+ *   a claimant exists but belongs to another staff member
+ *
+ * In the second case we return a generic 404 and disclose no claimant details.
+ */
+async function assertExistingClaimantOwnership(
+  claimId: string,
+  session: StaffSession,
+) {
+  const existing = await getClaimantOnboarding(claimId);
+
+  if (!existing) {
+    return undefined;
+  }
+
+  if (!staffCanAccessClaimantOnboarding(session, existing)) {
+    throw new OnboardingRouteError("Claimant onboarding was not found.", 404);
+  }
+
+  return existing;
+}
+
+/* ========================================================================== */
 /* Context                                                                     */
 /* ========================================================================== */
 
@@ -487,6 +544,16 @@ async function resolveOnboardingContext(
   }
 
   const claim = resolved.claim;
+
+  /*
+   * Ownership is enforced before claimant-specific onboarding information is
+   * returned. If onboarding has not started, the current authorized staff actor
+   * may continue through the normal start flow.
+   */
+  const existingOnboarding = await assertExistingClaimantOwnership(
+    claim.id,
+    session,
+  );
 
   const [opportunity, jurisdictionPackages] = await Promise.all([
     getOpportunityById(claim.opportunityId),
@@ -564,6 +631,8 @@ async function resolveOnboardingContext(
 
     readiness,
 
+    existingOnboarding,
+
     actorUserId: session.user.id,
 
     businessDate,
@@ -588,12 +657,15 @@ function serializeDisclosure(
 
 async function assertAgreementMayBeSigned({
   claimId,
+  session,
   feeAgreement,
   jurisdictionLegalRuleVersion,
   requiredDisclosureKeys,
   agreementDocumentId,
 }: {
   claimId: string;
+
+  session: StaffSession;
 
   feeAgreement: FeeAgreement | undefined;
 
@@ -639,7 +711,10 @@ async function assertAgreementMayBeSigned({
     );
   }
 
-  const onboarding = await getClaimantOnboarding(claimId);
+  const onboarding = await getClaimantOnboardingForStaff(
+    session,
+    claimId,
+  );
 
   if (!onboarding) {
     throw new OnboardingRouteError(
@@ -681,6 +756,11 @@ async function assertAgreementMayBeSigned({
     );
   }
 
+  /*
+   * Claim document ownership is being hardened separately in the staff document
+   * service. At this route boundary, claimant ownership has already been
+   * positively established before we inspect documents belonging to this Claim.
+   */
   const documents = await listClaimDocuments(claimId);
 
   const agreementDocument = documents.find(
@@ -728,18 +808,26 @@ export async function GET(
       candidateOwner,
       disclosures,
       readiness,
+      existingOnboarding,
     } = await resolveOnboardingContext(id, session);
 
-    const onboarding = await getClaimantOnboarding(claim.id);
+    const onboarding =
+      existingOnboarding ??
+      (
+        await getClaimantOnboardingForStaff(
+          session,
+          claim.id,
+        )
+      );
 
     /*
      * Eligible service-agreement documents.
      *
-     * The server decides which documents may be used to record a signature. Only
-     * an accepted internal fee-agreement document on this same Claim qualifies,
-     * which is the identical condition `assertAgreementMayBeSigned` enforces on
-     * POST. The browser therefore cannot offer a document the server would reject,
-     * and cannot invent a document ID that would be accepted.
+     * Claimant ownership has already been established before this read.
+     *
+     * Only an accepted internal fee-agreement document on this same Claim
+     * qualifies, which is the identical condition
+     * `assertAgreementMayBeSigned` enforces on POST.
      */
     const claimDocuments = await listClaimDocuments(claim.id);
 
@@ -933,6 +1021,8 @@ export async function POST(
 
           actorUserId,
 
+          staffSession: session,
+
           businessDate,
 
           occurredAt,
@@ -956,6 +1046,8 @@ export async function POST(
           phone: normalizeUsPhone(body.phone),
 
           actorUserId,
+
+          staffSession: session,
 
           occurredAt,
         });
@@ -986,6 +1078,8 @@ export async function POST(
           verified: body.verified,
 
           actorUserId,
+
+          staffSession: session,
 
           occurredAt,
         });
@@ -1025,6 +1119,8 @@ export async function POST(
 
           actorUserId,
 
+          staffSession: session,
+
           occurredAt,
         });
 
@@ -1063,6 +1159,8 @@ export async function POST(
           providerRef,
 
           actorUserId,
+
+          staffSession: session,
 
           occurredAt,
         });
@@ -1106,6 +1204,8 @@ export async function POST(
 
           actorUserId,
 
+          staffSession: session,
+
           occurredAt,
         });
 
@@ -1128,6 +1228,8 @@ export async function POST(
 
         await assertAgreementMayBeSigned({
           claimId: claim.id,
+
+          session,
 
           feeAgreement: claim.feeAgreement,
 
@@ -1155,6 +1257,8 @@ export async function POST(
           documentId: agreementDocumentId,
 
           actorUserId,
+
+          staffSession: session,
 
           occurredAt,
         });

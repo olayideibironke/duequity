@@ -1,13 +1,24 @@
 import type { Claim, IsoDate } from "@/domain/types";
+
 import {
   getCommercialApprovalByQuoteId,
   verifyCommercialQuoteSnapshot,
 } from "@/server/commercial-approval-store";
+
 import { getOpportunityConversionByClaimId } from "@/server/opportunity-conversion-store";
-import { getClaimantOnboarding } from "@/server/claimant-onboarding-store";
+
+import {
+  getClaimantOnboarding,
+  staffCanAccessClaimantOnboarding,
+} from "@/server/claimant-onboarding-store";
+
 import { resolvePersistedClaimFilingReadiness } from "@/server/claim-filing-readiness";
+
 import { getOpportunityById } from "@/server/opportunity-store";
+
 import { listJurisdictionRulePackages } from "@/server/jurisdiction-intelligence";
+
+import { resolveStaffSession } from "@/server/staff-session";
 
 /**
  * CLAIM RECORD RESOLVER
@@ -48,6 +59,16 @@ import { listJurisdictionRulePackages } from "@/server/jurisdiction-intelligence
  *
  * Nothing is fabricated. If a workflow has not recorded evidence, the Claim
  * read model continues to show that work as outstanding.
+ *
+ * STAFF OWNERSHIP
+ *
+ * When this resolver is invoked during an authenticated staff request, a
+ * claimant-linked Claim is returned only to Super Admin or the staff member
+ * currently recorded as assigned_staff_user_id on claimant_onboarding.
+ *
+ * This is intentionally enforced here because Claims, Documents, Recoveries,
+ * Attorney Coordination, Filing and Search all resolve persisted Claims through
+ * this boundary. Claimant-self authorization remains a separate portal concern.
  */
 
 /* ========================================================================== */
@@ -89,14 +110,51 @@ async function persistedClaim(
     return undefined;
   }
 
-  const [approval, opportunity, rulePackages, onboarding] = await Promise.all([
+  /*
+   * Claimant staff ownership is resolved before the Claim read model loads
+   * downstream commercial, property and jurisdiction detail.
+   *
+   * This gives every staff-facing caller of resolveClaimRecord() the same
+   * server-side ownership boundary:
+   *
+   *   - Super Admin may resolve every persisted Claim.
+   *   - Ordinary staff may resolve a claimant-linked Claim only when that
+   *     claimant is currently assigned to their persisted staff UUID.
+   *   - A converted Claim with no claimant onboarding yet remains available to
+   *     otherwise-authorized staff so the controlled onboarding workflow can
+   *     begin.
+   *   - Claimant-self and non-staff internal flows remain separate because no
+   *     staff session is resolved for a claimant Auth identity.
+   */
+  const onboarding =
+    await getClaimantOnboarding(
+      conversion.claimId,
+    );
+
+  const staffSession =
+    await resolveStaffSession();
+
+  if (
+    staffSession &&
+    onboarding &&
+    !staffCanAccessClaimantOnboarding(
+      staffSession,
+      onboarding,
+    )
+  ) {
+    return undefined;
+  }
+
+  const [
+    approval,
+    opportunity,
+    rulePackages,
+  ] = await Promise.all([
     getCommercialApprovalByQuoteId(conversion.commercialQuoteId),
 
     getOpportunityById(conversion.opportunityId),
 
     listJurisdictionRulePackages(),
-
-    getClaimantOnboarding(conversion.claimId),
   ]);
 
   /*

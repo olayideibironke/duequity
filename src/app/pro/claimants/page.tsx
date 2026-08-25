@@ -4,7 +4,7 @@ import { IDENTITY_STATUS } from "@/domain/status";
 
 import {
   claimantOnboardingStatus,
-  listClaimantOnboardings,
+  listClaimantOnboardingsForStaff,
   type ClaimantOnboardingStatus,
   type PersistedClaimantOnboarding,
 } from "@/server/claimant-onboarding-store";
@@ -32,6 +32,9 @@ import {
 import { formatDate, formatPhone, plural } from "@/lib/format";
 
 import { resolveStaffSession } from "@/server/staff-session";
+
+import { getSupabaseAdmin } from "@/server/supabase-admin";
+
 import { StaffAuthenticationRequired } from "@/components/ui/authentication-required";
 
 export const metadata: Metadata = {
@@ -106,21 +109,97 @@ function mobilePhone(onboarding: PersistedClaimantOnboarding) {
   );
 }
 
+async function staffNameDirectory(
+  records:
+    PersistedClaimantOnboarding[],
+): Promise<
+  Map<string, string>
+> {
+  const ids =
+    [
+      ...new Set(
+        records.flatMap(
+          (
+            record,
+          ) => [
+            record.originatingStaffUserId,
+            record.assignedStaffUserId,
+          ],
+        ),
+      ),
+    ];
+
+  if (
+    ids.length ===
+    0
+  ) {
+    return new Map();
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "staff_users",
+      )
+      .select(
+        "id, name",
+      )
+      .in(
+        "id",
+        ids,
+      );
+
+  if (error) {
+    throw new Error(
+      `Unable to load claimant staff attribution: ${error.message}`,
+    );
+  }
+
+  return new Map(
+    (
+      data ??
+      []
+    ).map(
+      (
+        row,
+      ) => [
+        String(
+          row.id,
+        ),
+
+        String(
+          row.name,
+        ),
+      ],
+    ),
+  );
+}
+
 /* ========================================================================== */
 /* Production register loader                                                  */
 /* ========================================================================== */
 
-async function loadClaimantRegister(): Promise<ClaimantRegisterRecord[]> {
-  const onboardings = await listClaimantOnboardings();
+async function loadClaimantRegister(
+  session:
+    NonNullable<
+      Awaited<
+        ReturnType<
+          typeof resolveStaffSession
+        >
+      >
+    >,
+): Promise<ClaimantRegisterRecord[]> {
+  const onboardings =
+    await listClaimantOnboardingsForStaff(
+      session,
+    );
 
-  /*
-   * Group by persisted claimant ID rather than assuming one claimant always
-   * equals one claim.
-   *
-   * The present local onboarding store normally creates one onboarding record
-   * per claimant, but the register should not duplicate a claimant if the
-   * persistence model later supports multiple claim links.
-   */
   const grouped = new Map<string, PersistedClaimantOnboarding[]>();
 
   for (const onboarding of onboardings) {
@@ -171,18 +250,33 @@ async function loadClaimantRegister(): Promise<ClaimantRegisterRecord[]> {
 /* ========================================================================== */
 
 export default async function ProClaimantsPage() {
-  /*
-   * Server-side session gate.
-   *
-   * Resolved before any store read. The layout also withholds the operations
-   * shell, but layout and page render in parallel, so the page must refuse to
-   * read operational data on its own account.
-   */
-  if (!(await resolveStaffSession())) {
+  const session =
+    await resolveStaffSession();
+
+  if (!session) {
     return <StaffAuthenticationRequired />;
   }
 
-  const claimants = await loadClaimantRegister();
+  const claimants =
+    await loadClaimantRegister(
+      session,
+    );
+
+  const superAdmin =
+    session.user.role ===
+    "super_admin";
+
+  const staffNames =
+    superAdmin
+      ? await staffNameDirectory(
+          claimants.map(
+            (
+              record,
+            ) =>
+              record.onboarding,
+          ),
+        )
+      : new Map<string, string>();
 
   const incomplete = claimants.filter(
     (record) => record.onboardingStatus !== "complete",
@@ -190,22 +284,24 @@ export default async function ProClaimantsPage() {
 
   return (
     <div className="space-y-5">
-      {/* ================================================================ header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="eyebrow text-ink-500">Work</p>
 
-          <h1 className="mt-1.5 text-2xl">Claimants</h1>
+          <h1 className="mt-1.5 text-2xl">
+            {superAdmin
+              ? "All Claimants"
+              : "My Claimants"}
+          </h1>
 
           <p className="mt-1 max-w-3xl text-sm text-ink-600">
-            Persisted claimant records linked to Duequity recovery claims.
-            Sensitive identity information is deliberately excluded from this
-            register.
+            {superAdmin
+              ? "All persisted claimant records across DueQuity, including permanent staff origination and current operational assignment."
+              : "Persisted claimant records currently assigned to your DueQuity staff account. Sensitive identity information is deliberately excluded from this register."}
           </p>
         </div>
       </div>
 
-      {/* ======================================================== attention callout */}
       {incomplete.length > 0 && (
         <div className="rounded-md border border-caution-200 bg-caution-50 px-4 py-3">
           <p className="text-sm font-semibold text-caution-800">
@@ -220,11 +316,18 @@ export default async function ProClaimantsPage() {
         </div>
       )}
 
-      {/* ================================================================ register */}
       {claimants.length === 0 ? (
         <EmptyState
-          title="No production claimants yet"
-          description="Claimants will appear here after claimant onboarding has been started for a persisted recovery claim."
+          title={
+            superAdmin
+              ? "No production claimants yet"
+              : "No claimants assigned to you yet"
+          }
+          description={
+            superAdmin
+              ? "Claimants will appear here after claimant onboarding has been started for a persisted recovery claim."
+              : "A claimant will appear here when you start their onboarding or when Super Admin assigns an existing claimant to you."
+          }
         />
       ) : (
         <Card className="overflow-hidden">
@@ -237,24 +340,31 @@ export default async function ProClaimantsPage() {
             }}
           />
 
-          {/* ============================================================ desktop */}
           <div className="hidden lg:block">
             <TableRegion label="Claimant register">
-              <Table caption="Persisted claimants with identity, onboarding, contact, consent and linked claim status">
+              <Table caption="Persisted claimants with identity, onboarding, contact, consent, staff ownership and linked claim status">
                 <THead>
                   <TH>Claimant</TH>
 
-                  <TH width="12%">Reference</TH>
+                  <TH width="11%">Reference</TH>
 
-                  <TH width="14%">Identity</TH>
+                  <TH width="13%">Identity</TH>
 
-                  <TH width="16%">Onboarding</TH>
+                  <TH width="14%">Onboarding</TH>
 
-                  <TH width="18%">Contact</TH>
+                  <TH width="16%">Contact</TH>
 
-                  <TH width="10%">Claims</TH>
+                  {superAdmin && (
+                    <TH width="12%">Brought by</TH>
+                  )}
 
-                  <TH width="12%">Consent</TH>
+                  {superAdmin && (
+                    <TH width="12%">Managed by</TH>
+                  )}
+
+                  <TH width="8%">Claims</TH>
+
+                  <TH width="10%">Consent</TH>
                 </THead>
 
                 <TBody>
@@ -347,6 +457,26 @@ export default async function ProClaimantsPage() {
                           )}
                         </TD>
 
+                        {superAdmin && (
+                          <TD>
+                            <span className="text-xs text-ink-700">
+                              {staffNames.get(
+                                onboarding.originatingStaffUserId,
+                              ) ?? onboarding.originatingStaffUserId}
+                            </span>
+                          </TD>
+                        )}
+
+                        {superAdmin && (
+                          <TD>
+                            <span className="text-xs text-ink-700">
+                              {staffNames.get(
+                                onboarding.assignedStaffUserId,
+                              ) ?? onboarding.assignedStaffUserId}
+                            </span>
+                          </TD>
+                        )}
+
                         <TD numeric>
                           <span className="text-sm text-ink-800">
                             {claimCount}
@@ -383,7 +513,6 @@ export default async function ProClaimantsPage() {
             </TableRegion>
           </div>
 
-          {/* ============================================================= mobile */}
           <div className="lg:hidden">
             <RecordList>
               {claimants.map((record) => {
@@ -392,6 +521,58 @@ export default async function ProClaimantsPage() {
                 const claimant = onboarding.claimant;
 
                 const email = primaryEmail(onboarding);
+
+                const facts = [
+                  {
+                    label: "Onboarding",
+
+                    value: onboardingStatusLabel(onboardingStatus),
+                  },
+                  {
+                    label: "Claims",
+
+                    value: String(claimCount),
+                  },
+                  {
+                    label: "Contact",
+
+                    value: email?.value ?? "Not recorded",
+                  },
+                  {
+                    label: "Consent",
+
+                    value: claimant.consentRecordedAt
+                      ? formatDate(claimant.consentRecordedAt)
+                      : "Not recorded",
+                  },
+                ];
+
+                if (
+                  superAdmin
+                ) {
+                  facts.push(
+                    {
+                      label:
+                        "Brought by",
+
+                      value:
+                        staffNames.get(
+                          onboarding.originatingStaffUserId,
+                        ) ??
+                        onboarding.originatingStaffUserId,
+                    },
+                    {
+                      label:
+                        "Managed by",
+
+                      value:
+                        staffNames.get(
+                          onboarding.assignedStaffUserId,
+                        ) ??
+                        onboarding.assignedStaffUserId,
+                    },
+                  );
+                }
 
                 return (
                   <RecordListItem
@@ -407,30 +588,7 @@ export default async function ProClaimantsPage() {
                     tone={
                       onboardingStatus !== "complete" ? "caution" : undefined
                     }
-                    facts={[
-                      {
-                        label: "Onboarding",
-
-                        value: onboardingStatusLabel(onboardingStatus),
-                      },
-                      {
-                        label: "Claims",
-
-                        value: String(claimCount),
-                      },
-                      {
-                        label: "Contact",
-
-                        value: email?.value ?? "Not recorded",
-                      },
-                      {
-                        label: "Consent",
-
-                        value: claimant.consentRecordedAt
-                          ? formatDate(claimant.consentRecordedAt)
-                          : "Not recorded",
-                      },
-                    ]}
+                    facts={facts}
                   />
                 );
               })}
@@ -439,11 +597,10 @@ export default async function ProClaimantsPage() {
         </Card>
       )}
 
-      {/* ============================================================ privacy note */}
       <p className="text-xs leading-relaxed text-ink-500">
         Sensitive identifiers and identity-document contents are deliberately
-        absent from this register. The claimant onboarding store does not
-        persist Social Security numbers or government identity-document images.
+        absent from this register. Claimant staff attribution is operational
+        metadata and does not alter claimant ownership of any recovery rights.
       </p>
     </div>
   );

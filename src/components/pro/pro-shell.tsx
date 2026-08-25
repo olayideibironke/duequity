@@ -34,6 +34,10 @@ import {
 } from "@/components/brand/logo";
 
 import {
+  ClaimantMessageHeaderSearch,
+} from "@/components/pro/claimant-message-header-search";
+
+import {
   StaffMailHeaderSearch,
 } from "@/components/pro/staff-mail-header-search";
 
@@ -59,6 +63,24 @@ import {
   IconTask,
 } from "@/components/ui/icon";
 
+/* ========================================================================== */
+/* Types                                                                       */
+/* ========================================================================== */
+
+interface NavChild {
+  href: string;
+
+  label: string;
+
+  icon: (props: {
+    size?: number;
+
+    className?: string;
+  }) => React.ReactElement;
+
+  exact?: boolean;
+}
+
 interface NavItem {
   href: string;
 
@@ -77,6 +99,9 @@ interface NavItem {
   badgeTone?:
     | "caution"
     | "critical";
+
+  children?:
+    NavChild[];
 }
 
 interface NavGroup {
@@ -91,6 +116,10 @@ interface MailCountPayload {
     unread?: number;
   };
 }
+
+/* ========================================================================== */
+/* Component                                                                   */
+/* ========================================================================== */
 
 export function ProShell({
   children,
@@ -153,6 +182,18 @@ export function ProShell({
   const pathname =
     usePathname();
 
+  const [
+    claimantsExpanded,
+    setClaimantsExpanded,
+  ] =
+    useState(
+      pathname ===
+        "/pro/claimants" ||
+      pathname.startsWith(
+        "/pro/claimants/",
+      ),
+    );
+
   const mailWorkspace =
     pathname ===
       "/pro/mail" ||
@@ -160,10 +201,33 @@ export function ProShell({
       "/pro/mail/",
     );
 
+  const claimantMessageWorkspace =
+    pathname ===
+      "/pro/claimants/messages";
+
   const homeHref =
     staffLandingPath(
       operator.role,
     );
+
+  useEffect(
+    () => {
+      if (
+        pathname ===
+          "/pro/claimants" ||
+        pathname.startsWith(
+          "/pro/claimants/",
+        )
+      ) {
+        setClaimantsExpanded(
+          true,
+        );
+      }
+    },
+    [
+      pathname,
+    ],
+  );
 
   useEffect(
     () => {
@@ -404,6 +468,50 @@ export function ProShell({
 
           icon:
             IconClaimant,
+
+          children: [
+            {
+              href:
+                "/pro/claimants",
+
+              label:
+                "All Claimants",
+
+              icon:
+                IconClaimant,
+
+              exact:
+                true,
+            },
+
+            {
+              href:
+                "/pro/claimants/onboarding",
+
+              label:
+                "Onboarding",
+
+              icon:
+                IconTask,
+
+              exact:
+                true,
+            },
+
+            {
+              href:
+                "/pro/claimants/messages",
+
+              label:
+                "Messages",
+
+              icon:
+                IconMail,
+
+              exact:
+                true,
+            },
+          ],
         },
 
         {
@@ -521,17 +629,38 @@ export function ProShell({
           ...group,
 
           items:
-            group.items.filter(
-              (
-                item,
-              ) =>
-                canAccessProPath(
-                  operator.role,
-                  operator.permissions,
-                  item.href,
-                  operator.email,
-                ),
-            ),
+            group.items
+              .filter(
+                (
+                  item,
+                ) =>
+                  canAccessProPath(
+                    operator.role,
+                    operator.permissions,
+                    item.href,
+                    operator.email,
+                  ),
+              )
+              .map(
+                (
+                  item,
+                ) => ({
+                  ...item,
+
+                  children:
+                    item.children?.filter(
+                      (
+                        child,
+                      ) =>
+                        canAccessProPath(
+                          operator.role,
+                          operator.permissions,
+                          child.href,
+                          operator.email,
+                        ),
+                    ),
+                }),
+              ),
         }),
       )
       .filter(
@@ -542,24 +671,37 @@ export function ProShell({
           0,
       );
 
-  function isActive(
-    item: NavItem,
+  function pathActive(
+    href:
+      string,
+    exact =
+      false,
   ) {
     if (
-      item.exact
+      exact
     ) {
       return (
         pathname ===
-        item.href
+        href
       );
     }
 
     return (
       pathname ===
-        item.href ||
+        href ||
       pathname.startsWith(
-        `${item.href}/`,
+        `${href}/`,
       )
+    );
+  }
+
+  function isActive(
+    item:
+      NavItem,
+  ) {
+    return pathActive(
+      item.href,
+      item.exact,
     );
   }
 
@@ -596,11 +738,11 @@ export function ProShell({
 
           <button
             type="button"
-            onClick={() =>
+            onClick={() => {
               setRailOpen(
                 false,
-              )
-            }
+              );
+            }}
             aria-label="Close navigation"
             className="inline-flex size-8 items-center justify-center rounded-md text-ink-300 hover:bg-ink-800 hover:text-white lg:hidden"
           >
@@ -643,6 +785,135 @@ export function ProShell({
                       const Icon =
                         item.icon;
 
+                      const hasChildren =
+                        Boolean(
+                          item.children?.length,
+                        );
+
+                      if (
+                        hasChildren
+                      ) {
+                        return (
+                          <li
+                            key={
+                              item.href
+                            }
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setClaimantsExpanded(
+                                  (
+                                    current,
+                                  ) =>
+                                    !current,
+                                );
+                              }}
+                              aria-expanded={
+                                claimantsExpanded
+                              }
+                              className={cn(
+                                "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
+                                "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400",
+
+                                active
+                                  ? "bg-ink-800 text-white"
+                                  : "text-ink-400 hover:bg-ink-900 hover:text-ink-100",
+                              )}
+                            >
+                              <Icon
+                                size={17}
+                                className={
+                                  active
+                                    ? "text-accent-300"
+                                    : undefined
+                                }
+                              />
+
+                              <span className="flex-1 truncate text-left">
+                                {
+                                  item.label
+                                }
+                              </span>
+
+                              <span
+                                aria-hidden="true"
+                                className="text-xs text-ink-500"
+                              >
+                                {claimantsExpanded
+                                  ? "▾"
+                                  : "▸"}
+                              </span>
+                            </button>
+
+                            {claimantsExpanded && (
+                              <ul className="ml-4 mt-1 space-y-0.5 border-l border-ink-800 pl-2">
+                                {item.children?.map(
+                                  (
+                                    child,
+                                  ) => {
+                                    const childActive =
+                                      pathActive(
+                                        child.href,
+                                        child.exact,
+                                      );
+
+                                    const ChildIcon =
+                                      child.icon;
+
+                                    return (
+                                      <li
+                                        key={
+                                          child.href
+                                        }
+                                      >
+                                        <Link
+                                          href={
+                                            child.href
+                                          }
+                                          onClick={() => {
+                                            setRailOpen(
+                                              false,
+                                            );
+                                          }}
+                                          aria-current={
+                                            childActive
+                                              ? "page"
+                                              : undefined
+                                          }
+                                          className={cn(
+                                            "flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium transition-colors",
+
+                                            childActive
+                                              ? "bg-ink-800 text-white"
+                                              : "text-ink-500 hover:bg-ink-900 hover:text-ink-100",
+                                          )}
+                                        >
+                                          <ChildIcon
+                                            size={14}
+                                            className={
+                                              childActive
+                                                ? "text-accent-300"
+                                                : undefined
+                                            }
+                                          />
+
+                                          <span className="truncate">
+                                            {
+                                              child.label
+                                            }
+                                          </span>
+                                        </Link>
+                                      </li>
+                                    );
+                                  },
+                                )}
+                              </ul>
+                            )}
+                          </li>
+                        );
+                      }
+
                       return (
                         <li
                           key={
@@ -653,11 +924,11 @@ export function ProShell({
                             href={
                               item.href
                             }
-                            onClick={() =>
+                            onClick={() => {
                               setRailOpen(
                                 false,
-                              )
-                            }
+                              );
+                            }}
                             aria-current={
                               active
                                 ? "page"
@@ -776,11 +1047,11 @@ export function ProShell({
         <button
           type="button"
           aria-label="Close navigation"
-          onClick={() =>
+          onClick={() => {
             setRailOpen(
               false,
-            )
-          }
+            );
+          }}
           className="fixed inset-0 z-30 bg-ink-950/50 lg:hidden"
         />
       )}
@@ -789,11 +1060,11 @@ export function ProShell({
         <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-line bg-paper/95 px-3 backdrop-blur-sm sm:px-4">
           <button
             type="button"
-            onClick={() =>
+            onClick={() => {
               setRailOpen(
                 true,
-              )
-            }
+              );
+            }}
             aria-label="Open navigation"
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-ink-600 transition-colors hover:bg-ink-100 hover:text-ink-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500 lg:hidden"
           >
@@ -804,6 +1075,8 @@ export function ProShell({
 
           {mailWorkspace ? (
             <StaffMailHeaderSearch />
+          ) : claimantMessageWorkspace ? (
+            <ClaimantMessageHeaderSearch />
           ) : (
             <ProSearch />
           )}

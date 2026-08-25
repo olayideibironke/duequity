@@ -5,43 +5,66 @@ import {
   type ClaimantSession,
 } from "@/lib/session";
 
-import { getSupabaseAdmin } from "@/server/supabase-admin";
-import { getSupabaseServerAuth } from "@/server/supabase-auth";
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+import {
+  getSupabaseServerAuth,
+} from "@/server/supabase-auth";
 
 /* ========================================================================== */
-/* Database row                                                               */
+/* Types                                                                       */
 /* ========================================================================== */
 
 interface ClaimantOnboardingAuthRow {
   claimant_id: string;
 }
 
+interface ClaimantInvitationSessionRow {
+  claimant_id: string;
+
+  status: string;
+}
+
+interface SupabaseClaimantResolution {
+  authenticatedIdentity: boolean;
+
+  session:
+    ClaimantSession | null;
+}
+
 /* ========================================================================== */
-/* Production claimant session                                                */
+/* Supabase                                                                    */
 /* ========================================================================== */
 
 async function resolveSupabaseClaimantSession(): Promise<
-  ClaimantSession | null
+  SupabaseClaimantResolution
 > {
   const auth =
     await getSupabaseServerAuth();
 
-  /*
-   * getUser() validates the current access token with Supabase Auth.
-   * Browser-supplied identity values are never trusted directly.
-   */
   const {
     data: {
-      user: authUser,
+      user:
+        authUser,
     },
-    error: authError,
-  } = await auth.auth.getUser();
+    error:
+      authError,
+  } =
+    await auth.auth.getUser();
 
   if (
     authError ||
     !authUser
   ) {
-    return null;
+    return {
+      authenticatedIdentity:
+        false,
+
+      session:
+        null,
+    };
   }
 
   const admin =
@@ -50,16 +73,19 @@ async function resolveSupabaseClaimantSession(): Promise<
   const {
     data,
     error,
-  } = await admin
-    .from("claimant_onboarding")
-    .select(
-      "claimant_id",
-    )
-    .eq(
-      "claimant_auth_user_id",
-      authUser.id,
-    )
-    .maybeSingle();
+  } =
+    await admin
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "claimant_id",
+      )
+      .eq(
+        "claimant_auth_user_id",
+        authUser.id,
+      )
+      .maybeSingle();
 
   if (error) {
     throw new Error(
@@ -68,50 +94,126 @@ async function resolveSupabaseClaimantSession(): Promise<
   }
 
   if (!data) {
-    return null;
+    return {
+      authenticatedIdentity:
+        true,
+
+      session:
+        null,
+    };
   }
 
   const row =
     data as ClaimantOnboardingAuthRow;
 
   /*
-   * Authentication alone never grants claimant portal access.
+   * Invitation-backed claimant identities must finish activation before portal
+   * access is granted.
    *
-   * The Supabase Auth identity must map to an existing claimant onboarding
-   * record through claimant_auth_user_id.
+   * Legacy claimant Auth identities created before controlled invitations were
+   * introduced have no invitation rows and remain valid.
    */
-  return {
-    claimantId:
-      row.claimant_id,
+  const {
+    data:
+      invitationData,
+    error:
+      invitationError,
+  } =
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .select(
+        "claimant_id, status",
+      )
+      .eq(
+        "auth_user_id",
+        authUser.id,
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        1,
+      );
 
-    provider:
-      "supabase",
+  if (
+    invitationError
+  ) {
+    throw new Error(
+      `Unable to verify claimant activation state: ${invitationError.message}`,
+    );
+  }
+
+  const invitations =
+    (
+      invitationData ??
+      []
+    ) as ClaimantInvitationSessionRow[];
+
+  if (
+    invitations.length >
+    0
+  ) {
+    const invitation =
+      invitations[0];
+
+    if (
+      invitation.claimant_id !==
+        row.claimant_id ||
+      invitation.status !==
+        "activated"
+    ) {
+      return {
+        authenticatedIdentity:
+          true,
+
+        session:
+          null,
+      };
+    }
+  }
+
+  return {
+    authenticatedIdentity:
+      true,
+
+    session: {
+      claimantId:
+        row.claimant_id,
+
+      provider:
+        "supabase",
+    },
   };
 }
 
 /* ========================================================================== */
-/* Unified server resolver                                                    */
+/* Unified resolver                                                            */
 /* ========================================================================== */
 
 /**
- * Resolve the current claimant session.
+ * A real Supabase identity always takes precedence.
  *
- * During `next dev`, the explicitly enabled local development adapter remains
- * available so local portal development is not interrupted.
- *
- * Outside that development-only condition, identity must come from Supabase
- * Auth and map to a public.claimant_onboarding record through
- * claimant_auth_user_id.
+ * This matters during local invitation testing: a pending real claimant invite
+ * must never fall through to the development claimant adapter and accidentally
+ * receive portal access.
  */
 export async function resolveClaimantSession(): Promise<
   ClaimantSession | null
 > {
-  const localSession =
-    tryGetClaimantSession();
+  const resolution =
+    await resolveSupabaseClaimantSession();
 
-  if (localSession) {
-    return localSession;
+  if (
+    resolution.authenticatedIdentity
+  ) {
+    return resolution.session;
   }
 
-  return resolveSupabaseClaimantSession();
+  return tryGetClaimantSession();
 }

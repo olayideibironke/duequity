@@ -19,7 +19,7 @@ import {
 } from "@/server/staff-session";
 
 import {
-  listClaimantOnboardings,
+  listClaimantOnboardingsForStaff,
 } from "@/server/claimant-onboarding-store";
 
 import {
@@ -43,32 +43,15 @@ import {
   listProperties,
 } from "@/server/opportunity-store";
 
+import {
+  resolveOpportunityStaffAccess,
+} from "@/server/opportunity-staff-access";
+
 export const runtime =
   "nodejs";
 
 export const dynamic =
   "force-dynamic";
-
-/**
- * OPERATIONS SEARCH API
- *
- * Global staff search across persisted operational records.
- *
- * Discovered Records is a confidential administrator-only workspace.
- *
- * Only:
- *
- *   invest@westforgeholdings.com
- *   role = super_admin
- *
- * may cause discovered-record data to be loaded or returned by this endpoint.
- *
- * Other staff users cannot discover those records through global search.
- */
-
-/* ========================================================================== */
-/* Result shape                                                                */
-/* ========================================================================== */
 
 export type OperationsSearchResultKind =
   | "opportunity"
@@ -128,10 +111,6 @@ const KIND_ORDER:
     5,
 };
 
-/* ========================================================================== */
-/* Matching                                                                    */
-/* ========================================================================== */
-
 type Haystack = [
   value:
     string | undefined,
@@ -141,15 +120,19 @@ type Haystack = [
 ];
 
 function firstMatch(
-  query: string,
+  query:
+    string,
   haystacks:
     Haystack[],
-): string | undefined {
+):
+  | string
+  | undefined {
   for (
     const [
       value,
       label,
-    ] of haystacks
+    ] of
+      haystacks
   ) {
     if (
       value &&
@@ -165,10 +148,6 @@ function firstMatch(
 
   return undefined;
 }
-
-/* ========================================================================== */
-/* Search                                                                      */
-/* ========================================================================== */
 
 async function runSearch(
   session:
@@ -233,16 +212,14 @@ async function runSearch(
   const propertyById =
     new Map(
       properties.map(
-        (property) => [
+        (
+          property,
+        ) => [
           property.id,
           property,
         ],
       ),
     );
-
-  /* ======================================================================== */
-  /* Claims                                                                   */
-  /* ======================================================================== */
 
   if (
     mayReadClaims
@@ -253,7 +230,9 @@ async function runSearch(
     const resolvedClaims =
       await Promise.all(
         conversions.map(
-          (conversion) =>
+          (
+            conversion,
+          ) =>
             resolveClaimRecord(
               conversion.claimId,
             ),
@@ -264,9 +243,7 @@ async function runSearch(
       const resolved of
         resolvedClaims
     ) {
-      if (
-        !resolved
-      ) {
+      if (!resolved) {
         continue;
       }
 
@@ -296,22 +273,18 @@ async function runSearch(
               claim.reference,
               "claim reference",
             ],
-
             [
               claim.id,
               "claim identifier",
             ],
-
             [
               claim.agencyReference,
               "agency reference",
             ],
-
             [
               property?.address.line1,
               "property address",
             ],
-
             [
               property?.parcelNumber,
               "parcel number",
@@ -319,9 +292,7 @@ async function runSearch(
           ],
         );
 
-      if (
-        !matchedOn
-      ) {
+      if (!matchedOn) {
         continue;
       }
 
@@ -348,10 +319,6 @@ async function runSearch(
     }
   }
 
-  /* ======================================================================== */
-  /* Opportunities                                                            */
-  /* ======================================================================== */
-
   if (
     mayReadOpportunities
   ) {
@@ -362,6 +329,28 @@ async function runSearch(
       const opportunity of
         opportunities
     ) {
+      /*
+       * Converted claimant-owned Opportunities obey the same Stage 16
+       * assignment boundary as the Opportunity pages and APIs.
+       */
+      const access =
+        await resolveOpportunityStaffAccess(
+          session,
+          {
+            opportunityId:
+              opportunity.id,
+
+            convertedClaimId:
+              opportunity.convertedClaimId,
+          },
+        );
+
+      if (
+        !access.accessible
+      ) {
+        continue;
+      }
+
       const property =
         propertyById.get(
           opportunity.propertyId,
@@ -385,31 +374,28 @@ async function runSearch(
               opportunity.reference,
               "opportunity reference",
             ],
-
             [
               opportunity.sale.caseNumber,
               "case number",
             ],
-
             [
               property?.parcelNumber,
               "parcel number",
             ],
-
             [
               property?.taxAccountNumber,
               "tax account",
             ],
-
             [
               property?.address.line1,
               "property address",
             ],
-
             [
               opportunity.priorOwners
                 .map(
-                  (owner) =>
+                  (
+                    owner,
+                  ) =>
                     owner.nameOnRecord,
                 )
                 .join(
@@ -420,9 +406,7 @@ async function runSearch(
           ],
         );
 
-      if (
-        !matchedOn
-      ) {
+      if (!matchedOn) {
         continue;
       }
 
@@ -448,10 +432,11 @@ async function runSearch(
       });
     }
 
-    /* ====================================================================== */
-    /* Properties                                                             */
-    /* ====================================================================== */
-
+    /*
+     * Property records remain part of the research / property repository.
+     *
+     * Claimant ownership is not inferred from a property address alone.
+     */
     for (
       const property of
         properties
@@ -473,22 +458,18 @@ async function runSearch(
               property.address.line1,
               "address",
             ],
-
             [
               property.address.city,
               "city",
             ],
-
             [
               property.parcelNumber,
               "parcel number",
             ],
-
             [
               property.taxAccountNumber,
               "tax account",
             ],
-
             [
               property.address.postalCode,
               "postal code",
@@ -496,9 +477,7 @@ async function runSearch(
           ],
         );
 
-      if (
-        !matchedOn
-      ) {
+      if (!matchedOn) {
         continue;
       }
 
@@ -523,18 +502,6 @@ async function runSearch(
     }
   }
 
-  /* ======================================================================== */
-  /* Discovered Records                                                       */
-  /* ======================================================================== */
-
-  /*
-   * IMPORTANT:
-   *
-   * Do not even read the discovery store for ordinary staff.
-   *
-   * This prevents former-owner names, case numbers, parcels, source references
-   * and other confidential discovery information from leaking through search.
-   */
   if (
     mayReadDiscoveredRecords
   ) {
@@ -562,27 +529,22 @@ async function runSearch(
               record.propertyId,
               "source property identifier",
             ],
-
             [
               record.parcelNumber,
               "parcel number",
             ],
-
             [
               record.addressLine1,
               "address",
             ],
-
             [
               record.formerOwnerName,
               "former owner of record",
             ],
-
             [
               record.sourceReference,
               "source reference",
             ],
-
             [
               record.caseNumber,
               "case number",
@@ -590,9 +552,7 @@ async function runSearch(
           ],
         );
 
-      if (
-        !matchedOn
-      ) {
+      if (!matchedOn) {
         continue;
       }
 
@@ -622,15 +582,13 @@ async function runSearch(
     }
   }
 
-  /* ======================================================================== */
-  /* Claimants                                                                */
-  /* ======================================================================== */
-
   if (
     mayReadClaimants
   ) {
     const onboardings =
-      await listClaimantOnboardings();
+      await listClaimantOnboardingsForStaff(
+        session,
+      );
 
     const mayReadContactDetails =
       can(
@@ -653,29 +611,27 @@ async function runSearch(
               claimant.legalName,
               "claimant name",
             ],
-
             [
               claimant.preferredName,
               "preferred name",
             ],
-
             [
               claimant.reference,
               "claimant reference",
             ],
-
             [
               onboarding.claimReference,
               "claim reference",
             ],
-
             ...(
               mayReadContactDetails
                 ? ([
                     [
                       claimant.contactMethods
                         .map(
-                          (method) =>
+                          (
+                            method,
+                          ) =>
                             method.value,
                         )
                         .join(
@@ -689,9 +645,7 @@ async function runSearch(
           ],
         );
 
-      if (
-        !matchedOn
-      ) {
+      if (!matchedOn) {
         continue;
       }
 
@@ -715,10 +669,6 @@ async function runSearch(
       });
     }
   }
-
-  /* ======================================================================== */
-  /* Jurisdictions                                                            */
-  /* ======================================================================== */
 
   if (
     mayReadJurisdictions
@@ -744,22 +694,18 @@ async function runSearch(
               rulePackage.countyName,
               "county",
             ],
-
             [
               rulePackage.stateName,
               "state",
             ],
-
             [
               rulePackage.stateCode,
               "state code",
             ],
-
             [
               rulePackage.rule?.agencyName,
               "agency",
             ],
-
             [
               rulePackage.id,
               "package identifier",
@@ -767,9 +713,7 @@ async function runSearch(
           ],
         );
 
-      if (
-        !matchedOn
-      ) {
+      if (!matchedOn) {
         continue;
       }
 
@@ -818,10 +762,6 @@ async function runSearch(
     );
 }
 
-/* ========================================================================== */
-/* GET                                                                         */
-/* ========================================================================== */
-
 export async function GET(
   request:
     NextRequest,
@@ -829,9 +769,7 @@ export async function GET(
   const session =
     await resolveStaffSession();
 
-  if (
-    !session
-  ) {
+  if (!session) {
     return NextResponse.json(
       {
         ok:
@@ -849,11 +787,9 @@ export async function GET(
 
   const query =
     (
-      request.nextUrl
-        .searchParams
-        .get(
-          "q",
-        ) ??
+      request.nextUrl.searchParams.get(
+        "q",
+      ) ??
       ""
     )
       .trim()

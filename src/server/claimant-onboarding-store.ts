@@ -13,7 +13,13 @@ import type {
   IsoInstant,
 } from "@/domain/types";
 
-import { getSupabaseAdmin } from "@/server/supabase-admin";
+import type {
+  StaffSession,
+} from "@/lib/session";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
 
 /* ========================================================================== */
 /* Domain                                                                      */
@@ -64,6 +70,28 @@ export interface PersistedClaimantOnboarding {
 
   serviceAgreement?: PersistedServiceAgreementAcceptance;
 
+  /**
+   * Permanent business attribution.
+   *
+   * This identifies the DueQuity staff member who originally brought the
+   * claimant into the controlled claimant workflow.
+   *
+   * Stage 16 protects this value at the database layer from later changes.
+   */
+  originatingStaffUserId: string;
+
+  /**
+   * Current operational owner.
+   *
+   * Ordinary staff may access only claimant records assigned to their own
+   * persisted staff UUID. Super Admin may access every claimant.
+   */
+  assignedStaffUserId: string;
+
+  /**
+   * Technical record-creation actor retained separately from business
+   * attribution.
+   */
   createdByUserId: string;
 
   createdAt: IsoInstant;
@@ -100,7 +128,23 @@ export interface ClaimantOnboardingAuditEntry {
 /* Inputs                                                                      */
 /* ========================================================================== */
 
-export interface StartClaimantOnboardingInput {
+interface StaffMutationAuthority {
+  /**
+   * Existing callers continue to supply the authenticated persisted staff UUID.
+   *
+   * During the Stage 16 application rollout we additionally accept the resolved
+   * StaffSession. When supplied, it enables the explicit Super Admin bypass.
+   *
+   * Ordinary callers without StaffSession are still fail-closed to the current
+   * assigned staff UUID.
+   */
+  actorUserId: string;
+
+  staffSession?: StaffSession;
+}
+
+export interface StartClaimantOnboardingInput
+  extends StaffMutationAuthority {
   claimId: string;
 
   claimReference: string;
@@ -131,38 +175,35 @@ export interface StartClaimantOnboardingInput {
 
   preferredLanguage?: string;
 
-  actorUserId: string;
-
   businessDate: IsoDate;
 
   occurredAt: IsoInstant;
 }
 
-export interface UpdateClaimantContactInput {
+export interface UpdateClaimantContactInput
+  extends StaffMutationAuthority {
   claimId: string;
 
   email: string;
 
   phone: string;
 
-  actorUserId: string;
-
   occurredAt: IsoInstant;
 }
 
-export interface SetClaimantContactVerificationInput {
+export interface SetClaimantContactVerificationInput
+  extends StaffMutationAuthority {
   claimId: string;
 
   kind: "email" | "mobile";
 
   verified: boolean;
 
-  actorUserId: string;
-
   occurredAt: IsoInstant;
 }
 
-export interface RecordClaimantContactConsentInput {
+export interface RecordClaimantContactConsentInput
+  extends StaffMutationAuthority {
   claimId: string;
 
   channels: ("email" | "mobile")[];
@@ -171,12 +212,11 @@ export interface RecordClaimantContactConsentInput {
 
   consentSource: string;
 
-  actorUserId: string;
-
   occurredAt: IsoInstant;
 }
 
-export interface SetClaimantIdentityVerificationInput {
+export interface SetClaimantIdentityVerificationInput
+  extends StaffMutationAuthority {
   claimId: string;
 
   status: IdentityVerificationStatus;
@@ -185,12 +225,11 @@ export interface SetClaimantIdentityVerificationInput {
 
   providerRef?: string;
 
-  actorUserId: string;
-
   occurredAt: IsoInstant;
 }
 
-export interface AcknowledgeClaimantDisclosuresInput {
+export interface AcknowledgeClaimantDisclosuresInput
+  extends StaffMutationAuthority {
   claimId: string;
 
   disclosureKeys: string[];
@@ -199,12 +238,11 @@ export interface AcknowledgeClaimantDisclosuresInput {
 
   freeClaimOptionDisclosed: boolean;
 
-  actorUserId: string;
-
   occurredAt: IsoInstant;
 }
 
-export interface SignClaimantServiceAgreementInput {
+export interface SignClaimantServiceAgreementInput
+  extends StaffMutationAuthority {
   claimId: string;
 
   requiredDisclosureKeys: string[];
@@ -215,8 +253,6 @@ export interface SignClaimantServiceAgreementInput {
 
   documentId?: string;
 
-  actorUserId: string;
-
   occurredAt: IsoInstant;
 }
 
@@ -226,62 +262,99 @@ export interface SignClaimantServiceAgreementInput {
 
 interface ClaimantOnboardingRow {
   claim_id: string;
+
   claim_reference: string;
 
   conversion_id: string;
 
   claimant_id: string;
+
   claimant_reference: string;
+
+  claimant_auth_user_id:
+    | string
+    | null;
 
   participant_id: string;
 
   legal_name: string;
-  preferred_name: string | null;
+
+  preferred_name:
+    | string
+    | null;
 
   entity_type: Claimant["entityType"];
 
   email: string;
+
   mobile_phone: string;
 
   contact_methods: unknown;
 
   preferred_contact_channel: ConsentChannel;
 
-  consent_recorded_at: string | null;
-  consent_source: string | null;
+  consent_recorded_at:
+    | string
+    | null;
+
+  consent_source:
+    | string
+    | null;
 
   identity_verification: IdentityVerificationStatus;
-  identity_verified_at: string | null;
-  identity_provider_ref: string | null;
+
+  identity_verified_at:
+    | string
+    | null;
+
+  identity_provider_ref:
+    | string
+    | null;
 
   preferred_language: string;
 
   fraud_flags: unknown;
 
   claimant_created_on: string;
+
   claimant_notes: unknown;
 
   participant_role: ClaimParticipantRole;
+
   relationship: ClaimantRelationship;
 
-  asserted_share: number | string | null;
+  asserted_share:
+    | number
+    | string
+    | null;
 
   participant_added_on: string;
 
   disclosure_acknowledgements: unknown;
 
-  free_claim_option_disclosed_at: string | null;
+  free_claim_option_disclosed_at:
+    | string
+    | null;
 
   jurisdiction_package_id: string;
-  jurisdiction_package_version: number | string;
 
-  legal_rule_version_snapshot: number | string;
+  jurisdiction_package_version:
+    | number
+    | string;
+
+  legal_rule_version_snapshot:
+    | number
+    | string;
 
   commercial_quote_id: string;
+
   commercial_snapshot_hash: string;
 
   commercial_policy_id: string;
-  commercial_policy_version: number | string;
+
+  commercial_policy_version:
+    | number
+    | string;
 
   fee_agreement_id: string;
 
@@ -290,7 +363,9 @@ interface ClaimantOnboardingRow {
     | string
     | null;
 
-  service_agreement_signed_at: string | null;
+  service_agreement_signed_at:
+    | string
+    | null;
 
   service_agreement_signed_by_claimant_id:
     | string
@@ -316,12 +391,19 @@ interface ClaimantOnboardingRow {
     | string
     | null;
 
+  originating_staff_user_id: string;
+
+  assigned_staff_user_id: string;
+
   created_by_user_id: string;
 
   created_at: string;
+
   updated_at: string;
 
-  row_version: number | string;
+  row_version:
+    | number
+    | string;
 }
 
 interface ClaimantOnboardingAuditRow {
@@ -337,25 +419,37 @@ interface ClaimantOnboardingAuditRow {
 
   occurred_at: string;
 
-  detail: string | null;
+  detail:
+    | string
+    | null;
 }
 
 interface ConversionContextRow {
   id: string;
 
   claim_id: string;
+
   claim_reference: string;
 
   jurisdiction_package_id: string;
-  jurisdiction_package_version: number | string;
 
-  legal_rule_version_snapshot: number | string;
+  jurisdiction_package_version:
+    | number
+    | string;
+
+  legal_rule_version_snapshot:
+    | number
+    | string;
 
   commercial_quote_id: string;
+
   commercial_snapshot_hash: string;
 
   commercial_policy_id: string;
-  commercial_policy_version: number | string;
+
+  commercial_policy_version:
+    | number
+    | string;
 
   fee_agreement_id: string;
 }
@@ -368,7 +462,8 @@ function requireNonEmpty(
   value: string,
   label: string,
 ): string {
-  const normalized = value.trim();
+  const normalized =
+    value.trim();
 
   if (!normalized) {
     throw new Error(
@@ -384,7 +479,9 @@ function validateIsoDate(
   label: string,
 ): IsoDate {
   if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(value)
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      value,
+    )
   ) {
     throw new Error(
       `${label} must be an ISO calendar date.`,
@@ -398,9 +495,16 @@ function validateIsoInstant(
   value: string,
   label: string,
 ): IsoInstant {
-  const parsed = Date.parse(value);
+  const parsed =
+    Date.parse(
+      value,
+    );
 
-  if (Number.isNaN(parsed)) {
+  if (
+    Number.isNaN(
+      parsed,
+    )
+  ) {
     throw new Error(
       `${label} must be a valid ISO timestamp.`,
     );
@@ -413,7 +517,9 @@ export function normalizeClaimantEmail(
   email: string,
 ): string {
   const normalized =
-    email.trim().toLowerCase();
+    email
+      .trim()
+      .toLowerCase();
 
   if (
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
@@ -432,16 +538,28 @@ export function normalizeUsPhone(
   phone: string,
 ): string {
   let digits =
-    phone.replace(/\D/g, "");
+    phone.replace(
+      /\D/g,
+      "",
+    );
 
   if (
-    digits.length === 11 &&
-    digits.startsWith("1")
+    digits.length ===
+      11 &&
+    digits.startsWith(
+      "1",
+    )
   ) {
-    digits = digits.slice(1);
+    digits =
+      digits.slice(
+        1,
+      );
   }
 
-  if (digits.length !== 10) {
+  if (
+    digits.length !==
+    10
+  ) {
     throw new Error(
       "Claimant phone must be a valid U.S. 10-digit number.",
     );
@@ -451,16 +569,26 @@ export function normalizeUsPhone(
 }
 
 function validateShare(
-  share: number | undefined,
-): number | undefined {
-  if (share === undefined) {
+  share:
+    number | undefined,
+):
+  | number
+  | undefined {
+  if (
+    share ===
+    undefined
+  ) {
     return undefined;
   }
 
   if (
-    !Number.isFinite(share) ||
-    share < 0 ||
-    share > 1
+    !Number.isFinite(
+      share,
+    ) ||
+    share <
+      0 ||
+    share >
+      1
   ) {
     throw new Error(
       "Asserted share must be between 0 and 1.",
@@ -476,21 +604,34 @@ function uniqueKeys(
   return [
     ...new Set(
       values
-        .map((value) => value.trim())
-        .filter(Boolean),
+        .map(
+          (
+            value,
+          ) =>
+            value.trim(),
+        )
+        .filter(
+          Boolean,
+        ),
     ),
   ];
 }
 
 function rowVersion(
-  row: ClaimantOnboardingRow,
+  row:
+    ClaimantOnboardingRow,
 ): number {
   const version =
-    Number(row.row_version);
+    Number(
+      row.row_version,
+    );
 
   if (
-    !Number.isInteger(version) ||
-    version < 1
+    !Number.isInteger(
+      version,
+    ) ||
+    version <
+      1
   ) {
     throw new Error(
       "Claimant onboarding has an invalid database row version.",
@@ -501,14 +642,146 @@ function rowVersion(
 }
 
 /* ========================================================================== */
+/* Ownership and staff authorization                                           */
+/* ========================================================================== */
+
+function isSuperAdmin(
+  session:
+    StaffSession,
+): boolean {
+  return (
+    session.user.role ===
+    "super_admin"
+  );
+}
+
+function validateMutationAuthority(
+  actorUserId:
+    string,
+  staffSession:
+    StaffSession | undefined,
+): string {
+  const actorId =
+    requireNonEmpty(
+      actorUserId,
+      "Actor user ID",
+    );
+
+  if (
+    staffSession &&
+    staffSession.user.id !==
+      actorId
+  ) {
+    throw new Error(
+      "The authenticated staff session does not match the claimant-operation actor.",
+    );
+  }
+
+  return actorId;
+}
+
+function staffMayAccessRow(
+  session:
+    StaffSession,
+  row:
+    ClaimantOnboardingRow,
+): boolean {
+  return (
+    isSuperAdmin(
+      session,
+    ) ||
+    row.assigned_staff_user_id ===
+      session.user.id
+  );
+}
+
+function actorMayAccessRow(
+  row:
+    ClaimantOnboardingRow,
+  actorUserId:
+    string,
+  staffSession?:
+    StaffSession,
+): boolean {
+  if (
+    staffSession
+  ) {
+    return staffMayAccessRow(
+      staffSession,
+      row,
+    );
+  }
+
+  /*
+   * Compatibility path during the Stage 16 application rollout.
+   *
+   * Existing server callers already supply a staff UUID resolved by the
+   * authenticated server session. Without the complete session object there is
+   * deliberately NO Super Admin bypass. The caller must be the assigned staff
+   * member.
+   */
+  return (
+    row.assigned_staff_user_id ===
+    actorUserId
+  );
+}
+
+function requireActorAccessToRow(
+  row:
+    ClaimantOnboardingRow,
+  actorUserId:
+    string,
+  staffSession?:
+    StaffSession,
+): void {
+  if (
+    actorMayAccessRow(
+      row,
+      actorUserId,
+      staffSession,
+    )
+  ) {
+    return;
+  }
+
+  /*
+   * Do not reveal that another staff member's claimant exists.
+   */
+  throw new Error(
+    "Claimant onboarding has not been started for this claim.",
+  );
+}
+
+export function staffCanAccessClaimantOnboarding(
+  session:
+    StaffSession,
+  record:
+    PersistedClaimantOnboarding,
+): boolean {
+  return (
+    isSuperAdmin(
+      session,
+    ) ||
+    record.assignedStaffUserId ===
+      session.user.id
+  );
+}
+
+/* ========================================================================== */
 /* JSON helpers                                                                */
 /* ========================================================================== */
 
 function readArray<T>(
-  value: unknown,
-  label: string,
+  value:
+    unknown,
+  label:
+    string,
 ): T[] {
-  if (!Array.isArray(value)) {
+  if (
+    !Array.isArray(
+      value,
+    )
+  ) {
     throw new Error(
       `${label} contains invalid persisted data.`,
     );
@@ -522,7 +795,8 @@ function readArray<T>(
 /* ========================================================================== */
 
 function onboardingFromRow(
-  row: ClaimantOnboardingRow,
+  row:
+    ClaimantOnboardingRow,
 ): PersistedClaimantOnboarding {
   const contactMethods =
     readArray<
@@ -554,7 +828,8 @@ function onboardingFromRow(
       "Claimant notes",
     );
 
-  const claimant: Claimant = {
+  const claimant:
+    Claimant = {
     id:
       row.claimant_id,
 
@@ -578,7 +853,10 @@ function onboardingFromRow(
 
     consentRecordedAt:
       row.consent_recorded_at
-        ? (row.consent_recorded_at as IsoDate)
+        ? (
+            row.consent_recorded_at as
+              IsoDate
+          )
         : undefined,
 
     consentSource:
@@ -590,7 +868,10 @@ function onboardingFromRow(
 
     identityVerifiedAt:
       row.identity_verified_at
-        ? (row.identity_verified_at as IsoDate)
+        ? (
+            row.identity_verified_at as
+              IsoDate
+          )
         : undefined,
 
     identityProviderRef:
@@ -603,12 +884,14 @@ function onboardingFromRow(
     fraudFlags,
 
     createdAt:
-      row.claimant_created_on as IsoDate,
+      row.claimant_created_on as
+        IsoDate,
 
     notes,
   };
 
-  const participant: ClaimParticipant = {
+  const participant:
+    ClaimParticipant = {
     id:
       row.participant_id,
 
@@ -622,12 +905,16 @@ function onboardingFromRow(
       row.relationship,
 
     assertedShare:
-      row.asserted_share === null
+      row.asserted_share ===
+      null
         ? undefined
-        : Number(row.asserted_share),
+        : Number(
+            row.asserted_share,
+          ),
 
     addedAt:
-      row.participant_added_on as IsoDate,
+      row.participant_added_on as
+        IsoDate,
   };
 
   let serviceAgreement:
@@ -650,7 +937,8 @@ function onboardingFromRow(
 
     serviceAgreement = {
       signedAt:
-        row.service_agreement_signed_at as IsoDate,
+        row.service_agreement_signed_at as
+          IsoDate,
 
       signedByClaimantId:
         row.service_agreement_signed_by_claimant_id,
@@ -660,7 +948,10 @@ function onboardingFromRow(
 
       cancellationDeadline:
         row.service_agreement_cancellation_deadline
-          ? (row.service_agreement_cancellation_deadline as IsoDate)
+          ? (
+              row.service_agreement_cancellation_deadline as
+                IsoDate
+            )
           : undefined,
 
       documentId:
@@ -671,7 +962,8 @@ function onboardingFromRow(
         row.service_agreement_recorded_by_user_id,
 
       recordedAt:
-        row.service_agreement_recorded_at as IsoInstant,
+        row.service_agreement_recorded_at as
+          IsoInstant,
     };
   }
 
@@ -690,24 +982,36 @@ function onboardingFromRow(
 
     freeClaimOptionDisclosedAt:
       row.free_claim_option_disclosed_at
-        ? (row.free_claim_option_disclosed_at as IsoDate)
+        ? (
+            row.free_claim_option_disclosed_at as
+              IsoDate
+          )
         : undefined,
 
     serviceAgreement,
+
+    originatingStaffUserId:
+      row.originating_staff_user_id,
+
+    assignedStaffUserId:
+      row.assigned_staff_user_id,
 
     createdByUserId:
       row.created_by_user_id,
 
     createdAt:
-      row.created_at as IsoInstant,
+      row.created_at as
+        IsoInstant,
 
     updatedAt:
-      row.updated_at as IsoInstant,
+      row.updated_at as
+        IsoInstant,
   };
 }
 
 function auditFromRow(
-  row: ClaimantOnboardingAuditRow,
+  row:
+    ClaimantOnboardingAuditRow,
 ): ClaimantOnboardingAuditEntry {
   return {
     id:
@@ -726,7 +1030,8 @@ function auditFromRow(
       row.actor_user_id,
 
     occurredAt:
-      row.occurred_at as IsoInstant,
+      row.occurred_at as
+        IsoInstant,
 
     detail:
       row.detail ??
@@ -739,53 +1044,82 @@ function auditFromRow(
 /* ========================================================================== */
 
 async function getOnboardingRow(
-  claimId: string,
+  claimId:
+    string,
 ): Promise<
   ClaimantOnboardingRow | undefined
 > {
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claimant_onboarding")
-      .select("*")
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "claim_id",
         claimId.trim(),
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read claimant onboarding: ${error.message}`,
     );
   }
 
   return data
-    ? (data as ClaimantOnboardingRow)
+    ? (
+        data as
+          ClaimantOnboardingRow
+      )
     : undefined;
 }
 
 async function updateOnboardingRow(
-  current: ClaimantOnboardingRow,
-  values: Record<string, unknown>,
-  occurredAt: IsoInstant,
-): Promise<ClaimantOnboardingRow> {
+  current:
+    ClaimantOnboardingRow,
+  values:
+    Record<
+      string,
+      unknown
+    >,
+  occurredAt:
+    IsoInstant,
+): Promise<
+  ClaimantOnboardingRow
+> {
   const supabase =
     getSupabaseAdmin();
 
   const expectedVersion =
-    rowVersion(current);
+    rowVersion(
+      current,
+    );
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claimant_onboarding")
+      .from(
+        "claimant_onboarding",
+      )
       .update({
         ...values,
 
         row_version:
-          expectedVersion + 1,
+          expectedVersion +
+          1,
 
         updated_at:
           occurredAt,
@@ -798,33 +1132,48 @@ async function updateOnboardingRow(
         "row_version",
         expectedVersion,
       )
-      .select("*")
+      .select(
+        "*",
+      )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to update claimant onboarding: ${error.message}`,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "Claimant onboarding changed while this request was being processed. Reload and try again.",
     );
   }
 
-  return data as ClaimantOnboardingRow;
+  return data as
+    ClaimantOnboardingRow;
 }
 
 async function getConversionContext(
-  claimId: string,
-): Promise<ConversionContextRow> {
+  claimId:
+    string,
+): Promise<
+  ConversionContextRow
+> {
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("opportunity_conversions")
+      .from(
+        "opportunity_conversions",
+      )
       .select(
         "id, claim_id, claim_reference, jurisdiction_package_id, jurisdiction_package_version, legal_rule_version_snapshot, commercial_quote_id, commercial_snapshot_hash, commercial_policy_id, commercial_policy_version, fee_agreement_id",
       )
@@ -834,19 +1183,24 @@ async function getConversionContext(
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read claim conversion context: ${error.message}`,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "The claim must be created from a completed opportunity conversion before claimant onboarding can begin.",
     );
   }
 
-  return data as ConversionContextRow;
+  return data as
+    ConversionContextRow;
 }
 
 /* ========================================================================== */
@@ -854,32 +1208,51 @@ async function getConversionContext(
 /* ========================================================================== */
 
 function createAuditId(
-  claimId: string,
-  action: ClaimantOnboardingAuditAction,
-  occurredAt: IsoInstant,
+  claimId:
+    string,
+  action:
+    ClaimantOnboardingAuditAction,
+  occurredAt:
+    IsoInstant,
 ): string {
-  return createHash("sha256")
+  return createHash(
+    "sha256",
+  )
     .update(
       `${claimId}:${action}:${occurredAt}`,
       "utf8",
     )
-    .digest("hex")
-    .slice(0, 32);
+    .digest(
+      "hex",
+    )
+    .slice(
+      0,
+      32,
+    );
 }
 
 async function appendAudit(
-  record: PersistedClaimantOnboarding,
-  action: ClaimantOnboardingAuditAction,
-  actorUserId: string,
-  occurredAt: IsoInstant,
-  detail?: string,
+  record:
+    PersistedClaimantOnboarding,
+  action:
+    ClaimantOnboardingAuditAction,
+  actorUserId:
+    string,
+  occurredAt:
+    IsoInstant,
+  detail?:
+    string,
 ): Promise<void> {
   const supabase =
     getSupabaseAdmin();
 
-  const { error } =
+  const {
+    error,
+  } =
     await supabase
-      .from("claimant_onboarding_audit")
+      .from(
+        "claimant_onboarding_audit",
+      )
       .insert({
         id:
           createAuditId(
@@ -903,10 +1276,13 @@ async function appendAudit(
           occurredAt,
 
         detail:
-          detail ?? null,
+          detail ??
+          null,
       });
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to write claimant onboarding audit: ${error.message}`,
     );
@@ -914,11 +1290,22 @@ async function appendAudit(
 }
 
 /* ========================================================================== */
-/* Reads                                                                       */
+/* Unscoped internal / claimant-self reads                                     */
 /* ========================================================================== */
 
+/**
+ * IMPORTANT
+ *
+ * These unscoped reads remain available because claimant-self portal services
+ * and internal filing/readiness services use claimant Auth binding rather than
+ * staff assignment.
+ *
+ * Staff-facing /pro routes must use the explicitly staff-scoped variants below.
+ */
+
 export async function getClaimantOnboarding(
-  claimId: string,
+  claimId:
+    string,
 ): Promise<
   PersistedClaimantOnboarding | undefined
 > {
@@ -928,29 +1315,41 @@ export async function getClaimantOnboarding(
     );
 
   return row
-    ? onboardingFromRow(row)
+    ? onboardingFromRow(
+        row,
+      )
     : undefined;
 }
 
 export async function getClaimantOnboardingByClaimantId(
-  claimantId: string,
+  claimantId:
+    string,
 ): Promise<
   PersistedClaimantOnboarding | undefined
 > {
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claimant_onboarding")
-      .select("*")
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "claimant_id",
         claimantId.trim(),
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read claimant onboarding by claimant id: ${error.message}`,
     );
@@ -958,7 +1357,8 @@ export async function getClaimantOnboardingByClaimantId(
 
   return data
     ? onboardingFromRow(
-        data as ClaimantOnboardingRow,
+        data as
+          ClaimantOnboardingRow,
       )
     : undefined;
 }
@@ -969,32 +1369,50 @@ export async function listClaimantOnboardings(): Promise<
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claimant_onboarding")
-      .select("*")
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "*",
+      )
       .order(
         "created_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to list claimant onboardings: ${error.message}`,
     );
   }
 
-  return (data ?? []).map((row) =>
-    onboardingFromRow(
-      row as ClaimantOnboardingRow,
-    ),
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      onboardingFromRow(
+        row as
+          ClaimantOnboardingRow,
+      ),
   );
 }
 
 export async function claimantOnboardingAudit(
-  claimId?: string,
+  claimId?:
+    string,
 ): Promise<
   ClaimantOnboardingAuditEntry[]
 > {
@@ -1003,35 +1421,392 @@ export async function claimantOnboardingAudit(
 
   let query =
     supabase
-      .from("claimant_onboarding_audit")
-      .select("*")
+      .from(
+        "claimant_onboarding_audit",
+      )
+      .select(
+        "*",
+      )
       .order(
         "occurred_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       );
 
-  if (claimId) {
-    query = query.eq(
-      "claim_id",
-      claimId,
-    );
+  if (
+    claimId
+  ) {
+    query =
+      query.eq(
+        "claim_id",
+        claimId,
+      );
   }
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await query;
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read claimant onboarding audit: ${error.message}`,
     );
   }
 
-  return (data ?? []).map((row) =>
-    auditFromRow(
-      row as ClaimantOnboardingAuditRow,
-    ),
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      auditFromRow(
+        row as
+          ClaimantOnboardingAuditRow,
+      ),
+  );
+}
+
+/* ========================================================================== */
+/* Staff-scoped reads                                                          */
+/* ========================================================================== */
+
+export async function getClaimantOnboardingForStaff(
+  session:
+    StaffSession,
+  claimId:
+    string,
+): Promise<
+  PersistedClaimantOnboarding | undefined
+> {
+  const supabase =
+    getSupabaseAdmin();
+
+  let query =
+    supabase
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "claim_id",
+        claimId.trim(),
+      );
+
+  if (
+    !isSuperAdmin(
+      session,
+    )
+  ) {
+    query =
+      query.eq(
+        "assigned_staff_user_id",
+        session.user.id,
+      );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await query
+      .maybeSingle();
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to read staff-scoped claimant onboarding: ${error.message}`,
+    );
+  }
+
+  return data
+    ? onboardingFromRow(
+        data as
+          ClaimantOnboardingRow,
+      )
+    : undefined;
+}
+
+export async function getClaimantOnboardingByClaimantIdForStaff(
+  session:
+    StaffSession,
+  claimantId:
+    string,
+): Promise<
+  PersistedClaimantOnboarding | undefined
+> {
+  const supabase =
+    getSupabaseAdmin();
+
+  let query =
+    supabase
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "claimant_id",
+        claimantId.trim(),
+      );
+
+  if (
+    !isSuperAdmin(
+      session,
+    )
+  ) {
+    query =
+      query.eq(
+        "assigned_staff_user_id",
+        session.user.id,
+      );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await query
+      .maybeSingle();
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to read staff-scoped claimant onboarding by claimant id: ${error.message}`,
+    );
+  }
+
+  return data
+    ? onboardingFromRow(
+        data as
+          ClaimantOnboardingRow,
+      )
+    : undefined;
+}
+
+export async function listClaimantOnboardingsForStaff(
+  session:
+    StaffSession,
+): Promise<
+  PersistedClaimantOnboarding[]
+> {
+  const supabase =
+    getSupabaseAdmin();
+
+  let query =
+    supabase
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "*",
+      );
+
+  if (
+    !isSuperAdmin(
+      session,
+    )
+  ) {
+    query =
+      query.eq(
+        "assigned_staff_user_id",
+        session.user.id,
+      );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await query
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      );
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to list staff-scoped claimant onboardings: ${error.message}`,
+    );
+  }
+
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      onboardingFromRow(
+        row as
+          ClaimantOnboardingRow,
+      ),
+  );
+}
+
+export async function claimantOnboardingAuditForStaff(
+  session:
+    StaffSession,
+  claimId?:
+    string,
+): Promise<
+  ClaimantOnboardingAuditEntry[]
+> {
+  if (
+    isSuperAdmin(
+      session,
+    )
+  ) {
+    return claimantOnboardingAudit(
+      claimId,
+    );
+  }
+
+  const supabase =
+    getSupabaseAdmin();
+
+  if (
+    claimId
+  ) {
+    const accessible =
+      await getClaimantOnboardingForStaff(
+        session,
+        claimId,
+      );
+
+    if (
+      !accessible
+    ) {
+      return [];
+    }
+
+    const {
+      data,
+      error,
+    } =
+      await supabase
+        .from(
+          "claimant_onboarding_audit",
+        )
+        .select(
+          "*",
+        )
+        .eq(
+          "claim_id",
+          accessible.claimId,
+        )
+        .order(
+          "occurred_at",
+          {
+            ascending:
+              false,
+          },
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to read staff-scoped claimant onboarding audit: ${error.message}`,
+      );
+    }
+
+    return (
+      data ??
+      []
+    ).map(
+      (
+        row,
+      ) =>
+        auditFromRow(
+          row as
+            ClaimantOnboardingAuditRow,
+        ),
+    );
+  }
+
+  const owned =
+    await listClaimantOnboardingsForStaff(
+      session,
+    );
+
+  const claimIds =
+    [
+      ...new Set(
+        owned.map(
+          (
+            onboarding,
+          ) =>
+            onboarding.claimId,
+        ),
+      ),
+    ];
+
+  if (
+    claimIds.length ===
+    0
+  ) {
+    return [];
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "claimant_onboarding_audit",
+      )
+      .select(
+        "*",
+      )
+      .in(
+        "claim_id",
+        claimIds,
+      )
+      .order(
+        "occurred_at",
+        {
+          ascending:
+            false,
+        },
+      );
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to read staff-scoped claimant onboarding audit: ${error.message}`,
+    );
+  }
+
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      auditFromRow(
+        row as
+          ClaimantOnboardingAuditRow,
+      ),
   );
 }
 
@@ -1040,24 +1815,33 @@ export async function claimantOnboardingAudit(
 /* ========================================================================== */
 
 export function claimantOnboardingStatus(
-  record: PersistedClaimantOnboarding,
+  record:
+    PersistedClaimantOnboarding,
 ): ClaimantOnboardingStatus {
   if (
-    record.claimant.identityVerification !==
+    record
+      .claimant
+      .identityVerification !==
     "verified"
   ) {
     return "identity_pending";
   }
 
   if (
-    record.disclosureAcknowledgements.length ===
+    record
+      .disclosureAcknowledgements
+      .length ===
       0 ||
-    !record.freeClaimOptionDisclosedAt
+    !record
+      .freeClaimOptionDisclosedAt
   ) {
     return "disclosures_pending";
   }
 
-  if (!record.serviceAgreement) {
+  if (
+    !record
+      .serviceAgreement
+  ) {
     return "agreement_pending";
   }
 
@@ -1069,8 +1853,11 @@ export function claimantOnboardingStatus(
 /* ========================================================================== */
 
 export async function startClaimantOnboarding(
-  input: StartClaimantOnboardingInput,
-): Promise<PersistedClaimantOnboarding> {
+  input:
+    StartClaimantOnboardingInput,
+): Promise<
+  PersistedClaimantOnboarding
+> {
   const claimId =
     requireNonEmpty(
       input.claimId,
@@ -1130,9 +1917,9 @@ export async function startClaimantOnboarding(
     );
 
   const actorUserId =
-    requireNonEmpty(
+    validateMutationAuthority(
       input.actorUserId,
-      "Actor user ID",
+      input.staffSession,
     );
 
   const assertedShare =
@@ -1145,29 +1932,61 @@ export async function startClaimantOnboarding(
       claimId,
     );
 
-  if (existingRow) {
+  if (
+    existingRow
+  ) {
+    /*
+     * Before returning an idempotent existing result, prove that the current
+     * actor is entitled to this claimant. This prevents Staff B from learning
+     * about or receiving Staff A's claimant simply by submitting matching
+     * claimant details.
+     */
+    requireActorAccessToRow(
+      existingRow,
+      actorUserId,
+      input.staffSession,
+    );
+
     const existing =
       onboardingFromRow(
         existingRow,
       );
 
     const existingEmail =
-      existing.claimant.contactMethods.find(
-        (method) =>
-          method.kind === "email",
-      )?.value;
+      existing
+        .claimant
+        .contactMethods
+        .find(
+          (
+            method,
+          ) =>
+            method.kind ===
+            "email",
+        )
+        ?.value;
 
     const existingPhone =
-      existing.claimant.contactMethods.find(
-        (method) =>
-          method.kind === "mobile",
-      )?.value;
+      existing
+        .claimant
+        .contactMethods
+        .find(
+          (
+            method,
+          ) =>
+            method.kind ===
+            "mobile",
+        )
+        ?.value;
 
     if (
-      existing.claimant.legalName ===
+      existing
+        .claimant
+        .legalName ===
         legalName &&
-      existingEmail === email &&
-      existingPhone === phone
+      existingEmail ===
+        email &&
+      existingPhone ===
+        phone
     ) {
       return existing;
     }
@@ -1183,7 +2002,8 @@ export async function startClaimantOnboarding(
     );
 
   if (
-    conversion.claim_reference !==
+    conversion
+      .claim_reference !==
     claimReference
   ) {
     throw new Error(
@@ -1191,7 +2011,8 @@ export async function startClaimantOnboarding(
     );
   }
 
-  const claimant: Claimant = {
+  const claimant:
+    Claimant = {
     id:
       claimantId,
 
@@ -1201,11 +2022,14 @@ export async function startClaimantOnboarding(
     legalName,
 
     preferredName:
-      input.preferredName?.trim() ||
+      input
+        .preferredName
+        ?.trim() ||
       undefined,
 
     entityType:
-      input.entityType ??
+      input
+        .entityType ??
       "individual",
 
     contactMethods: [
@@ -1244,36 +2068,44 @@ export async function startClaimantOnboarding(
     ],
 
     preferredContactChannel:
-      input.preferredContactChannel ??
+      input
+        .preferredContactChannel ??
       "email",
 
     identityVerification:
       "not_started",
 
     preferredLanguage:
-      input.preferredLanguage?.trim() ||
+      input
+        .preferredLanguage
+        ?.trim() ||
       "en",
 
-    fraudFlags: [],
+    fraudFlags:
+      [],
 
     createdAt:
       businessDate,
 
-    notes: [],
+    notes:
+      [],
   };
 
-  const participant: ClaimParticipant = {
+  const participant:
+    ClaimParticipant = {
     id:
       participantId,
 
     claimantId,
 
     role:
-      input.participantRole ??
+      input
+        .participantRole ??
       "primary_claimant",
 
     relationship:
-      input.relationship ??
+      input
+        .relationship ??
       "self_former_owner",
 
     assertedShare,
@@ -1285,9 +2117,14 @@ export async function startClaimantOnboarding(
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claimant_onboarding")
+      .from(
+        "claimant_onboarding",
+      )
       .insert({
         claim_id:
           claimId,
@@ -1314,14 +2151,16 @@ export async function startClaimantOnboarding(
           legalName,
 
         preferred_name:
-          claimant.preferredName ??
+          claimant
+            .preferredName ??
           null,
 
         date_of_birth:
           null,
 
         entity_type:
-          claimant.entityType,
+          claimant
+            .entityType,
 
         email,
 
@@ -1329,13 +2168,15 @@ export async function startClaimantOnboarding(
           phone,
 
         contact_methods:
-          claimant.contactMethods,
+          claimant
+            .contactMethods,
 
         mailing_address:
           null,
 
         preferred_contact_channel:
-          claimant.preferredContactChannel,
+          claimant
+            .preferredContactChannel,
 
         consent_recorded_at:
           null,
@@ -1353,7 +2194,8 @@ export async function startClaimantOnboarding(
           null,
 
         preferred_language:
-          claimant.preferredLanguage,
+          claimant
+            .preferredLanguage,
 
         accessibility_note:
           null,
@@ -1371,7 +2213,8 @@ export async function startClaimantOnboarding(
           participant.role,
 
         relationship:
-          participant.relationship,
+          participant
+            .relationship,
 
         asserted_share:
           assertedShare ??
@@ -1393,34 +2236,42 @@ export async function startClaimantOnboarding(
           null,
 
         jurisdiction_package_id:
-          conversion.jurisdiction_package_id,
+          conversion
+            .jurisdiction_package_id,
 
         jurisdiction_package_version:
           Number(
-            conversion.jurisdiction_package_version,
+            conversion
+              .jurisdiction_package_version,
           ),
 
         legal_rule_version_snapshot:
           Number(
-            conversion.legal_rule_version_snapshot,
+            conversion
+              .legal_rule_version_snapshot,
           ),
 
         commercial_quote_id:
-          conversion.commercial_quote_id,
+          conversion
+            .commercial_quote_id,
 
         commercial_snapshot_hash:
-          conversion.commercial_snapshot_hash,
+          conversion
+            .commercial_snapshot_hash,
 
         commercial_policy_id:
-          conversion.commercial_policy_id,
+          conversion
+            .commercial_policy_id,
 
         commercial_policy_version:
           Number(
-            conversion.commercial_policy_version,
+            conversion
+              .commercial_policy_version,
           ),
 
         fee_agreement_id:
-          conversion.fee_agreement_id,
+          conversion
+            .fee_agreement_id,
 
         fee_agreement_legal_rule_version_snapshot:
           null,
@@ -1446,6 +2297,21 @@ export async function startClaimantOnboarding(
         service_agreement_recorded_at:
           null,
 
+        /*
+         * Stage 16 ownership.
+         *
+         * The authenticated staff actor who starts onboarding is both the
+         * permanent business originator and the initial operational manager.
+         */
+        originating_staff_user_id:
+          actorUserId,
+
+        assigned_staff_user_id:
+          actorUserId,
+
+        /*
+         * Keep technical provenance separate.
+         */
         created_by_user_id:
           actorUserId,
 
@@ -1458,11 +2324,18 @@ export async function startClaimantOnboarding(
         row_version:
           1,
       })
-      .select("*")
+      .select(
+        "*",
+      )
       .single();
 
-  if (error) {
-    if (error.code === "23505") {
+  if (
+    error
+  ) {
+    if (
+      error.code ===
+      "23505"
+    ) {
       throw new Error(
         "Claimant identifier, claimant reference, or participant identifier is already in use.",
       );
@@ -1475,7 +2348,8 @@ export async function startClaimantOnboarding(
 
   const record =
     onboardingFromRow(
-      data as ClaimantOnboardingRow,
+      data as
+        ClaimantOnboardingRow,
     );
 
   await appendAudit(
@@ -1483,7 +2357,7 @@ export async function startClaimantOnboarding(
     "onboarding_started",
     actorUserId,
     occurredAt,
-    "Claimant onboarding started with required email and mobile contact details. Contact consent and identity verification remain separate outstanding controls.",
+    "Claimant onboarding started with required email and mobile contact details. The originating and assigned DueQuity staff ownership was recorded. Contact consent and identity verification remain separate outstanding controls.",
   );
 
   return record;
@@ -1494,18 +2368,35 @@ export async function startClaimantOnboarding(
 /* ========================================================================== */
 
 export async function updateClaimantContactDetails(
-  input: UpdateClaimantContactInput,
-): Promise<PersistedClaimantOnboarding> {
+  input:
+    UpdateClaimantContactInput,
+): Promise<
+  PersistedClaimantOnboarding
+> {
   const current =
     await getOnboardingRow(
       input.claimId,
     );
 
-  if (!current) {
+  if (
+    !current
+  ) {
     throw new Error(
       "Claimant onboarding has not been started for this claim.",
     );
   }
+
+  const actorUserId =
+    validateMutationAuthority(
+      input.actorUserId,
+      input.staffSession,
+    );
+
+  requireActorAccessToRow(
+    current,
+    actorUserId,
+    input.staffSession,
+  );
 
   const record =
     onboardingFromRow(
@@ -1528,29 +2419,34 @@ export async function updateClaimantContactDetails(
       "Occurred at",
     );
 
-  const actorUserId =
-    requireNonEmpty(
-      input.actorUserId,
-      "Actor user ID",
-    );
-
   const contactMethods =
-    record.claimant.contactMethods.map(
-      (method) => ({
-        ...method,
-      }),
-    );
+    record
+      .claimant
+      .contactMethods
+      .map(
+        (
+          method,
+        ) => ({
+          ...method,
+        }),
+      );
 
   const emailMethod =
     contactMethods.find(
-      (method) =>
-        method.kind === "email",
+      (
+        method,
+      ) =>
+        method.kind ===
+        "email",
     );
 
   const mobileMethod =
     contactMethods.find(
-      (method) =>
-        method.kind === "mobile",
+      (
+        method,
+      ) =>
+        method.kind ===
+        "mobile",
     );
 
   if (
@@ -1563,10 +2459,12 @@ export async function updateClaimantContactDetails(
   }
 
   const emailChanged =
-    emailMethod.value !== email;
+    emailMethod.value !==
+    email;
 
   const phoneChanged =
-    mobileMethod.value !== phone;
+    mobileMethod.value !==
+    phone;
 
   emailMethod.value =
     email;
@@ -1574,12 +2472,16 @@ export async function updateClaimantContactDetails(
   mobileMethod.value =
     phone;
 
-  if (emailChanged) {
+  if (
+    emailChanged
+  ) {
     emailMethod.verified =
       false;
   }
 
-  if (phoneChanged) {
+  if (
+    phoneChanged
+  ) {
     mobileMethod.verified =
       false;
 
@@ -1623,18 +2525,35 @@ export async function updateClaimantContactDetails(
 /* ========================================================================== */
 
 export async function setClaimantContactVerification(
-  input: SetClaimantContactVerificationInput,
-): Promise<PersistedClaimantOnboarding> {
+  input:
+    SetClaimantContactVerificationInput,
+): Promise<
+  PersistedClaimantOnboarding
+> {
   const current =
     await getOnboardingRow(
       input.claimId,
     );
 
-  if (!current) {
+  if (
+    !current
+  ) {
     throw new Error(
       "Claimant onboarding has not been started for this claim.",
     );
   }
+
+  const actorUserId =
+    validateMutationAuthority(
+      input.actorUserId,
+      input.staffSession,
+    );
+
+  requireActorAccessToRow(
+    current,
+    actorUserId,
+    input.staffSession,
+  );
 
   const record =
     onboardingFromRow(
@@ -1647,27 +2566,30 @@ export async function setClaimantContactVerification(
       "Occurred at",
     );
 
-  const actorUserId =
-    requireNonEmpty(
-      input.actorUserId,
-      "Actor user ID",
-    );
-
   const contactMethods =
-    record.claimant.contactMethods.map(
-      (method) => ({
-        ...method,
-      }),
-    );
+    record
+      .claimant
+      .contactMethods
+      .map(
+        (
+          method,
+        ) => ({
+          ...method,
+        }),
+      );
 
   const method =
     contactMethods.find(
-      (candidate) =>
+      (
+        candidate,
+      ) =>
         candidate.kind ===
         input.kind,
     );
 
-  if (!method) {
+  if (
+    !method
+  ) {
     throw new Error(
       `Claimant ${input.kind} contact method is not recorded.`,
     );
@@ -1711,31 +2633,52 @@ export async function setClaimantContactVerification(
 /* ========================================================================== */
 
 export async function recordClaimantContactConsent(
-  input: RecordClaimantContactConsentInput,
-): Promise<PersistedClaimantOnboarding> {
+  input:
+    RecordClaimantContactConsentInput,
+): Promise<
+  PersistedClaimantOnboarding
+> {
   const current =
     await getOnboardingRow(
       input.claimId,
     );
 
-  if (!current) {
+  if (
+    !current
+  ) {
     throw new Error(
       "Claimant onboarding has not been started for this claim.",
     );
   }
+
+  const actorUserId =
+    validateMutationAuthority(
+      input.actorUserId,
+      input.staffSession,
+    );
+
+  requireActorAccessToRow(
+    current,
+    actorUserId,
+    input.staffSession,
+  );
 
   const record =
     onboardingFromRow(
       current,
     );
 
-  const channels = [
-    ...new Set(
-      input.channels,
-    ),
-  ];
+  const channels =
+    [
+      ...new Set(
+        input.channels,
+      ),
+    ];
 
-  if (channels.length === 0) {
+  if (
+    channels.length ===
+    0
+  ) {
     throw new Error(
       "At least one contact channel is required when recording consent.",
     );
@@ -1759,30 +2702,34 @@ export async function recordClaimantContactConsent(
       "Occurred at",
     );
 
-  const actorUserId =
-    requireNonEmpty(
-      input.actorUserId,
-      "Actor user ID",
-    );
-
   const contactMethods =
-    record.claimant.contactMethods.map(
-      (method) => ({
-        ...method,
-      }),
-    );
+    record
+      .claimant
+      .contactMethods
+      .map(
+        (
+          method,
+        ) => ({
+          ...method,
+        }),
+      );
 
   for (
-    const channel of channels
+    const channel of
+    channels
   ) {
     const method =
       contactMethods.find(
-        (candidate) =>
+        (
+          candidate,
+        ) =>
           candidate.kind ===
           channel,
       );
 
-    if (!method) {
+    if (
+      !method
+    ) {
       throw new Error(
         `Claimant ${channel} contact method is not recorded.`,
       );
@@ -1834,18 +2781,35 @@ export async function recordClaimantContactConsent(
 /* ========================================================================== */
 
 export async function setClaimantIdentityVerification(
-  input: SetClaimantIdentityVerificationInput,
-): Promise<PersistedClaimantOnboarding> {
+  input:
+    SetClaimantIdentityVerificationInput,
+): Promise<
+  PersistedClaimantOnboarding
+> {
   const current =
     await getOnboardingRow(
       input.claimId,
     );
 
-  if (!current) {
+  if (
+    !current
+  ) {
     throw new Error(
       "Claimant onboarding has not been started for this claim.",
     );
   }
+
+  const actorUserId =
+    validateMutationAuthority(
+      input.actorUserId,
+      input.staffSession,
+    );
+
+  requireActorAccessToRow(
+    current,
+    actorUserId,
+    input.staffSession,
+  );
 
   const businessDate =
     validateIsoDate(
@@ -1859,12 +2823,6 @@ export async function setClaimantIdentityVerification(
       "Occurred at",
     );
 
-  const actorUserId =
-    requireNonEmpty(
-      input.actorUserId,
-      "Actor user ID",
-    );
-
   const updatedRow =
     await updateOnboardingRow(
       current,
@@ -1873,7 +2831,9 @@ export async function setClaimantIdentityVerification(
           input.status,
 
         identity_provider_ref:
-          input.providerRef?.trim() ||
+          input
+            .providerRef
+            ?.trim() ||
           null,
 
         identity_verified_at:
@@ -1906,18 +2866,35 @@ export async function setClaimantIdentityVerification(
 /* ========================================================================== */
 
 export async function acknowledgeClaimantDisclosures(
-  input: AcknowledgeClaimantDisclosuresInput,
-): Promise<PersistedClaimantOnboarding> {
+  input:
+    AcknowledgeClaimantDisclosuresInput,
+): Promise<
+  PersistedClaimantOnboarding
+> {
   const current =
     await getOnboardingRow(
       input.claimId,
     );
 
-  if (!current) {
+  if (
+    !current
+  ) {
     throw new Error(
       "Claimant onboarding has not been started for this claim.",
     );
   }
+
+  const actorUserId =
+    validateMutationAuthority(
+      input.actorUserId,
+      input.staffSession,
+    );
+
+  requireActorAccessToRow(
+    current,
+    actorUserId,
+    input.staffSession,
+  );
 
   const record =
     onboardingFromRow(
@@ -1930,7 +2907,8 @@ export async function acknowledgeClaimantDisclosures(
     );
 
   if (
-    disclosureKeys.length === 0
+    disclosureKeys.length ===
+    0
   ) {
     throw new Error(
       "At least one disclosure acknowledgement is required.",
@@ -1949,30 +2927,33 @@ export async function acknowledgeClaimantDisclosures(
       "Occurred at",
     );
 
-  const actorUserId =
-    requireNonEmpty(
-      input.actorUserId,
-      "Actor user ID",
-    );
-
   const acknowledgements =
-    record.disclosureAcknowledgements.map(
-      (item) => ({
-        ...item,
-      }),
-    );
+    record
+      .disclosureAcknowledgements
+      .map(
+        (
+          item,
+        ) => ({
+          ...item,
+        }),
+      );
 
   for (
-    const key of disclosureKeys
+    const key of
+    disclosureKeys
   ) {
     const existing =
       acknowledgements.find(
-        (acknowledgement) =>
+        (
+          acknowledgement,
+        ) =>
           acknowledgement.key ===
           key,
       );
 
-    if (existing) {
+    if (
+      existing
+    ) {
       existing.acknowledgedAt =
         acknowledgementDate;
 
@@ -1999,9 +2980,11 @@ export async function acknowledgeClaimantDisclosures(
           acknowledgements,
 
         free_claim_option_disclosed_at:
-          input.freeClaimOptionDisclosed
+          input
+            .freeClaimOptionDisclosed
             ? acknowledgementDate
-            : current.free_claim_option_disclosed_at,
+            : current
+                .free_claim_option_disclosed_at,
       },
       occurredAt,
     );
@@ -2017,11 +3000,13 @@ export async function acknowledgeClaimantDisclosures(
     actorUserId,
     occurredAt,
     `${disclosureKeys.length} disclosure acknowledgement${
-      disclosureKeys.length === 1
+      disclosureKeys.length ===
+      1
         ? ""
         : "s"
     } recorded.${
-      input.freeClaimOptionDisclosed
+      input
+        .freeClaimOptionDisclosed
         ? " Free-claim option disclosure recorded."
         : ""
     }`,
@@ -2035,18 +3020,35 @@ export async function acknowledgeClaimantDisclosures(
 /* ========================================================================== */
 
 export async function signClaimantServiceAgreement(
-  input: SignClaimantServiceAgreementInput,
-): Promise<PersistedClaimantOnboarding> {
+  input:
+    SignClaimantServiceAgreementInput,
+): Promise<
+  PersistedClaimantOnboarding
+> {
   const current =
     await getOnboardingRow(
       input.claimId,
     );
 
-  if (!current) {
+  if (
+    !current
+  ) {
     throw new Error(
       "Claimant onboarding has not been started for this claim.",
     );
   }
+
+  const actorUserId =
+    validateMutationAuthority(
+      input.actorUserId,
+      input.staffSession,
+    );
+
+  requireActorAccessToRow(
+    current,
+    actorUserId,
+    input.staffSession,
+  );
 
   const record =
     onboardingFromRow(
@@ -2054,7 +3056,8 @@ export async function signClaimantServiceAgreement(
     );
 
   if (
-    record.claimant
+    record
+      .claimant
       .identityVerification !==
     "verified"
   ) {
@@ -2079,20 +3082,29 @@ export async function signClaimantServiceAgreement(
 
   const acknowledgedKeys =
     new Set(
-      record.disclosureAcknowledgements.map(
-        (acknowledgement) =>
-          acknowledgement.key,
-      ),
+      record
+        .disclosureAcknowledgements
+        .map(
+          (
+            acknowledgement,
+          ) =>
+            acknowledgement.key,
+        ),
     );
 
   const missingDisclosures =
     requiredDisclosureKeys.filter(
-      (key) =>
-        !acknowledgedKeys.has(key),
+      (
+        key,
+      ) =>
+        !acknowledgedKeys.has(
+          key,
+        ),
     );
 
   if (
-    missingDisclosures.length > 0
+    missingDisclosures.length >
+    0
   ) {
     throw new Error(
       `Required disclosure acknowledgements are missing: ${missingDisclosures.join(
@@ -2102,7 +3114,8 @@ export async function signClaimantServiceAgreement(
   }
 
   if (
-    !record.freeClaimOptionDisclosedAt
+    !record
+      .freeClaimOptionDisclosedAt
   ) {
     throw new Error(
       "The claimant's free direct-claim option must be disclosed before the service agreement can be signed.",
@@ -2116,7 +3129,8 @@ export async function signClaimantServiceAgreement(
     );
 
   const cancellationDeadline =
-    input.cancellationDeadline
+    input
+      .cancellationDeadline
       ? validateIsoDate(
           input.cancellationDeadline,
           "Cancellation deadline",
@@ -2129,13 +3143,9 @@ export async function signClaimantServiceAgreement(
       "Occurred at",
     );
 
-  const actorUserId =
-    requireNonEmpty(
-      input.actorUserId,
-      "Actor user ID",
-    );
-
-  if (record.serviceAgreement) {
+  if (
+    record.serviceAgreement
+  ) {
     const existing =
       record.serviceAgreement;
 
@@ -2144,12 +3154,15 @@ export async function signClaimantServiceAgreement(
         signedAt &&
       existing.documentId ===
         (
-          input.documentId?.trim() ||
+          input
+            .documentId
+            ?.trim() ||
           undefined
         ) &&
       JSON.stringify(
         [
-          ...existing.requiredDisclosureKeysSnapshot,
+          ...existing
+            .requiredDisclosureKeysSnapshot,
         ].sort(),
       ) ===
         JSON.stringify(
@@ -2158,7 +3171,9 @@ export async function signClaimantServiceAgreement(
           ].sort(),
         );
 
-    if (sameAgreement) {
+    if (
+      sameAgreement
+    ) {
       return record;
     }
 
@@ -2169,14 +3184,16 @@ export async function signClaimantServiceAgreement(
 
   const legalRuleVersion =
     Number(
-      current.legal_rule_version_snapshot,
+      current
+        .legal_rule_version_snapshot,
     );
 
   if (
     !Number.isInteger(
       legalRuleVersion,
     ) ||
-    legalRuleVersion < 1
+    legalRuleVersion <
+      1
   ) {
     throw new Error(
       "Claimant onboarding is missing its jurisdiction legal-rule version.",
@@ -2204,7 +3221,9 @@ export async function signClaimantServiceAgreement(
           null,
 
         service_agreement_document_id:
-          input.documentId?.trim() ||
+          input
+            .documentId
+            ?.trim() ||
           null,
 
         service_agreement_recorded_by_user_id:

@@ -23,28 +23,31 @@ import {
   getPropertyById,
 } from "@/server/opportunity-store";
 
-import { resolveStaffSession } from "@/server/staff-session";
+import {
+  resolveOpportunityStaffAccess,
+} from "@/server/opportunity-staff-access";
 
-import { getSupabaseAdmin } from "@/server/supabase-admin";
+import {
+  resolveStaffSession,
+} from "@/server/staff-session";
 
-export const runtime = "nodejs";
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
 
-export const dynamic = "force-dynamic";
+export const runtime =
+  "nodejs";
+
+export const dynamic =
+  "force-dynamic";
 
 /**
  * OPPORTUNITY OWNER STATUS
  *
  * Records the result of owner-locating work against the existing Opportunity.
  *
- * This endpoint does not:
- *
- * - create a claimant
- * - invent contact information
- * - record consent
- * - verify identity
- * - start claimant onboarding
- *
- * It updates only the existing owner-located and contact-confidence fields.
+ * Once an Opportunity becomes claimant-linked, Stage 16 ownership applies
+ * before owner research can be read or changed.
  */
 
 /* ========================================================================== */
@@ -52,13 +55,17 @@ export const dynamic = "force-dynamic";
 /* ========================================================================== */
 
 interface OwnerStatusRequestBody {
-  ownerLocated?: string;
+  ownerLocated?:
+    string;
 
-  contactConfidence?: string;
+  contactConfidence?:
+    string;
 }
 
 interface OpportunityVersionRow {
-  row_version: number | string;
+  row_version:
+    | number
+    | string;
 }
 
 /* ========================================================================== */
@@ -66,14 +73,18 @@ interface OpportunityVersionRow {
 /* ========================================================================== */
 
 function errorResponse(
-  message: string,
-  status: number,
+  message:
+    string,
+  status:
+    number,
 ) {
   return NextResponse.json(
     {
-      ok: false,
+      ok:
+        false,
 
-      error: message,
+      error:
+        message,
     },
     {
       status,
@@ -86,7 +97,8 @@ function errorResponse(
 /* ========================================================================== */
 
 function isOwnerLocatedStatus(
-  value: string,
+  value:
+    string,
 ): value is Opportunity["ownerLocated"] {
   return Object.prototype.hasOwnProperty.call(
     OWNER_LOCATED_STATUS,
@@ -95,7 +107,8 @@ function isOwnerLocatedStatus(
 }
 
 function isContactConfidence(
-  value: string,
+  value:
+    string,
 ): value is Opportunity["contactConfidence"] {
   return Object.prototype.hasOwnProperty.call(
     CONTACT_CONFIDENCE,
@@ -104,14 +117,21 @@ function isContactConfidence(
 }
 
 function databaseRowVersion(
-  value: number | string,
+  value:
+    | number
+    | string,
 ): number {
   const version =
-    Number(value);
+    Number(
+      value,
+    );
 
   if (
-    !Number.isInteger(version) ||
-    version < 1
+    !Number.isInteger(
+      version,
+    ) ||
+    version <
+      1
   ) {
     throw new Error(
       "Opportunity has an invalid database row version.",
@@ -124,7 +144,10 @@ function databaseRowVersion(
 function currentIsoDate(): string {
   return new Date()
     .toISOString()
-    .slice(0, 10);
+    .slice(
+      0,
+      10,
+    );
 }
 
 /* ========================================================================== */
@@ -132,7 +155,8 @@ function currentIsoDate(): string {
 /* ========================================================================== */
 
 export async function POST(
-  request: NextRequest,
+  request:
+    NextRequest,
   context: {
     params: Promise<{
       opportunityId: string;
@@ -190,6 +214,25 @@ export async function POST(
     );
   }
 
+  const access =
+    await resolveOpportunityStaffAccess(
+      session,
+      {
+        opportunityId:
+          opportunity.id,
+
+        convertedClaimId:
+          opportunity.convertedClaimId,
+      },
+    );
+
+  if (!access.accessible) {
+    return errorResponse(
+      "Opportunity not found.",
+      404,
+    );
+  }
+
   const property =
     await getPropertyById(
       opportunity.propertyId,
@@ -219,7 +262,9 @@ export async function POST(
 
   try {
     body =
-      (await request.json()) as OwnerStatusRequestBody;
+      (
+        await request.json()
+      ) as OwnerStatusRequestBody;
   } catch {
     return errorResponse(
       "Invalid JSON request.",
@@ -257,9 +302,6 @@ export async function POST(
     );
   }
 
-  /*
-   * Retry-safe.
-   */
   if (
     opportunity.ownerLocated ===
       ownerLocated &&
@@ -267,9 +309,11 @@ export async function POST(
       contactConfidence
   ) {
     return NextResponse.json({
-      ok: true,
+      ok:
+        true,
 
-      changed: false,
+      changed:
+        false,
 
       opportunity,
     });
@@ -279,26 +323,36 @@ export async function POST(
     getSupabaseAdmin();
 
   const {
-    data: versionData,
-    error: versionError,
+    data:
+      versionData,
+    error:
+      versionError,
   } =
     await supabase
-      .from("opportunities")
-      .select("row_version")
+      .from(
+        "opportunities",
+      )
+      .select(
+        "row_version",
+      )
       .eq(
         "id",
         opportunity.id,
       )
       .maybeSingle();
 
-  if (versionError) {
+  if (
+    versionError
+  ) {
     return errorResponse(
       `Unable to read Opportunity version: ${versionError.message}`,
       409,
     );
   }
 
-  if (!versionData) {
+  if (
+    !versionData
+  ) {
     return errorResponse(
       "Opportunity no longer exists.",
       404,
@@ -313,11 +367,15 @@ export async function POST(
     );
 
   const {
-    data: updatedData,
-    error: updateError,
+    data:
+      updatedData,
+    error:
+      updateError,
   } =
     await supabase
-      .from("opportunities")
+      .from(
+        "opportunities",
+      )
       .update({
         owner_located:
           ownerLocated,
@@ -336,20 +394,51 @@ export async function POST(
         "row_version",
         expectedVersion,
       )
-      .select("id")
+      .select(
+        "id",
+      )
       .maybeSingle();
 
-  if (updateError) {
+  if (
+    updateError
+  ) {
     return errorResponse(
       `Unable to update Opportunity owner status: ${updateError.message}`,
       409,
     );
   }
 
-  if (!updatedData) {
+  if (
+    !updatedData
+  ) {
     return errorResponse(
       "Opportunity changed while owner research was being recorded. Reload and try again.",
       409,
+    );
+  }
+
+  /*
+   * Ownership could theoretically change while the mutation was executing.
+   * Re-check before returning the updated operational record.
+   */
+  const finalAccess =
+    await resolveOpportunityStaffAccess(
+      session,
+      {
+        opportunityId:
+          opportunity.id,
+
+        convertedClaimId:
+          opportunity.convertedClaimId,
+      },
+    );
+
+  if (
+    !finalAccess.accessible
+  ) {
+    return errorResponse(
+      "Opportunity not found.",
+      404,
     );
   }
 
@@ -366,9 +455,11 @@ export async function POST(
   }
 
   return NextResponse.json({
-    ok: true,
+    ok:
+      true,
 
-    changed: true,
+    changed:
+      true,
 
     opportunity:
       updated,

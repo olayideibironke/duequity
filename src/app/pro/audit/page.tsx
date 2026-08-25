@@ -29,7 +29,7 @@ import {
 } from "@/server/commercial-approval-store";
 
 import {
-  claimantOnboardingAudit,
+  claimantOnboardingAuditForStaff,
   type ClaimantOnboardingAuditEntry,
 } from "@/server/claimant-onboarding-store";
 
@@ -37,6 +37,10 @@ import {
   claimFilingPackageAudit,
   type ClaimFilingPackageAuditEntry,
 } from "@/server/claim-filing-package-store";
+
+import {
+  resolveClaimRecord,
+} from "@/server/claim-record";
 
 export const metadata: Metadata = {
   title: "Audit",
@@ -317,11 +321,51 @@ export default async function ProAuditPage({
   /* Load persisted subsystem audit trails                                    */
   /* ======================================================================== */
 
-  const [commercialAudit, onboardingAudit, filingAudit] = await Promise.all([
+  const [
+    commercialAudit,
+    onboardingAudit,
+    allFilingAudit,
+  ] = await Promise.all([
     commercialApprovalAudit(),
-    claimantOnboardingAudit(),
+
+    claimantOnboardingAuditForStaff(
+      session,
+    ),
+
     claimFilingPackageAudit(),
   ]);
+
+  /*
+   * Filing audit entries are claimant-linked through their Claim.
+   *
+   * Reuse the central Claim resolver so ordinary staff never receive another
+   * staff member's filing history. Super Admin still resolves every Claim.
+   */
+  const filingAudit = (
+    await Promise.all(
+      allFilingAudit.map(
+        async (
+          entry,
+        ) =>
+          (
+            await resolveClaimRecord(
+              entry.claimId,
+            )
+          )
+            ? entry
+            : undefined,
+      ),
+    )
+  ).flatMap(
+    (
+      entry,
+    ) =>
+      entry
+        ? [
+            entry,
+          ]
+        : [],
+  );
 
   const events: OperationalAuditEvent[] = [
     ...commercialAudit.map(commercialEvent),
@@ -390,7 +434,6 @@ export default async function ProAuditPage({
 
   return (
     <div className="space-y-5">
-      {/* ================================================================ header */}
       <div>
         <p className="eyebrow text-ink-500">Governance</p>
 
@@ -404,7 +447,6 @@ export default async function ProAuditPage({
         </p>
       </div>
 
-      {/* ================================================================= stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Entries recorded"
@@ -431,7 +473,6 @@ export default async function ProAuditPage({
         />
       </div>
 
-      {/* ============================================================= boundary */}
       <Callout
         tone="neutral"
         title="Audit coverage is currently workflow-specific"
@@ -444,10 +485,8 @@ export default async function ProAuditPage({
         </p>
       </Callout>
 
-      {/* =============================================================== filters */}
       <FilterLinks filters={filters} label="Filter audit entries" />
 
-      {/* ============================================================= entries */}
       <Card className="overflow-hidden">
         <CardHeader
           title="Audit entries"
@@ -530,7 +569,6 @@ export default async function ProAuditPage({
         </CardBody>
       </Card>
 
-      {/* ========================================================== limitations */}
       <Callout tone="neutral" title="Production audit requirement">
         <div className="space-y-2">
           <p>
