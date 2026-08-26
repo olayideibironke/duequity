@@ -1,6 +1,28 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import {
+  spawn,
+} from "node:child_process";
+
+import {
+  randomUUID,
+} from "node:crypto";
+
+import {
+  access,
+  mkdtemp,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+
+import {
+  tmpdir,
+} from "node:os";
+
+import {
+  join,
+} from "node:path";
 
 import type {
   DocumentKind,
@@ -12,9 +34,12 @@ import type {
   StoredDocument,
 } from "@/domain/types";
 
-import { getSupabaseAdmin } from "@/server/supabase-admin";
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
 
-export const CLAIM_DOCUMENT_STORAGE_BUCKET = "claim-documents";
+export const CLAIM_DOCUMENT_STORAGE_BUCKET =
+  "claim-documents";
 
 /**
  * Temporary compatibility export.
@@ -38,21 +63,29 @@ export type ClaimDocumentAuditAction =
   | "document_request_waived";
 
 export interface ClaimDocumentAuditEntry {
-  id: string;
+  id:
+    string;
 
-  claimId: string;
+  claimId:
+    string;
 
-  documentId?: string;
+  documentId?:
+    string;
 
-  requestId?: string;
+  requestId?:
+    string;
 
-  action: ClaimDocumentAuditAction;
+  action:
+    ClaimDocumentAuditAction;
 
-  actorUserId: string;
+  actorUserId:
+    string;
 
-  occurredAt: IsoInstant;
+  occurredAt:
+    IsoInstant;
 
-  detail?: string;
+  detail?:
+    string;
 }
 
 /* ========================================================================== */
@@ -60,134 +93,115 @@ export interface ClaimDocumentAuditEntry {
 /* ========================================================================== */
 
 export interface SyncClaimDocumentRequestsInput {
-  claimId: string;
+  claimId:
+    string;
 
-  requiredKinds: DocumentKind[];
+  requiredKinds:
+    DocumentKind[];
 
-  requestedFromClaimantId?: string;
+  requestedFromClaimantId?:
+    string;
 
-  requestedAt: IsoDate;
+  requestedAt:
+    IsoDate;
 
-  actorUserId: string;
+  actorUserId:
+    string;
 
-  occurredAt: IsoInstant;
+  occurredAt:
+    IsoInstant;
 }
 
 export interface RegisterClaimDocumentUploadInput {
-  claimId: string;
+  claimId:
+    string;
 
-  claimantId?: string;
+  claimantId?:
+    string;
 
-  kind: DocumentKind;
+  kind:
+    DocumentKind;
 
-  title: string;
+  title:
+    string;
 
-  originalFileName?: string;
+  originalFileName?:
+    string;
 
-  mimeType: string;
+  mimeType:
+    string;
 
-  byteSize: number;
+  byteSize:
+    number;
 
-  storageKey: string;
+  storageKey:
+    string;
 
-  uploadedByUserId?: string;
+  uploadedByUserId?:
+    string;
 
-  uploadedByClaimantId?: string;
+  uploadedByClaimantId?:
+    string;
 
-  uploadedAt: IsoInstant;
+  uploadedAt:
+    IsoInstant;
 
-  actorUserId: string;
+  actorUserId:
+    string;
 }
 
 export interface ReviewClaimDocumentInput {
-  documentId: string;
+  documentId:
+    string;
 
-  decision: "accepted" | "rejected";
+  decision:
+    "accepted" |
+    "rejected";
 
-  reviewedByUserId: string;
+  reviewedByUserId:
+    string;
 
-  reviewedAt: IsoInstant;
+  reviewedAt:
+    IsoInstant;
 
-  rejectionReason?: string;
+  rejectionReason?:
+    string;
 
-  actorUserId: string;
+  actorUserId:
+    string;
 }
 
 export interface WaiveClaimDocumentRequestInput {
-  requestId: string;
+  requestId:
+    string;
 
-  waivedReason: string;
+  waivedReason:
+    string;
 
-  actorUserId: string;
+  actorUserId:
+    string;
 
-  occurredAt: IsoInstant;
+  occurredAt:
+    IsoInstant;
 }
 
 export interface SupersedeClaimDocumentInput {
-  documentId: string;
+  documentId:
+    string;
 
-  actorUserId: string;
+  actorUserId:
+    string;
 
-  occurredAt: IsoInstant;
+  occurredAt:
+    IsoInstant;
 
-  detail?: string;
+  detail?:
+    string;
 }
 
 /* ========================================================================== */
-/* Readiness                                                                   */
+/* Safety scan                                                                 */
 /* ========================================================================== */
-
-export interface ClaimDocumentReadiness {
-  claimId: string;
-
-  requiredRequests: DocumentRequest[];
-
-  acceptedRequiredRequests: DocumentRequest[];
-
-  outstandingRequiredRequests: DocumentRequest[];
-
-  requiredCount: number;
-
-  acceptedCount: number;
-
-  outstandingCount: number;
-
-  complete: boolean;
-}
-
-/* ========================================================================== */
-/* Database rows                                                               */
-/* ========================================================================== */
-
-interface ClaimDocumentRequestRow {
-  id: string;
-
-  claim_id: string;
-
-  kind: DocumentKind;
-
-  reason: string;
-
-  requested_from_claimant_id: string | null;
-
-  requested_at: string;
-
-  due_by: string | null;
-
-  required: boolean;
-
-  status: DocumentRequest["status"];
-
-  guidance: string | null;
-
-  fulfilled_by_document_id: string | null;
-
-  waived_reason: string | null;
-
-  row_version: number | string;
-
-  updated_at: string;
-}
 
 type MalwareScanStatus =
   | "pending"
@@ -195,141 +209,326 @@ type MalwareScanStatus =
   | "rejected"
   | "unsafe";
 
+export interface ClaimDocumentSafetyScanResult {
+  document:
+    StoredDocument;
+
+  malwareScanStatus:
+    MalwareScanStatus;
+
+  scannedAt:
+    IsoInstant;
+
+  detail:
+    string;
+
+  scanner:
+    "microsoft_defender";
+
+  clean:
+    boolean;
+
+  unsafe:
+    boolean;
+}
+
+interface ProcessResult {
+  exitCode:
+    number | null;
+
+  stdout:
+    string;
+
+  stderr:
+    string;
+
+  timedOut:
+    boolean;
+}
+
+/* ========================================================================== */
+/* Readiness                                                                   */
+/* ========================================================================== */
+
+export interface ClaimDocumentReadiness {
+  claimId:
+    string;
+
+  requiredRequests:
+    DocumentRequest[];
+
+  acceptedRequiredRequests:
+    DocumentRequest[];
+
+  outstandingRequiredRequests:
+    DocumentRequest[];
+
+  requiredCount:
+    number;
+
+  acceptedCount:
+    number;
+
+  outstandingCount:
+    number;
+
+  complete:
+    boolean;
+}
+
+/* ========================================================================== */
+/* Database rows                                                               */
+/* ========================================================================== */
+
+interface ClaimDocumentRequestRow {
+  id:
+    string;
+
+  claim_id:
+    string;
+
+  kind:
+    DocumentKind;
+
+  reason:
+    string;
+
+  requested_from_claimant_id:
+    string | null;
+
+  requested_at:
+    string;
+
+  due_by:
+    string | null;
+
+  required:
+    boolean;
+
+  status:
+    DocumentRequest["status"];
+
+  guidance:
+    string | null;
+
+  fulfilled_by_document_id:
+    string | null;
+
+  waived_reason:
+    string | null;
+
+  row_version:
+    number | string;
+
+  updated_at:
+    string;
+}
+
 interface ClaimDocumentRow {
-  id: string;
+  id:
+    string;
 
-  claim_id: string;
+  claim_id:
+    string;
 
-  opportunity_id: string | null;
+  opportunity_id:
+    string | null;
 
-  claimant_id: string | null;
+  claimant_id:
+    string | null;
 
-  kind: DocumentKind;
+  kind:
+    DocumentKind;
 
-  title: string;
+  title:
+    string;
 
-  original_file_name: string | null;
+  original_file_name:
+    string | null;
 
-  mime_type: string;
+  mime_type:
+    string;
 
-  byte_size: number | string;
+  byte_size:
+    number | string;
 
-  sensitivity: DocumentSensitivity;
+  sensitivity:
+    DocumentSensitivity;
 
-  status: DocumentStatus;
+  status:
+    DocumentStatus;
 
-  storage_bucket: string;
+  storage_bucket:
+    string;
 
-  storage_key: string;
+  storage_key:
+    string;
 
-  malware_scan_status: MalwareScanStatus;
+  malware_scan_status:
+    MalwareScanStatus;
 
-  malware_scanned_at: string | null;
+  malware_scanned_at:
+    string | null;
 
-  malware_scan_detail: string | null;
+  malware_scan_detail:
+    string | null;
 
-  uploaded_by_user_id: string | null;
+  uploaded_by_user_id:
+    string | null;
 
-  uploaded_by_claimant_id: string | null;
+  uploaded_by_claimant_id:
+    string | null;
 
-  uploaded_at: string;
+  uploaded_at:
+    string;
 
-  reviewed_by_user_id: string | null;
+  reviewed_by_user_id:
+    string | null;
 
-  reviewed_at: string | null;
+  reviewed_at:
+    string | null;
 
-  rejection_reason: string | null;
+  rejection_reason:
+    string | null;
 
-  page_count: number | null;
+  page_count:
+    number | null;
 
-  expires_at: string | null;
+  expires_at:
+    string | null;
 
-  row_version: number | string;
+  row_version:
+    number | string;
 
-  updated_at: string;
+  updated_at:
+    string;
 }
 
 interface ClaimDocumentAuditRow {
-  id: string;
+  id:
+    string;
 
-  claim_id: string;
+  claim_id:
+    string;
 
-  document_id: string | null;
+  document_id:
+    string | null;
 
-  request_id: string | null;
+  request_id:
+    string | null;
 
-  action: ClaimDocumentAuditAction;
+  action:
+    ClaimDocumentAuditAction;
 
-  actor_user_id: string;
+  actor_user_id:
+    string;
 
-  occurred_at: string;
+  occurred_at:
+    string;
 
-  detail: string | null;
+  detail:
+    string | null;
 }
 
 /* ========================================================================== */
 /* Validation                                                                  */
 /* ========================================================================== */
 
-const MAX_DOCUMENT_BYTES = 15 * 1024 * 1024;
+const MAX_DOCUMENT_BYTES =
+  15 *
+  1024 *
+  1024;
 
-const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
+const ALLOWED_DOCUMENT_MIME_TYPES =
+  new Set([
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+  ]);
 
 function requireNonEmpty(
-  value: string,
-  label: string,
+  value:
+    string,
+  label:
+    string,
 ): string {
-  const normalized = value.trim();
+  const normalized =
+    value.trim();
 
-  if (!normalized) {
-    throw new Error(`${label} is required.`);
+  if (
+    !normalized
+  ) {
+    throw new Error(
+      `${label} is required.`,
+    );
   }
 
   return normalized;
 }
 
 function validateIsoDate(
-  value: string,
-  label: string,
+  value:
+    string,
+  label:
+    string,
 ): IsoDate {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      value,
+    )
+  ) {
     throw new Error(
       `${label} must be an ISO calendar date.`,
     );
   }
 
-  return value as IsoDate;
+  return value as
+    IsoDate;
 }
 
 function validateIsoInstant(
-  value: string,
-  label: string,
+  value:
+    string,
+  label:
+    string,
 ): IsoInstant {
-  if (Number.isNaN(Date.parse(value))) {
+  if (
+    Number.isNaN(
+      Date.parse(
+        value,
+      ),
+    )
+  ) {
     throw new Error(
       `${label} must be a valid ISO timestamp.`,
     );
   }
 
-  return value as IsoInstant;
+  return value as
+    IsoInstant;
 }
 
-function validateByteSize(value: number): number {
+function validateByteSize(
+  value:
+    number,
+): number {
   if (
-    !Number.isInteger(value) ||
-    value <= 0
+    !Number.isInteger(
+      value,
+    ) ||
+    value <=
+      0
   ) {
     throw new Error(
       "Document byte size must be a positive integer.",
     );
   }
 
-  if (value > MAX_DOCUMENT_BYTES) {
+  if (
+    value >
+    MAX_DOCUMENT_BYTES
+  ) {
     throw new Error(
       "Document exceeds the 15 MB upload limit.",
     );
@@ -339,7 +538,8 @@ function validateByteSize(value: number): number {
 }
 
 function validateMimeType(
-  value: string,
+  value:
+    string,
 ): string {
   const mimeType =
     requireNonEmpty(
@@ -361,21 +561,32 @@ function validateMimeType(
 }
 
 function uniqueDocumentKinds(
-  kinds: DocumentKind[],
+  kinds:
+    DocumentKind[],
 ): DocumentKind[] {
   return [
-    ...new Set(kinds),
+    ...new Set(
+      kinds,
+    ),
   ];
 }
 
 function databaseRowVersion(
-  value: number | string,
+  value:
+    number |
+    string,
 ): number {
-  const version = Number(value);
+  const version =
+    Number(
+      value,
+    );
 
   if (
-    !Number.isInteger(version) ||
-    version < 1
+    !Number.isInteger(
+      version,
+    ) ||
+    version <
+      1
   ) {
     throw new Error(
       "Document record has an invalid database row version.",
@@ -395,7 +606,8 @@ const INTERNAL_WORKFLOW_DOCUMENT_KINDS =
   ]);
 
 export function isInternalWorkflowDocumentKind(
-  kind: DocumentKind,
+  kind:
+    DocumentKind,
 ): boolean {
   return INTERNAL_WORKFLOW_DOCUMENT_KINDS.has(
     kind,
@@ -403,13 +615,41 @@ export function isInternalWorkflowDocumentKind(
 }
 
 /* ========================================================================== */
+/* Government ID synchronization                                               */
+/* ========================================================================== */
+
+/**
+ * Government-ID request and claimant-identity state are synchronized by the
+ * database trigger attached to claim_documents.
+ *
+ * When a government-ID document becomes accepted, rejected, expired or
+ * superseded, that trigger updates claimant_onboarding and the matching
+ * government-ID request inside the same database operation.
+ *
+ * Application code must therefore not perform a second request mutation from
+ * a request row captured before the document update. Doing so races the
+ * database trigger's row_version increment and can falsely report a
+ * concurrency failure after a successful operation.
+ */
+function databaseSynchronizesDocumentRequest(
+  kind:
+    DocumentKind,
+): boolean {
+  return kind ===
+    "government_id";
+}
+
+/* ========================================================================== */
 /* Sensitivity                                                                 */
 /* ========================================================================== */
 
 export function sensitivityForDocumentKind(
-  kind: DocumentKind,
+  kind:
+    DocumentKind,
 ): DocumentSensitivity {
-  switch (kind) {
+  switch (
+    kind
+  ) {
     case "government_id":
       return "restricted";
 
@@ -440,7 +680,8 @@ export function sensitivityForDocumentKind(
 /* ========================================================================== */
 
 function safeIdPart(
-  value: string,
+  value:
+    string,
 ): string {
   return value.replace(
     /[^a-zA-Z0-9_-]/g,
@@ -449,24 +690,35 @@ function safeIdPart(
 }
 
 function requestIdFor(
-  claimId: string,
-  kind: DocumentKind,
+  claimId:
+    string,
+  kind:
+    DocumentKind,
 ): string {
   return [
     "doc-request",
-    safeIdPart(claimId),
+    safeIdPart(
+      claimId,
+    ),
     kind,
-  ].join("-");
+  ].join(
+    "-",
+  );
 }
 
 export function createClaimDocumentId(
-  claimId: string,
+  claimId:
+    string,
 ): string {
   return [
     "doc",
-    safeIdPart(claimId),
+    safeIdPart(
+      claimId,
+    ),
     randomUUID(),
-  ].join("-");
+  ].join(
+    "-",
+  );
 }
 
 /* ========================================================================== */
@@ -474,32 +726,41 @@ export function createClaimDocumentId(
 /* ========================================================================== */
 
 function requestFromRow(
-  row: ClaimDocumentRequestRow,
+  row:
+    ClaimDocumentRequestRow,
 ): DocumentRequest {
   return {
-    id: row.id,
+    id:
+      row.id,
 
-    claimId: row.claim_id,
+    claimId:
+      row.claim_id,
 
-    kind: row.kind,
+    kind:
+      row.kind,
 
-    reason: row.reason,
+    reason:
+      row.reason,
 
     requestedFromClaimantId:
       row.requested_from_claimant_id ??
       undefined,
 
     requestedAt:
-      row.requested_at as IsoDate,
+      row.requested_at as
+        IsoDate,
 
     dueBy:
       row.due_by
-        ? (row.due_by as IsoDate)
+        ? row.due_by as
+            IsoDate
         : undefined,
 
-    required: row.required,
+    required:
+      row.required,
 
-    status: row.status,
+    status:
+      row.status,
 
     guidance:
       row.guidance ??
@@ -516,29 +777,37 @@ function requestFromRow(
 }
 
 function documentFromRow(
-  row: ClaimDocumentRow,
+  row:
+    ClaimDocumentRow,
 ): StoredDocument {
   return {
-    id: row.id,
+    id:
+      row.id,
 
-    claimId: row.claim_id,
+    claimId:
+      row.claim_id,
 
     claimantId:
       row.claimant_id ??
       undefined,
 
-    kind: row.kind,
+    kind:
+      row.kind,
 
-    title: row.title,
+    title:
+      row.title,
 
     originalFileName:
       row.original_file_name ??
       undefined,
 
-    mimeType: row.mime_type,
+    mimeType:
+      row.mime_type,
 
     byteSize:
-      Number(row.byte_size),
+      Number(
+        row.byte_size,
+      ),
 
     sensitivity:
       row.sensitivity,
@@ -558,7 +827,8 @@ function documentFromRow(
       undefined,
 
     uploadedAt:
-      row.uploaded_at as IsoInstant,
+      row.uploaded_at as
+        IsoInstant,
 
     reviewedByUserId:
       row.reviewed_by_user_id ??
@@ -566,7 +836,8 @@ function documentFromRow(
 
     reviewedAt:
       row.reviewed_at
-        ? (row.reviewed_at as IsoInstant)
+        ? row.reviewed_at as
+            IsoInstant
         : undefined,
 
     rejectionReason:
@@ -576,10 +847,12 @@ function documentFromRow(
 }
 
 function auditFromRow(
-  row: ClaimDocumentAuditRow,
+  row:
+    ClaimDocumentAuditRow,
 ): ClaimDocumentAuditEntry {
   return {
-    id: row.id,
+    id:
+      row.id,
 
     claimId:
       row.claim_id,
@@ -599,7 +872,8 @@ function auditFromRow(
       row.actor_user_id,
 
     occurredAt:
-      row.occurred_at as IsoInstant,
+      row.occurred_at as
+        IsoInstant,
 
     detail:
       row.detail ??
@@ -612,67 +886,98 @@ function auditFromRow(
 /* ========================================================================== */
 
 async function getRequestRow(
-  requestId: string,
+  requestId:
+    string,
 ): Promise<
-  ClaimDocumentRequestRow | undefined
+  ClaimDocumentRequestRow |
+  undefined
 > {
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claim_document_requests")
-      .select("*")
+      .from(
+        "claim_document_requests",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "id",
         requestId,
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read document request: ${error.message}`,
     );
   }
 
   return data
-    ? (data as ClaimDocumentRequestRow)
+    ? data as
+        ClaimDocumentRequestRow
     : undefined;
 }
 
 async function getDocumentRow(
-  documentId: string,
+  documentId:
+    string,
 ): Promise<
-  ClaimDocumentRow | undefined
+  ClaimDocumentRow |
+  undefined
 > {
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claim_documents")
-      .select("*")
+      .from(
+        "claim_documents",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "id",
         documentId,
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read document: ${error.message}`,
     );
   }
 
   return data
-    ? (data as ClaimDocumentRow)
+    ? data as
+        ClaimDocumentRow
     : undefined;
 }
 
 async function updateRequestRow(
-  current: ClaimDocumentRequestRow,
-  values: Record<string, unknown>,
-): Promise<ClaimDocumentRequestRow> {
+  current:
+    ClaimDocumentRequestRow,
+  values:
+    Record<
+      string,
+      unknown
+    >,
+): Promise<
+  ClaimDocumentRequestRow
+> {
   const supabase =
     getSupabaseAdmin();
 
@@ -681,17 +986,24 @@ async function updateRequestRow(
       current.row_version,
     );
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claim_document_requests")
+      .from(
+        "claim_document_requests",
+      )
       .update({
         ...values,
 
         row_version:
-          expectedVersion + 1,
+          expectedVersion +
+          1,
 
         updated_at:
-          new Date().toISOString(),
+          new Date()
+            .toISOString(),
       })
       .eq(
         "id",
@@ -701,28 +1013,42 @@ async function updateRequestRow(
         "row_version",
         expectedVersion,
       )
-      .select("*")
+      .select(
+        "*",
+      )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to update document request: ${error.message}`,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "Document request changed while this request was being processed. Reload and try again.",
     );
   }
 
-  return data as ClaimDocumentRequestRow;
+  return data as
+    ClaimDocumentRequestRow;
 }
 
 async function updateDocumentRow(
-  current: ClaimDocumentRow,
-  values: Record<string, unknown>,
-): Promise<ClaimDocumentRow> {
+  current:
+    ClaimDocumentRow,
+  values:
+    Record<
+      string,
+      unknown
+    >,
+): Promise<
+  ClaimDocumentRow
+> {
   const supabase =
     getSupabaseAdmin();
 
@@ -731,17 +1057,24 @@ async function updateDocumentRow(
       current.row_version,
     );
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claim_documents")
+      .from(
+        "claim_documents",
+      )
       .update({
         ...values,
 
         row_version:
-          expectedVersion + 1,
+          expectedVersion +
+          1,
 
         updated_at:
-          new Date().toISOString(),
+          new Date()
+            .toISOString(),
       })
       .eq(
         "id",
@@ -751,22 +1084,29 @@ async function updateDocumentRow(
         "row_version",
         expectedVersion,
       )
-      .select("*")
+      .select(
+        "*",
+      )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to update document: ${error.message}`,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "Document changed while this request was being processed. Reload and try again.",
     );
   }
 
-  return data as ClaimDocumentRow;
+  return data as
+    ClaimDocumentRow;
 }
 
 /* ========================================================================== */
@@ -775,27 +1115,38 @@ async function updateDocumentRow(
 
 async function appendAudit(
   input: {
-    claimId: string;
+    claimId:
+      string;
 
-    documentId?: string;
+    documentId?:
+      string;
 
-    requestId?: string;
+    requestId?:
+      string;
 
-    action: ClaimDocumentAuditAction;
+    action:
+      ClaimDocumentAuditAction;
 
-    actorUserId: string;
+    actorUserId:
+      string;
 
-    occurredAt: IsoInstant;
+    occurredAt:
+      IsoInstant;
 
-    detail?: string;
+    detail?:
+      string;
   },
 ): Promise<void> {
   const supabase =
     getSupabaseAdmin();
 
-  const { error } =
+  const {
+    error,
+  } =
     await supabase
-      .from("claim_document_audit")
+      .from(
+        "claim_document_audit",
+      )
       .insert({
         id:
           randomUUID(),
@@ -825,7 +1176,9 @@ async function appendAudit(
           null,
       });
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to write document audit: ${error.message}`,
     );
@@ -833,19 +1186,474 @@ async function appendAudit(
 }
 
 /* ========================================================================== */
+/* Microsoft Defender                                                         */
+/* ========================================================================== */
+
+const DEFENDER_SCAN_TIMEOUT_MS =
+  120_000;
+
+const MAX_PROCESS_OUTPUT_CHARACTERS =
+  65_536;
+
+async function fileExists(
+  path:
+    string,
+): Promise<boolean> {
+  try {
+    await access(
+      path,
+    );
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function findMicrosoftDefenderExecutable(): Promise<string> {
+  if (
+    process.platform !==
+    "win32"
+  ) {
+    throw new Error(
+      "Microsoft Defender local document scanning is available only on the Windows QA environment.",
+    );
+  }
+
+  const programData =
+    process.env.ProgramData ??
+    "C:\\ProgramData";
+
+  const programFiles =
+    process.env.ProgramFiles ??
+    "C:\\Program Files";
+
+  const platformRoot =
+    join(
+      programData,
+      "Microsoft",
+      "Windows Defender",
+      "Platform",
+    );
+
+  try {
+    const entries =
+      await readdir(
+        platformRoot,
+        {
+          withFileTypes:
+            true,
+        },
+      );
+
+    const versions =
+      entries
+        .filter(
+          (
+            entry,
+          ) =>
+            entry.isDirectory(),
+        )
+        .map(
+          (
+            entry,
+          ) =>
+            entry.name,
+        )
+        .sort(
+          (
+            left,
+            right,
+          ) =>
+            right.localeCompare(
+              left,
+              "en-US",
+              {
+                numeric:
+                  true,
+              },
+            ),
+        );
+
+    for (
+      const version of
+      versions
+    ) {
+      const candidate =
+        join(
+          platformRoot,
+          version,
+          "MpCmdRun.exe",
+        );
+
+      if (
+        await fileExists(
+          candidate,
+        )
+      ) {
+        return candidate;
+      }
+    }
+  } catch {
+    /*
+     * Fall through to the legacy Program Files location.
+     */
+  }
+
+  const fallback =
+    join(
+      programFiles,
+      "Windows Defender",
+      "MpCmdRun.exe",
+    );
+
+  if (
+    await fileExists(
+      fallback,
+    )
+  ) {
+    return fallback;
+  }
+
+  throw new Error(
+    "Microsoft Defender command-line scanner could not be located on this Windows system.",
+  );
+}
+
+function appendProcessOutput(
+  current:
+    string,
+  chunk:
+    Buffer,
+): string {
+  if (
+    current.length >=
+    MAX_PROCESS_OUTPUT_CHARACTERS
+  ) {
+    return current;
+  }
+
+  const available =
+    MAX_PROCESS_OUTPUT_CHARACTERS -
+    current.length;
+
+  return (
+    current +
+    chunk
+      .toString(
+        "utf8",
+      )
+      .slice(
+        0,
+        available,
+      )
+  );
+}
+
+function runProcess(
+  executable:
+    string,
+  args:
+    string[],
+): Promise<
+  ProcessResult
+> {
+  return new Promise(
+    (
+      resolve,
+      reject,
+    ) => {
+      let stdout =
+        "";
+
+      let stderr =
+        "";
+
+      let timedOut =
+        false;
+
+      let settled =
+        false;
+
+      const child =
+        spawn(
+          executable,
+          args,
+          {
+            windowsHide:
+              true,
+
+            shell:
+              false,
+
+            stdio: [
+              "ignore",
+              "pipe",
+              "pipe",
+            ],
+          },
+        );
+
+      const timeout =
+        setTimeout(
+          () => {
+            timedOut =
+              true;
+
+            child.kill();
+          },
+          DEFENDER_SCAN_TIMEOUT_MS,
+        );
+
+      child.stdout.on(
+        "data",
+        (
+          chunk:
+            Buffer,
+        ) => {
+          stdout =
+            appendProcessOutput(
+              stdout,
+              chunk,
+            );
+        },
+      );
+
+      child.stderr.on(
+        "data",
+        (
+          chunk:
+            Buffer,
+        ) => {
+          stderr =
+            appendProcessOutput(
+              stderr,
+              chunk,
+            );
+        },
+      );
+
+      child.on(
+        "error",
+        (
+          error,
+        ) => {
+          if (
+            settled
+          ) {
+            return;
+          }
+
+          settled =
+            true;
+
+          clearTimeout(
+            timeout,
+          );
+
+          reject(
+            error,
+          );
+        },
+      );
+
+      child.on(
+        "close",
+        (
+          code,
+        ) => {
+          if (
+            settled
+          ) {
+            return;
+          }
+
+          settled =
+            true;
+
+          clearTimeout(
+            timeout,
+          );
+
+          resolve({
+            exitCode:
+              code,
+
+            stdout,
+
+            stderr,
+
+            timedOut,
+          });
+        },
+      );
+    },
+  );
+}
+
+function extensionForMimeType(
+  mimeType:
+    string,
+): string {
+  switch (
+    mimeType
+  ) {
+    case "application/pdf":
+      return ".pdf";
+
+    case "image/jpeg":
+      return ".jpg";
+
+    case "image/png":
+      return ".png";
+
+    case "image/webp":
+      return ".webp";
+
+    default:
+      return ".bin";
+  }
+}
+
+function defenderReportedThreat(
+  result:
+    ProcessResult,
+): boolean {
+  const output =
+    `${result.stdout}\n${result.stderr}`
+      .toLowerCase();
+
+  if (
+    /detected\s+[1-9]\d*\s+threat/.test(
+      output,
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /found\s+[1-9]\d*\s+threat/.test(
+      output,
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    output.includes(
+      "malware found",
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    output.includes(
+      "threat detected",
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function cleanSafetyResult(
+  row:
+    ClaimDocumentRow,
+): ClaimDocumentSafetyScanResult {
+  if (
+    row.malware_scan_status !==
+      "clean" ||
+    !row.malware_scanned_at
+  ) {
+    throw new Error(
+      "Document does not contain a completed clean safety result.",
+    );
+  }
+
+  return {
+    document:
+      documentFromRow(
+        row,
+      ),
+
+    malwareScanStatus:
+      "clean",
+
+    scannedAt:
+      row.malware_scanned_at as
+        IsoInstant,
+
+    detail:
+      row.malware_scan_detail ??
+      "Microsoft Defender safety scan completed with no unresolved malware detection.",
+
+    scanner:
+      "microsoft_defender",
+
+    clean:
+      true,
+
+    unsafe:
+      false,
+  };
+}
+
+async function recordScannerFailure(
+  scanningRow:
+    ClaimDocumentRow,
+  detail:
+    string,
+): Promise<
+  ClaimDocumentRow
+> {
+  const scannedAt =
+    new Date()
+      .toISOString();
+
+  return updateDocumentRow(
+    scanningRow,
+    {
+      status:
+        "uploaded",
+
+      malware_scan_status:
+        "rejected",
+
+      malware_scanned_at:
+        scannedAt,
+
+      malware_scan_detail:
+        detail,
+    },
+  );
+}
+
+/* ========================================================================== */
 /* Reads                                                                       */
 /* ========================================================================== */
 
 export async function listClaimDocumentRequests(
-  claimId: string,
-): Promise<DocumentRequest[]> {
+  claimId:
+    string,
+): Promise<
+  DocumentRequest[]
+> {
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claim_document_requests")
-      .select("*")
+      .from(
+        "claim_document_requests",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "claim_id",
         claimId,
@@ -853,27 +1661,39 @@ export async function listClaimDocumentRequests(
       .order(
         "kind",
         {
-          ascending: true,
+          ascending:
+            true,
         },
       );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to list document requests: ${error.message}`,
     );
   }
 
-  return (data ?? []).map((row) =>
-    requestFromRow(
-      row as ClaimDocumentRequestRow,
-    ),
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      requestFromRow(
+        row as
+          ClaimDocumentRequestRow,
+      ),
   );
 }
 
 export async function getClaimDocumentRequest(
-  requestId: string,
+  requestId:
+    string,
 ): Promise<
-  DocumentRequest | undefined
+  DocumentRequest |
+  undefined
 > {
   const row =
     await getRequestRow(
@@ -881,20 +1701,32 @@ export async function getClaimDocumentRequest(
     );
 
   return row
-    ? requestFromRow(row)
+    ? requestFromRow(
+        row,
+      )
     : undefined;
 }
 
 export async function listClaimDocuments(
-  claimId: string,
-): Promise<StoredDocument[]> {
+  claimId:
+    string,
+): Promise<
+  StoredDocument[]
+> {
   const supabase =
     getSupabaseAdmin();
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await supabase
-      .from("claim_documents")
-      .select("*")
+      .from(
+        "claim_documents",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "claim_id",
         claimId,
@@ -902,27 +1734,39 @@ export async function listClaimDocuments(
       .order(
         "uploaded_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to list claim documents: ${error.message}`,
     );
   }
 
-  return (data ?? []).map((row) =>
-    documentFromRow(
-      row as ClaimDocumentRow,
-    ),
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      documentFromRow(
+        row as
+          ClaimDocumentRow,
+      ),
   );
 }
 
 export async function getClaimDocument(
-  documentId: string,
+  documentId:
+    string,
 ): Promise<
-  StoredDocument | undefined
+  StoredDocument |
+  undefined
 > {
   const row =
     await getDocumentRow(
@@ -930,12 +1774,15 @@ export async function getClaimDocument(
     );
 
   return row
-    ? documentFromRow(row)
+    ? documentFromRow(
+        row,
+      )
     : undefined;
 }
 
 export async function claimDocumentAudit(
-  claimId?: string,
+  claimId?:
+    string,
 ): Promise<
   ClaimDocumentAuditEntry[]
 > {
@@ -944,36 +1791,455 @@ export async function claimDocumentAudit(
 
   let query =
     supabase
-      .from("claim_document_audit")
-      .select("*")
+      .from(
+        "claim_document_audit",
+      )
+      .select(
+        "*",
+      )
       .order(
         "occurred_at",
         {
-          ascending: false,
+          ascending:
+            false,
         },
       );
 
-  if (claimId) {
-    query = query.eq(
-      "claim_id",
-      claimId,
-    );
+  if (
+    claimId
+  ) {
+    query =
+      query.eq(
+        "claim_id",
+        claimId,
+      );
   }
 
-  const { data, error } =
+  const {
+    data,
+    error,
+  } =
     await query;
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to read document audit: ${error.message}`,
     );
   }
 
-  return (data ?? []).map((row) =>
-    auditFromRow(
-      row as ClaimDocumentAuditRow,
-    ),
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      auditFromRow(
+        row as
+          ClaimDocumentAuditRow,
+      ),
   );
+}
+
+/* ========================================================================== */
+/* Microsoft Defender safety scan                                              */
+/* ========================================================================== */
+
+export async function runClaimDocumentSafetyScan(
+  documentId:
+    string,
+): Promise<
+  ClaimDocumentSafetyScanResult
+> {
+  const normalizedDocumentId =
+    requireNonEmpty(
+      documentId,
+      "Document ID",
+    );
+
+  const current =
+    await getDocumentRow(
+      normalizedDocumentId,
+    );
+
+  if (
+    !current
+  ) {
+    throw new Error(
+      "Document not found.",
+    );
+  }
+
+  if (
+    current.storage_bucket !==
+    CLAIM_DOCUMENT_STORAGE_BUCKET
+  ) {
+    throw new Error(
+      "Document is stored outside the approved private claim-document bucket.",
+    );
+  }
+
+  if (
+    current.status ===
+      "superseded" ||
+    current.status ===
+      "expired"
+  ) {
+    throw new Error(
+      "This document is no longer eligible for a safety scan.",
+    );
+  }
+
+  if (
+    current.malware_scan_status ===
+      "clean"
+  ) {
+    return cleanSafetyResult(
+      current,
+    );
+  }
+
+  if (
+    current.malware_scan_status ===
+      "unsafe"
+  ) {
+    throw new Error(
+      "This document was previously identified as unsafe and must be replaced.",
+    );
+  }
+
+  const scanningRow =
+    await updateDocumentRow(
+      current,
+      {
+        status:
+          "scanning",
+
+        malware_scan_status:
+          "pending",
+
+        malware_scanned_at:
+          null,
+
+        malware_scan_detail:
+          null,
+      },
+    );
+
+  let temporaryDirectory:
+    string |
+    undefined;
+
+  try {
+    const supabase =
+      getSupabaseAdmin();
+
+    const {
+      data,
+      error,
+    } =
+      await supabase.storage
+        .from(
+          CLAIM_DOCUMENT_STORAGE_BUCKET,
+        )
+        .download(
+          scanningRow.storage_key,
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Private document could not be retrieved for safety scanning: ${error.message}`,
+      );
+    }
+
+    if (
+      !data
+    ) {
+      throw new Error(
+        "Private document could not be retrieved for safety scanning.",
+      );
+    }
+
+    const bytes =
+      new Uint8Array(
+        await data.arrayBuffer(),
+      );
+
+    const expectedByteSize =
+      Number(
+        scanningRow.byte_size,
+      );
+
+    if (
+      !Number.isSafeInteger(
+        expectedByteSize,
+      ) ||
+      expectedByteSize <=
+        0
+    ) {
+      throw new Error(
+        "Document record contains an invalid byte size.",
+      );
+    }
+
+    if (
+      bytes.byteLength !==
+      expectedByteSize
+    ) {
+      throw new Error(
+        "Stored document byte size does not match its database record.",
+      );
+    }
+
+    if (
+      bytes.byteLength >
+      MAX_DOCUMENT_BYTES
+    ) {
+      throw new Error(
+        "Stored document exceeds the approved 15 MB safety limit.",
+      );
+    }
+
+    const defenderExecutable =
+      await findMicrosoftDefenderExecutable();
+
+    temporaryDirectory =
+      await mkdtemp(
+        join(
+          tmpdir(),
+          "duequity-defender-",
+        ),
+      );
+
+    const temporaryFile =
+      join(
+        temporaryDirectory,
+        `document${extensionForMimeType(
+          scanningRow.mime_type,
+        )}`,
+      );
+
+    await writeFile(
+      temporaryFile,
+      bytes,
+      {
+        flag:
+          "wx",
+      },
+    );
+
+    /*
+     * Microsoft Defender custom scan:
+     *
+     * -ScanType 3         = custom scan
+     * -File               = scan only this temporary copy
+     * -DisableRemediation = do not alter the file after detection
+     *
+     * The original claimant document remains private in Supabase Storage.
+     */
+    const result =
+      await runProcess(
+        defenderExecutable,
+        [
+          "-Scan",
+          "-ScanType",
+          "3",
+          "-File",
+          temporaryFile,
+          "-DisableRemediation",
+        ],
+      );
+
+    const scannedAt =
+      new Date()
+        .toISOString() as
+        IsoInstant;
+
+    if (
+      result.timedOut
+    ) {
+      await recordScannerFailure(
+        scanningRow,
+        "Microsoft Defender safety scan timed out before a clean result could be established.",
+      );
+
+      throw new Error(
+        "Microsoft Defender safety scan timed out. The document remains blocked and may be scanned again.",
+      );
+    }
+
+    if (
+      result.exitCode ===
+      0
+    ) {
+      const updated =
+        await updateDocumentRow(
+          scanningRow,
+          {
+            status:
+              "under_review",
+
+            malware_scan_status:
+              "clean",
+
+            malware_scanned_at:
+              scannedAt,
+
+            malware_scan_detail:
+              "Microsoft Defender custom file scan completed with no unresolved malware detection.",
+          },
+        );
+
+      return {
+        document:
+          documentFromRow(
+            updated,
+          ),
+
+        malwareScanStatus:
+          "clean",
+
+        scannedAt,
+
+        detail:
+          "Microsoft Defender custom file scan completed with no unresolved malware detection.",
+
+        scanner:
+          "microsoft_defender",
+
+        clean:
+          true,
+
+        unsafe:
+          false,
+      };
+    }
+
+    if (
+      result.exitCode ===
+        2 &&
+      defenderReportedThreat(
+        result,
+      )
+    ) {
+      const updated =
+        await updateDocumentRow(
+          scanningRow,
+          {
+            status:
+              "rejected",
+
+            malware_scan_status:
+              "unsafe",
+
+            malware_scanned_at:
+              scannedAt,
+
+            malware_scan_detail:
+              "Microsoft Defender reported a threat during the custom document scan. The document is blocked and must be replaced.",
+
+            rejection_reason:
+              "Automated safety scan identified the uploaded file as unsafe. Upload a replacement document.",
+          },
+        );
+
+      return {
+        document:
+          documentFromRow(
+            updated,
+          ),
+
+        malwareScanStatus:
+          "unsafe",
+
+        scannedAt,
+
+        detail:
+          "Microsoft Defender reported a threat during the custom document scan. The document is blocked and must be replaced.",
+
+        scanner:
+          "microsoft_defender",
+
+        clean:
+          false,
+
+        unsafe:
+          true,
+      };
+    }
+
+    const exitCodeText =
+      result.exitCode ===
+        null
+        ? "unknown"
+        : String(
+            result.exitCode,
+          );
+
+    await recordScannerFailure(
+      scanningRow,
+      `Microsoft Defender custom scan did not establish a clean result. Scanner exit code: ${exitCodeText}.`,
+    );
+
+    throw new Error(
+      `Microsoft Defender did not establish a clean safety result. Scanner exit code: ${exitCodeText}. The document remains blocked and may be scanned again.`,
+    );
+  } catch (
+    scanError
+  ) {
+    const latest =
+      await getDocumentRow(
+        scanningRow.id,
+      );
+
+    if (
+      latest &&
+      latest.status ===
+        "scanning" &&
+      latest.malware_scan_status ===
+        "pending"
+    ) {
+      try {
+        await recordScannerFailure(
+          latest,
+          "Microsoft Defender safety scan could not complete. No clean result was recorded.",
+        );
+      } catch {
+        /*
+         * Preserve the original scan error. A later retry or staff refresh can
+         * resolve a concurrent row-version change.
+         */
+      }
+    }
+
+    throw scanError;
+  } finally {
+    if (
+      temporaryDirectory
+    ) {
+      try {
+        await rm(
+          temporaryDirectory,
+          {
+            recursive:
+              true,
+
+            force:
+              true,
+          },
+        );
+      } catch {
+        /*
+         * Temporary cleanup failure must never turn an unsafe or indeterminate
+         * scan into a clean result.
+         */
+      }
+    }
+  }
 }
 
 /* ========================================================================== */
@@ -981,8 +2247,11 @@ export async function claimDocumentAudit(
 /* ========================================================================== */
 
 export async function syncClaimDocumentRequests(
-  input: SyncClaimDocumentRequestsInput,
-): Promise<DocumentRequest[]> {
+  input:
+    SyncClaimDocumentRequestsInput,
+): Promise<
+  DocumentRequest[]
+> {
   const claimId =
     requireNonEmpty(
       input.claimId,
@@ -1013,7 +2282,8 @@ export async function syncClaimDocumentRequests(
     );
 
   for (
-    const kind of requiredKinds
+    const kind of
+    requiredKinds
   ) {
     if (
       isInternalWorkflowDocumentKind(
@@ -1033,49 +2303,79 @@ export async function syncClaimDocumentRequests(
     getSupabaseAdmin();
 
   const {
-    data: requestData,
-    error: requestError,
-  } = await supabase
-    .from("claim_document_requests")
-    .select("*")
-    .eq(
-      "claim_id",
-      claimId,
-    );
+    data:
+      requestData,
+    error:
+      requestError,
+  } =
+    await supabase
+      .from(
+        "claim_document_requests",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "claim_id",
+        claimId,
+      );
 
-  if (requestError) {
+  if (
+    requestError
+  ) {
     throw new Error(
       `Unable to read current document requests: ${requestError.message}`,
     );
   }
 
   const {
-    data: documentData,
-    error: documentError,
-  } = await supabase
-    .from("claim_documents")
-    .select("*")
-    .eq(
-      "claim_id",
-      claimId,
-    );
+    data:
+      documentData,
+    error:
+      documentError,
+  } =
+    await supabase
+      .from(
+        "claim_documents",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "claim_id",
+        claimId,
+      );
 
-  if (documentError) {
+  if (
+    documentError
+  ) {
     throw new Error(
       `Unable to read current claim documents: ${documentError.message}`,
     );
   }
 
   const requests =
-    (requestData ?? []).map(
-      (row) =>
-        row as ClaimDocumentRequestRow,
+    (
+      requestData ??
+      []
+    ).map(
+      (
+        row,
+      ) =>
+        row as
+          ClaimDocumentRequestRow,
     );
 
   const documents =
-    (documentData ?? []).map(
-      (row) =>
-        row as ClaimDocumentRow,
+    (
+      documentData ??
+      []
+    ).map(
+      (
+        row,
+      ) =>
+        row as
+          ClaimDocumentRow,
     );
 
   const requiredKindSet =
@@ -1083,12 +2383,18 @@ export async function syncClaimDocumentRequests(
       requiredKinds,
     );
 
-  let createdCount = 0;
-  let reactivatedCount = 0;
-  let retiredCount = 0;
+  let createdCount =
+    0;
+
+  let reactivatedCount =
+    0;
+
+  let retiredCount =
+    0;
 
   for (
-    const request of requests
+    const request of
+    requests
   ) {
     if (
       !request.required ||
@@ -1107,24 +2413,35 @@ export async function syncClaimDocumentRequests(
       },
     );
 
-    retiredCount += 1;
+    retiredCount +=
+      1;
   }
 
   for (
-    const kind of requiredKinds
+    const kind of
+    requiredKinds
   ) {
     const existing =
       requests.find(
-        (request) =>
-          request.kind === kind,
+        (
+          request,
+        ) =>
+          request.kind ===
+          kind,
       );
 
-    if (existing) {
-      if (!existing.required) {
+    if (
+      existing
+    ) {
+      if (
+        !existing.required
+      ) {
         const acceptedDocument =
           existing.fulfilled_by_document_id
             ? documents.find(
-                (document) =>
+                (
+                  document,
+                ) =>
                   document.id ===
                     existing.fulfilled_by_document_id &&
                   document.kind ===
@@ -1176,15 +2493,20 @@ export async function syncClaimDocumentRequests(
           },
         );
 
-        reactivatedCount += 1;
+        reactivatedCount +=
+          1;
       }
 
       continue;
     }
 
-    const { error } =
+    const {
+      error,
+    } =
       await supabase
-        .from("claim_document_requests")
+        .from(
+          "claim_document_requests",
+        )
         .insert({
           id:
             requestIdFor(
@@ -1235,13 +2557,16 @@ export async function syncClaimDocumentRequests(
             1,
         });
 
-    if (error) {
+    if (
+      error
+    ) {
       throw new Error(
         `Unable to create document request: ${error.message}`,
       );
     }
 
-    createdCount += 1;
+    createdCount +=
+      1;
   }
 
   await appendAudit({
@@ -1256,11 +2581,13 @@ export async function syncClaimDocumentRequests(
 
     detail:
       `${requiredKinds.length} current required document kind${
-        requiredKinds.length === 1
+        requiredKinds.length ===
+        1
           ? ""
           : "s"
       } evaluated. ${createdCount} new request${
-        createdCount === 1
+        createdCount ===
+        1
           ? ""
           : "s"
       } created, ${reactivatedCount} reactivated, ${retiredCount} retired from current filing requirements.`,
@@ -1276,8 +2603,11 @@ export async function syncClaimDocumentRequests(
 /* ========================================================================== */
 
 export async function registerClaimDocumentUpload(
-  input: RegisterClaimDocumentUploadInput,
-): Promise<StoredDocument> {
+  input:
+    RegisterClaimDocumentUploadInput,
+): Promise<
+  StoredDocument
+> {
   const claimId =
     requireNonEmpty(
       input.claimId,
@@ -1322,26 +2652,35 @@ export async function registerClaimDocumentUpload(
     getSupabaseAdmin();
 
   const {
-    data: requestData,
-    error: requestError,
-  } = await supabase
-    .from("claim_document_requests")
-    .select("*")
-    .eq(
-      "claim_id",
-      claimId,
-    )
-    .eq(
-      "kind",
-      input.kind,
-    )
-    .eq(
-      "required",
-      true,
-    )
-    .maybeSingle();
+    data:
+      requestData,
+    error:
+      requestError,
+  } =
+    await supabase
+      .from(
+        "claim_document_requests",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "claim_id",
+        claimId,
+      )
+      .eq(
+        "kind",
+        input.kind,
+      )
+      .eq(
+        "required",
+        true,
+      )
+      .maybeSingle();
 
-  if (requestError) {
+  if (
+    requestError
+  ) {
     throw new Error(
       `Unable to resolve document request: ${requestError.message}`,
     );
@@ -1349,7 +2688,8 @@ export async function registerClaimDocumentUpload(
 
   const request =
     requestData
-      ? (requestData as ClaimDocumentRequestRow)
+      ? requestData as
+          ClaimDocumentRequestRow
       : undefined;
 
   const internalWorkflowDocument =
@@ -1374,93 +2714,100 @@ export async function registerClaimDocumentUpload(
   const {
     data,
     error,
-  } = await supabase
-    .from("claim_documents")
-    .insert({
-      id:
-        documentId,
+  } =
+    await supabase
+      .from(
+        "claim_documents",
+      )
+      .insert({
+        id:
+          documentId,
 
-      claim_id:
-        claimId,
+        claim_id:
+          claimId,
 
-      opportunity_id:
-        null,
+        opportunity_id:
+          null,
 
-      claimant_id:
-        input.claimantId ??
-        null,
+        claimant_id:
+          input.claimantId ??
+          null,
 
-      kind:
-        input.kind,
-
-      title,
-
-      original_file_name:
-        input.originalFileName?.trim() ||
-        null,
-
-      mime_type:
-        mimeType,
-
-      byte_size:
-        byteSize,
-
-      sensitivity:
-        sensitivityForDocumentKind(
+        kind:
           input.kind,
-        ),
 
-      status:
-        "uploaded",
+        title,
 
-      storage_bucket:
-        CLAIM_DOCUMENT_STORAGE_BUCKET,
+        original_file_name:
+          input.originalFileName?.trim() ||
+          null,
 
-      storage_key:
-        storageKey,
+        mime_type:
+          mimeType,
 
-      malware_scan_status:
-        "pending",
+        byte_size:
+          byteSize,
 
-      malware_scanned_at:
-        null,
+        sensitivity:
+          sensitivityForDocumentKind(
+            input.kind,
+          ),
 
-      malware_scan_detail:
-        null,
+        status:
+          "uploaded",
 
-      uploaded_by_user_id:
-        input.uploadedByUserId ??
-        null,
+        storage_bucket:
+          CLAIM_DOCUMENT_STORAGE_BUCKET,
 
-      uploaded_by_claimant_id:
-        input.uploadedByClaimantId ??
-        null,
+        storage_key:
+          storageKey,
 
-      uploaded_at:
-        uploadedAt,
+        malware_scan_status:
+          "pending",
 
-      reviewed_by_user_id:
-        null,
+        malware_scanned_at:
+          null,
 
-      reviewed_at:
-        null,
+        malware_scan_detail:
+          null,
 
-      rejection_reason:
-        null,
+        uploaded_by_user_id:
+          input.uploadedByUserId ??
+          null,
 
-      page_count:
-        null,
+        uploaded_by_claimant_id:
+          input.uploadedByClaimantId ??
+          null,
 
-      expires_at:
-        null,
+        uploaded_at:
+          uploadedAt,
 
-      row_version:
-        1,
-    })
-    .select("*")
-    .single();
+        reviewed_by_user_id:
+          null,
 
-  if (error) {
+        reviewed_at:
+          null,
+
+        rejection_reason:
+          null,
+
+        page_count:
+          null,
+
+        expires_at:
+          null,
+
+        row_version:
+          1,
+      })
+      .select(
+        "*",
+      )
+      .single();
+
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to register document upload: ${error.message}`,
     );
@@ -1468,8 +2815,10 @@ export async function registerClaimDocumentUpload(
 
   if (
     request &&
-    request.status !== "accepted" &&
-    request.status !== "waived"
+    request.status !==
+      "accepted" &&
+    request.status !==
+      "waived"
   ) {
     await updateRequestRow(
       request,
@@ -1509,7 +2858,8 @@ export async function registerClaimDocumentUpload(
   });
 
   return documentFromRow(
-    data as ClaimDocumentRow,
+    data as
+      ClaimDocumentRow,
   );
 }
 
@@ -1518,8 +2868,11 @@ export async function registerClaimDocumentUpload(
 /* ========================================================================== */
 
 export async function reviewClaimDocument(
-  input: ReviewClaimDocumentInput,
-): Promise<StoredDocument> {
+  input:
+    ReviewClaimDocumentInput,
+): Promise<
+  StoredDocument
+> {
   const reviewedAt =
     validateIsoInstant(
       input.reviewedAt,
@@ -1543,7 +2896,9 @@ export async function reviewClaimDocument(
       input.documentId,
     );
 
-  if (!current) {
+  if (
+    !current
+  ) {
     throw new Error(
       "Document not found.",
     );
@@ -1569,7 +2924,7 @@ export async function reviewClaimDocument(
 
   if (
     input.decision ===
-    "accepted" &&
+      "accepted" &&
     current.malware_scan_status !==
       "clean"
   ) {
@@ -1582,26 +2937,35 @@ export async function reviewClaimDocument(
     getSupabaseAdmin();
 
   const {
-    data: requestData,
-    error: requestError,
-  } = await supabase
-    .from("claim_document_requests")
-    .select("*")
-    .eq(
-      "claim_id",
-      current.claim_id,
-    )
-    .eq(
-      "kind",
-      current.kind,
-    )
-    .eq(
-      "required",
-      true,
-    )
-    .maybeSingle();
+    data:
+      requestData,
+    error:
+      requestError,
+  } =
+    await supabase
+      .from(
+        "claim_document_requests",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "claim_id",
+        current.claim_id,
+      )
+      .eq(
+        "kind",
+        current.kind,
+      )
+      .eq(
+        "required",
+        true,
+      )
+      .maybeSingle();
 
-  if (requestError) {
+  if (
+    requestError
+  ) {
     throw new Error(
       `Unable to resolve document request during review: ${requestError.message}`,
     );
@@ -1609,11 +2973,17 @@ export async function reviewClaimDocument(
 
   const request =
     requestData
-      ? (requestData as ClaimDocumentRequestRow)
+      ? requestData as
+          ClaimDocumentRequestRow
       : undefined;
 
   const internalWorkflowDocument =
     isInternalWorkflowDocumentKind(
+      current.kind,
+    );
+
+  const requestSynchronizedByDatabase =
+    databaseSynchronizesDocumentRequest(
       current.kind,
     );
 
@@ -1624,7 +2994,7 @@ export async function reviewClaimDocument(
     const rejectionReason =
       requireNonEmpty(
         input.rejectionReason ??
-          "",
+        "",
         "Rejection reason",
       );
 
@@ -1646,122 +3016,157 @@ export async function reviewClaimDocument(
         },
       );
 
+    /*
+     * Government-ID request state is synchronized by the database trigger that
+     * just observed the document rejection. Do not update the same request
+     * again from the pre-document-update row version.
+     */
     if (
-      request &&
-      request.fulfilled_by_document_id ===
-        current.id
+      !requestSynchronizedByDatabase
     ) {
-      const {
-        data: replacementData,
-        error: replacementError,
-      } = await supabase
-        .from("claim_documents")
-        .select("*")
-        .eq(
-          "claim_id",
-          current.claim_id,
-        )
-        .eq(
-          "kind",
-          current.kind,
-        )
-        .eq(
-          "status",
-          "accepted",
-        )
-        .neq(
-          "id",
-          current.id,
-        )
-        .order(
-          "uploaded_at",
-          {
-            ascending: false,
-          },
-        )
-        .limit(1)
-        .maybeSingle();
+      if (
+        request &&
+        request.fulfilled_by_document_id ===
+          current.id
+      ) {
+        const {
+          data:
+            replacementData,
+          error:
+            replacementError,
+        } =
+          await supabase
+            .from(
+              "claim_documents",
+            )
+            .select(
+              "*",
+            )
+            .eq(
+              "claim_id",
+              current.claim_id,
+            )
+            .eq(
+              "kind",
+              current.kind,
+            )
+            .eq(
+              "status",
+              "accepted",
+            )
+            .neq(
+              "id",
+              current.id,
+            )
+            .order(
+              "uploaded_at",
+              {
+                ascending:
+                  false,
+              },
+            )
+            .limit(
+              1,
+            )
+            .maybeSingle();
 
-      if (replacementError) {
-        throw new Error(
-          `Unable to resolve accepted replacement document: ${replacementError.message}`,
+        if (
+          replacementError
+        ) {
+          throw new Error(
+            `Unable to resolve accepted replacement document: ${replacementError.message}`,
+          );
+        }
+
+        await updateRequestRow(
+          request,
+          {
+            status:
+              replacementData
+                ? "accepted"
+                : "outstanding",
+
+            fulfilled_by_document_id:
+              replacementData
+                ? (
+                    replacementData as
+                      ClaimDocumentRow
+                  ).id
+                : null,
+          },
+        );
+      } else if (
+        request &&
+        request.status !==
+          "waived"
+      ) {
+        const {
+          data:
+            replacementData,
+          error:
+            replacementError,
+        } =
+          await supabase
+            .from(
+              "claim_documents",
+            )
+            .select(
+              "*",
+            )
+            .eq(
+              "claim_id",
+              current.claim_id,
+            )
+            .eq(
+              "kind",
+              current.kind,
+            )
+            .eq(
+              "status",
+              "accepted",
+            )
+            .neq(
+              "id",
+              current.id,
+            )
+            .order(
+              "uploaded_at",
+              {
+                ascending:
+                  false,
+              },
+            )
+            .limit(
+              1,
+            )
+            .maybeSingle();
+
+        if (
+          replacementError
+        ) {
+          throw new Error(
+            `Unable to resolve accepted replacement document: ${replacementError.message}`,
+          );
+        }
+
+        await updateRequestRow(
+          request,
+          {
+            status:
+              replacementData
+                ? "accepted"
+                : "outstanding",
+
+            fulfilled_by_document_id:
+              replacementData
+                ? (
+                    replacementData as
+                      ClaimDocumentRow
+                  ).id
+                : null,
+          },
         );
       }
-
-      await updateRequestRow(
-        request,
-        {
-          status:
-            replacementData
-              ? "accepted"
-              : "outstanding",
-
-          fulfilled_by_document_id:
-            replacementData
-              ? (
-                  replacementData as ClaimDocumentRow
-                ).id
-              : null,
-        },
-      );
-    } else if (
-      request &&
-      request.status !==
-        "waived"
-    ) {
-      const {
-        data: replacementData,
-        error: replacementError,
-      } = await supabase
-        .from("claim_documents")
-        .select("*")
-        .eq(
-          "claim_id",
-          current.claim_id,
-        )
-        .eq(
-          "kind",
-          current.kind,
-        )
-        .eq(
-          "status",
-          "accepted",
-        )
-        .neq(
-          "id",
-          current.id,
-        )
-        .order(
-          "uploaded_at",
-          {
-            ascending: false,
-          },
-        )
-        .limit(1)
-        .maybeSingle();
-
-      if (replacementError) {
-        throw new Error(
-          `Unable to resolve accepted replacement document: ${replacementError.message}`,
-        );
-      }
-
-      await updateRequestRow(
-        request,
-        {
-          status:
-            replacementData
-              ? "accepted"
-              : "outstanding",
-
-          fulfilled_by_document_id:
-            replacementData
-              ? (
-                  replacementData as ClaimDocumentRow
-                ).id
-              : null,
-        },
-      );
     }
 
     await appendAudit({
@@ -1801,39 +3206,51 @@ export async function reviewClaimDocument(
   }
 
   const {
-    data: acceptedRows,
-    error: acceptedError,
-  } = await supabase
-    .from("claim_documents")
-    .select("*")
-    .eq(
-      "claim_id",
-      current.claim_id,
-    )
-    .eq(
-      "kind",
-      current.kind,
-    )
-    .eq(
-      "status",
-      "accepted",
-    )
-    .neq(
-      "id",
-      current.id,
-    );
+    data:
+      acceptedRows,
+    error:
+      acceptedError,
+  } =
+    await supabase
+      .from(
+        "claim_documents",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "claim_id",
+        current.claim_id,
+      )
+      .eq(
+        "kind",
+        current.kind,
+      )
+      .eq(
+        "status",
+        "accepted",
+      )
+      .neq(
+        "id",
+        current.id,
+      );
 
-  if (acceptedError) {
+  if (
+    acceptedError
+  ) {
     throw new Error(
       `Unable to resolve previously accepted documents: ${acceptedError.message}`,
     );
   }
 
   for (
-    const accepted of acceptedRows ?? []
+    const accepted of
+    acceptedRows ??
+    []
   ) {
     await updateDocumentRow(
-      accepted as ClaimDocumentRow,
+      accepted as
+        ClaimDocumentRow,
       {
         status:
           "superseded",
@@ -1841,6 +3258,11 @@ export async function reviewClaimDocument(
     );
   }
 
+  /*
+   * For Government ID, this document update invokes the database identity-sync
+   * trigger. That trigger verifies claimant identity and marks the matching
+   * document request accepted using this exact document ID.
+   */
   const updated =
     await updateDocumentRow(
       current,
@@ -1859,7 +3281,16 @@ export async function reviewClaimDocument(
       },
     );
 
-  if (request) {
+  /*
+   * Non-government document kinds remain application-managed.
+   *
+   * Government ID deliberately skips this second mutation because the database
+   * trigger already performed it and incremented the request row version.
+   */
+  if (
+    request &&
+    !requestSynchronizedByDatabase
+  ) {
     await updateRequestRow(
       request,
       {
@@ -1915,8 +3346,11 @@ export async function reviewClaimDocument(
 /* ========================================================================== */
 
 export async function waiveClaimDocumentRequest(
-  input: WaiveClaimDocumentRequestInput,
-): Promise<DocumentRequest> {
+  input:
+    WaiveClaimDocumentRequestInput,
+): Promise<
+  DocumentRequest
+> {
   const reason =
     requireNonEmpty(
       input.waivedReason,
@@ -1940,7 +3374,9 @@ export async function waiveClaimDocumentRequest(
       input.requestId,
     );
 
-  if (!current) {
+  if (
+    !current
+  ) {
     throw new Error(
       "Document request not found.",
     );
@@ -1989,8 +3425,11 @@ export async function waiveClaimDocumentRequest(
 /* ========================================================================== */
 
 export async function supersedeClaimDocument(
-  input: SupersedeClaimDocumentInput,
-): Promise<StoredDocument> {
+  input:
+    SupersedeClaimDocumentInput,
+): Promise<
+  StoredDocument
+> {
   const occurredAt =
     validateIsoInstant(
       input.occurredAt,
@@ -2008,12 +3447,23 @@ export async function supersedeClaimDocument(
       input.documentId,
     );
 
-  if (!current) {
+  if (
+    !current
+  ) {
     throw new Error(
       "Document not found.",
     );
   }
 
+  const requestSynchronizedByDatabase =
+    databaseSynchronizesDocumentRequest(
+      current.kind,
+    );
+
+  /*
+   * For Government ID, this update may change claimant identity/request state
+   * through the database trigger before application code continues.
+   */
   const updated =
     await updateDocumentRow(
       current,
@@ -2027,46 +3477,18 @@ export async function supersedeClaimDocument(
     getSupabaseAdmin();
 
   const {
-    data: requestData,
-    error: requestError,
-  } = await supabase
-    .from("claim_document_requests")
-    .select("*")
-    .eq(
-      "claim_id",
-      current.claim_id,
-    )
-    .eq(
-      "kind",
-      current.kind,
-    )
-    .eq(
-      "required",
-      true,
-    )
-    .maybeSingle();
-
-  if (requestError) {
-    throw new Error(
-      `Unable to resolve document request during supersede: ${requestError.message}`,
-    );
-  }
-
-  const request =
-    requestData
-      ? (requestData as ClaimDocumentRequestRow)
-      : undefined;
-
-  if (
-    request?.fulfilled_by_document_id ===
-    current.id
-  ) {
-    const {
-      data: replacementData,
-      error: replacementError,
-    } = await supabase
-      .from("claim_documents")
-      .select("*")
+    data:
+      requestData,
+    error:
+      requestError,
+  } =
+    await supabase
+      .from(
+        "claim_document_requests",
+      )
+      .select(
+        "*",
+      )
       .eq(
         "claim_id",
         current.claim_id,
@@ -2076,23 +3498,80 @@ export async function supersedeClaimDocument(
         current.kind,
       )
       .eq(
-        "status",
-        "accepted",
+        "required",
+        true,
       )
-      .neq(
-        "id",
-        current.id,
-      )
-      .order(
-        "uploaded_at",
-        {
-          ascending: false,
-        },
-      )
-      .limit(1)
       .maybeSingle();
 
-    if (replacementError) {
+  if (
+    requestError
+  ) {
+    throw new Error(
+      `Unable to resolve document request during supersede: ${requestError.message}`,
+    );
+  }
+
+  const request =
+    requestData
+      ? requestData as
+          ClaimDocumentRequestRow
+      : undefined;
+
+  /*
+   * Government-ID requests have already been synchronized by the database
+   * trigger. All other request kinds continue to use the existing
+   * application-managed replacement logic.
+   */
+  if (
+    !requestSynchronizedByDatabase &&
+    request
+      ?.fulfilled_by_document_id ===
+      current.id
+  ) {
+    const {
+      data:
+        replacementData,
+      error:
+        replacementError,
+    } =
+      await supabase
+        .from(
+          "claim_documents",
+        )
+        .select(
+          "*",
+        )
+        .eq(
+          "claim_id",
+          current.claim_id,
+        )
+        .eq(
+          "kind",
+          current.kind,
+        )
+        .eq(
+          "status",
+          "accepted",
+        )
+        .neq(
+          "id",
+          current.id,
+        )
+        .order(
+          "uploaded_at",
+          {
+            ascending:
+              false,
+          },
+        )
+        .limit(
+          1,
+        )
+        .maybeSingle();
+
+    if (
+      replacementError
+    ) {
       throw new Error(
         `Unable to resolve replacement document: ${replacementError.message}`,
       );
@@ -2109,7 +3588,8 @@ export async function supersedeClaimDocument(
         fulfilled_by_document_id:
           replacementData
             ? (
-                replacementData as ClaimDocumentRow
+                replacementData as
+                  ClaimDocumentRow
               ).id
             : null,
       },
@@ -2148,8 +3628,11 @@ export async function supersedeClaimDocument(
 /* ========================================================================== */
 
 export async function resolveClaimDocumentReadiness(
-  claimId: string,
-): Promise<ClaimDocumentReadiness> {
+  claimId:
+    string,
+): Promise<
+  ClaimDocumentReadiness
+> {
   const requests =
     await listClaimDocumentRequests(
       claimId,
@@ -2157,18 +3640,23 @@ export async function resolveClaimDocumentReadiness(
 
   const requiredRequests =
     requests.filter(
-      (request) =>
+      (
+        request,
+      ) =>
         request.required,
     );
 
   const acceptedRequiredRequests =
     requiredRequests.filter(
-      (request) =>
+      (
+        request,
+      ) =>
         (
           request.status ===
             "accepted" &&
           Boolean(
-            request.fulfilledByDocumentId,
+            request
+              .fulfilledByDocumentId,
           )
         ) ||
         request.status ===
@@ -2178,14 +3666,18 @@ export async function resolveClaimDocumentReadiness(
   const acceptedIds =
     new Set(
       acceptedRequiredRequests.map(
-        (request) =>
+        (
+          request,
+        ) =>
           request.id,
       ),
     );
 
   const outstandingRequiredRequests =
     requiredRequests.filter(
-      (request) =>
+      (
+        request,
+      ) =>
         !acceptedIds.has(
           request.id,
         ),
@@ -2220,9 +3712,12 @@ export async function resolveClaimDocumentReadiness(
 /* ========================================================================== */
 
 export function documentStatusLabel(
-  status: DocumentStatus,
+  status:
+    DocumentStatus,
 ): string {
-  switch (status) {
+  switch (
+    status
+  ) {
     case "requested":
       return "Requested";
 

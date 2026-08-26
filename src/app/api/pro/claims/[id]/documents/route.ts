@@ -25,6 +25,7 @@ import {
   listClaimDocuments,
   registerClaimDocumentUpload,
   reviewClaimDocument,
+  runClaimDocumentSafetyScan,
   syncClaimDocumentRequests,
 } from "@/server/claim-document-store";
 
@@ -54,7 +55,7 @@ export const dynamic = "force-dynamic";
  *   Uploads a current agency-required document or supported internal document.
  *
  * POST application/json
- *   Performs human document review.
+ *   Runs an authenticated document safety scan or performs human review.
  *
  * Claim-specific document requirements remain subordinate to the approved
  * jurisdiction rule.
@@ -90,6 +91,7 @@ const FILE_EXTENSION_BY_MIME: Record<string, string> = {
 /* ========================================================================== */
 
 type DocumentAction =
+  | "run_safety_scan"
   | "accept_document"
   | "reject_document";
 
@@ -135,6 +137,11 @@ function errorResponse(
     },
     {
       status,
+
+      headers: {
+        "Cache-Control":
+          "no-store",
+      },
     },
   );
 }
@@ -431,7 +438,7 @@ function requireDocumentReview(
   requirePermission(
     session,
     "document.review",
-    "You do not have permission to accept or reject Claim documents.",
+    "You do not have permission to run safety checks or review Claim documents.",
   );
 }
 
@@ -861,6 +868,16 @@ async function documentResponse(
           "document.review",
         ),
 
+      mayRunSafetyScan:
+        can(
+          session,
+          "claim.write",
+        ) &&
+        can(
+          session,
+          "document.review",
+        ),
+
       mayReadRestricted,
     },
 
@@ -1071,6 +1088,12 @@ export async function GET(
         resolved,
         session,
       ),
+      {
+        headers: {
+          "Cache-Control":
+            "no-store",
+        },
+      },
     );
   } catch (error) {
     return routeErrorResponse(
@@ -1353,6 +1376,12 @@ export async function POST(
           refreshed,
           session,
         ),
+        {
+          headers: {
+            "Cache-Control":
+              "no-store",
+          },
+        },
       );
     }
 
@@ -1382,6 +1411,20 @@ export async function POST(
       ) {
         return errorResponse(
           "Document action is required.",
+        );
+      }
+
+      if (
+        body.action !==
+          "run_safety_scan" &&
+        body.action !==
+          "accept_document" &&
+        body.action !==
+          "reject_document"
+      ) {
+        return errorResponse(
+          "Unsupported document action.",
+          400,
         );
       }
 
@@ -1432,7 +1475,7 @@ export async function POST(
         )
       ) {
         throw new DocumentRouteError(
-          "You do not have permission to review restricted Claim documents.",
+          "You do not have permission to process restricted Claim documents.",
           403,
         );
       }
@@ -1450,13 +1493,11 @@ export async function POST(
         );
 
       if (
-        body.action ===
-          "accept_document" &&
         !internalWorkflowDocument &&
         !currentAgencyKind
       ) {
         return errorResponse(
-          "This document kind is not a current filing requirement for this Claim.",
+          "This document kind is not part of the current Claim document workflow.",
           409,
         );
       }
@@ -1467,9 +1508,49 @@ export async function POST(
         requirePermission(
           session,
           "fee_agreement.write",
-          "You do not have permission to approve or reject Duequity service-agreement evidence.",
+          "You do not have permission to process Duequity service-agreement evidence.",
         );
-      } else {
+      }
+
+      /* ==================================================================== */
+      /* Automated safety scan                                                */
+      /* ==================================================================== */
+
+      if (
+        body.action ===
+        "run_safety_scan"
+      ) {
+        await runClaimDocumentSafetyScan(
+          documentId,
+        );
+
+        const refreshed =
+          await resolveDocumentContext(
+            resolved.claim.id,
+            session,
+          );
+
+        return NextResponse.json(
+          await documentResponse(
+            refreshed,
+            session,
+          ),
+          {
+            headers: {
+              "Cache-Control":
+                "no-store",
+            },
+          },
+        );
+      }
+
+      /* ==================================================================== */
+      /* Human review                                                         */
+      /* ==================================================================== */
+
+      if (
+        !internalWorkflowDocument
+      ) {
         await reconcileCurrentAgencyRequests(
           resolved,
         );
@@ -1519,10 +1600,6 @@ export async function POST(
           actorUserId:
             resolved.actorUserId,
         });
-      } else {
-        return errorResponse(
-          "Unsupported document action.",
-        );
       }
 
       const refreshed =
@@ -1536,11 +1613,17 @@ export async function POST(
           refreshed,
           session,
         ),
+        {
+          headers: {
+            "Cache-Control":
+              "no-store",
+          },
+        },
       );
     }
 
     return errorResponse(
-      "Request must use multipart/form-data for an upload or application/json for document review.",
+      "Request must use multipart/form-data for an upload or application/json for a document safety or review action.",
       415,
     );
   } catch (error) {

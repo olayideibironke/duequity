@@ -97,6 +97,20 @@ const NAV:
 
     {
       href:
+        "/portal/agreements",
+
+      label:
+        "Agreements",
+
+      mobileLabel:
+        "Agreements",
+
+      icon:
+        IconDocument,
+    },
+
+    {
+      href:
         "/portal/documents",
 
       label:

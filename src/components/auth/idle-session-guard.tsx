@@ -117,9 +117,13 @@ export function IdleSessionGuard() {
         aria-modal="true"
         aria-labelledby="idle-session-title"
         aria-describedby="idle-session-description"
-        className="w-full max-w-[460px] rounded-lg border border-line bg-paper shadow-xl"
+        className="rounded-xl border border-line bg-paper shadow-xl"
+        style={{
+          width: "100%",
+          maxWidth: "560px",
+        }}
       >
-        <div className="px-5 py-5 sm:px-6">
+        <div className="px-5 py-5 sm:px-6 sm:py-6">
           <p className="eyebrow text-accent-700">
             Session security
           </p>

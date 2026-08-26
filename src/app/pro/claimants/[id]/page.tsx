@@ -42,6 +42,10 @@ import {
 } from "@/components/ui/timeline";
 
 import {
+  ClaimantAgreementPanel,
+} from "@/components/pro/claimant-agreement-panel";
+
+import {
   formatDate,
   formatPhone,
   plural,
@@ -1083,6 +1087,12 @@ export default async function ProClaimantDetailPage({
               )}
             </CardBody>
           </Card>
+
+          <ClaimantAgreementPanel
+            claimantId={
+              claimant.id
+            }
+          />
 
           {audit.length >
             0 && (
