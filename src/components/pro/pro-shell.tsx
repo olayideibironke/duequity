@@ -201,6 +201,13 @@ export function ProShell({
       "/pro/mail/",
     );
 
+  const contactWorkspace =
+    pathname ===
+      "/pro/contact" ||
+    pathname.startsWith(
+      "/pro/contact/",
+    );
+
   const claimantMessageWorkspace =
     pathname ===
       "/pro/claimants/messages";
@@ -208,6 +215,14 @@ export function ProShell({
   const homeHref =
     staffLandingPath(
       operator.role,
+    );
+
+  const canUseStaffMail =
+    canAccessProPath(
+      operator.role,
+      operator.permissions,
+      "/pro/mail",
+      operator.email,
     );
 
   useEffect(
@@ -242,6 +257,12 @@ export function ProShell({
 
   useEffect(
     () => {
+      if (
+        !canUseStaffMail
+      ) {
+        return;
+      }
+
       let cancelled =
         false;
 
@@ -327,7 +348,9 @@ export function ProShell({
         );
       };
     },
-    [],
+    [
+      canUseStaffMail,
+    ],
   );
 
   const baseGroups:
@@ -408,6 +431,17 @@ export function ProShell({
         "Work",
 
       items: [
+        {
+          href:
+            "/pro/contact",
+
+          label:
+            "Contact Inbox",
+
+          icon:
+            IconMail,
+        },
+
         {
           href:
             "/pro/mail",
@@ -1018,7 +1052,10 @@ export function ProShell({
           </div>
 
           <p className="mt-2 text-2xs text-ink-600">
-            National work access
+            {operator.role ===
+            "communications_specialist"
+              ? "Public communications access"
+              : "National work access"}
           </p>
 
           <Link
@@ -1077,6 +1114,16 @@ export function ProShell({
             <StaffMailHeaderSearch />
           ) : claimantMessageWorkspace ? (
             <ClaimantMessageHeaderSearch />
+          ) : contactWorkspace ? (
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-ink-900">
+                Contact Inbox
+              </p>
+
+              <p className="truncate text-xs text-ink-500">
+                Public DueQuity inquiries
+              </p>
+            </div>
           ) : (
             <ProSearch />
           )}

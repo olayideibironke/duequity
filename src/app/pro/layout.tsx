@@ -67,6 +67,61 @@ export default async function ProLayout({
     );
   }
 
+  /*
+   * Public communications is an isolated staff lane.
+   *
+   * Communications Specialists do not query operational workload, claimant
+   * records or internal DueQuity Mail merely by loading the Pro shell.
+   */
+  if (
+    session.user.role ===
+    "communications_specialist"
+  ) {
+    return (
+      <ProShell
+        operator={{
+          name:
+            session.user.name,
+
+          email:
+            session.user.email,
+
+          title:
+            session.user.title,
+
+          role:
+            session.user.role,
+
+          permissions:
+            session.permissions,
+        }}
+        counts={{
+          opportunities:
+            0,
+
+          claims:
+            0,
+
+          tasksOverdue:
+            0,
+
+          documentsOutstanding:
+            0,
+
+          complianceBlocked:
+            0,
+
+          mailUnread:
+            0,
+        }}
+      >
+        <IdleSessionGuard />
+
+        {children}
+      </ProShell>
+    );
+  }
+
   const [
     workload,
     mailCounts,

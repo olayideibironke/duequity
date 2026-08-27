@@ -1,10 +1,14 @@
-import type { Metadata } from "next";
+import type {
+  Metadata,
+} from "next";
+
 import {
   Container,
   Prose,
   Section,
   SectionIntro,
 } from "@/components/public/section";
+
 import {
   Card,
   CardBody,
@@ -13,161 +17,472 @@ import {
   DataItem,
   DataList,
 } from "@/components/ui/surface";
-import { TextLink } from "@/components/ui/button";
 
-export const metadata: Metadata = {
-  title: "Contact",
+import {
+  TextLink,
+} from "@/components/ui/button";
+
+import {
+  DUEQUITY_CONTACT_EMAIL,
+  DUEQUITY_CONTACT_PHONE,
+} from "@/server/contact-email-transport";
+
+import {
+  submitPublicContactInquiry,
+} from "./actions";
+
+export const metadata:
+  Metadata = {
+  title:
+    "Contact",
+
   description:
-    "Contact Duequity. Speak to a recovery specialist, verify a contact you received, or reach our compliance and security teams.",
+    "Contact DueQuity with a general inquiry, surplus recovery question, business inquiry, or request to verify a DueQuity contact.",
 };
 
-/**
- * CONTACT
- *
- * This page publishes contact channels rather than presenting a web form.
- *
- * WHY THERE IS NO FORM
- *
- * There is no message transport configured. The form that previously stood here
- * validated a name, an email address, a phone number and a free-text message, then
- * displayed a confirmation without transmitting or storing anything.
- *
- * That is not an acceptable state for a contact surface. Someone writing to a
- * surplus-recovery company may be describing a bereavement, a foreclosure, or a
- * message they suspect is a scam. Collecting that and discarding it, behind a
- * confirmation that says the message is ready to send, is worse than offering no
- * form: the sender waits for a reply that cannot come.
- *
- * A direct address is honest, works today, and gives the sender a record of what
- * they sent. When a message transport is configured, a form can return here.
- */
-export default function ContactPage() {
+interface ContactPageProps {
+  searchParams:
+    Promise<{
+      status?: string;
+    }>;
+}
+
+export default async function ContactPage({
+  searchParams,
+}: ContactPageProps) {
+  const params =
+    await searchParams;
+
+  const submitted =
+    params.status ===
+    "sent";
+
   return (
     <>
-      <Section tone="ink" size="sm">
+      <Section
+        tone="ink"
+        size="sm"
+      >
         <Container>
-          <p className="eyebrow text-accent-300">Contact</p>
+          <p className="eyebrow text-accent-300">
+            Contact
+          </p>
+
           <h1 className="mt-3 max-w-3xl text-3xl text-white sm:text-4xl">
-            Speak to a specialist
+            {submitted
+              ? "Thank you for contacting DueQuity"
+              : "Speak to DueQuity"}
           </h1>
+
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-ink-300">
-            You do not need to know whether you have a claim before you contact
-            us. If you received something from us and want to check that it is
-            genuine, that is a good reason to write as well.
+            {submitted
+              ? "Your inquiry has been received by our team."
+              : "Ask a question about surplus recovery, verify a DueQuity contact, or send us a general inquiry."}
           </p>
         </Container>
       </Section>
 
-      <Section tone="paper" size="md">
+      <Section
+        tone="paper"
+        size="md"
+      >
         <Container>
-          <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-16">
-            <div className="min-w-0">
-              <SectionIntro
-                eyebrow="How to reach us"
-                title="Write to the address that matches your reason"
-                lede="Email reaches a person. There is deliberately no web form on this page, because a form that cannot deliver your message is worse than no form at all."
-              />
-
-              <Card className="mt-7">
+          {submitted ? (
+            <div className="mx-auto max-w-3xl">
+              <Card>
                 <CardBody>
-                  <Prose>
-                    <p>
-                      Include the property address, the county, and a case or
-                      list reference if you have one. Those three things let us
-                      find the public record you are asking about.
+                  <div className="py-6 text-center sm:py-10">
+                    <p className="eyebrow text-accent-700">
+                      Inquiry received
                     </p>
 
-                    <p>
-                      <strong>Please do not send</strong> a Social Security
-                      number, bank details, or images of identity documents in a
-                      first message. We do not need any of them to answer a
-                      question, and email is the wrong channel for them. If
-                      anyone asks you for them by email while claiming to be
-                      Duequity, that request did not come from us.
+                    <h2 className="mt-3 font-serif text-3xl font-semibold text-ink-950 sm:text-4xl">
+                      Thank you for reaching out.
+                    </h2>
+
+                    <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-ink-600">
+                      Your inquiry has been successfully submitted to DueQuity.
+                      A member of our staff will review your message and reach
+                      out to you shortly using the contact information you
+                      provided.
                     </p>
 
-                    <p>
-                      We answer as a small team. If your message concerns a
-                      statutory deadline, say so in the subject line.
+                    <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-ink-500">
+                      Please do not submit another message about the same inquiry
+                      unless you need to provide important additional
+                      information.
                     </p>
-                  </Prose>
+
+                    <div className="mt-8 flex justify-center">
+                      <a
+                        href="/"
+                        className="rounded-xl bg-ink-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                      >
+                        Return to Home Page
+                      </a>
+                    </div>
+                  </div>
                 </CardBody>
               </Card>
 
               <Callout
                 tone="neutral"
                 className="mt-6"
-                title="You can always claim directly, for free"
+                title="Need immediate claimant support?"
               >
                 <p>
-                  Whatever you write to us about, you may pursue a surplus claim
-                  yourself, directly with the agency holding the funds, at no
-                  cost and without involving Duequity. See{" "}
-                  <TextLink href="/fees">how fees work</TextLink> for how to do
-                  that, including the steps and who to ask.
+                  You can also reach DueQuity by phone at{" "}
+                  <a
+                    href="tel:+18886692551"
+                    className="font-semibold underline"
+                  >
+                    {DUEQUITY_CONTACT_PHONE}
+                  </a>
+                  .
                 </p>
               </Callout>
             </div>
+          ) : (
+            <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-16">
+              <div className="min-w-0">
+                <SectionIntro
+                  eyebrow="Send us a message"
+                  title="How can we help?"
+                  lede="Use the form below for ordinary questions and public inquiries. Please do not submit sensitive identity or financial information."
+                />
 
-            <aside className="min-w-0 space-y-6">
-              <Card>
-                <CardHeader title="Direct contact" />
-                <CardBody>
-                  <DataList>
-                    <DataItem label="General enquiries">
-                      <span className="font-mono text-sm">
-                        hello@duequity.com
-                      </span>
-                    </DataItem>
-                    <DataItem label="Existing claimants">
-                      <span className="font-mono text-sm">
-                        support@duequity.com
-                      </span>
-                    </DataItem>
-                    <DataItem label="Report a suspicious contact">
-                      <span className="font-mono text-sm">
-                        security@duequity.com
-                      </span>
-                    </DataItem>
-                    <DataItem label="Compliance and legal">
-                      <span className="font-mono text-sm">
-                        compliance@duequity.com
-                      </span>
-                    </DataItem>
-                    <DataItem label="Attorney network">
-                      <span className="font-mono text-sm">
-                        counsel@duequity.com
-                      </span>
-                    </DataItem>
-                  </DataList>
-                </CardBody>
-              </Card>
+                {params.status ===
+                "invalid" ? (
+                  <Callout
+                    tone="critical"
+                    className="mt-6"
+                    role="alert"
+                    title="Check your message"
+                  >
+                    <p>
+                      Please complete all required fields and enter a valid
+                      email address.
+                    </p>
+                  </Callout>
+                ) : null}
 
-              <Callout tone="caution" title="Verify before you share">
-                <p>
-                  If you received a letter, email or call claiming to be
-                  Duequity, verify it before sharing anything. Enter the code
-                  from the message at{" "}
-                  <TextLink href="/verify">duequity.com/verify</TextLink>, or
-                  write to us at the address above rather than replying to the
-                  message.
-                </p>
-              </Callout>
+                {params.status ===
+                "rate-limited" ? (
+                  <Callout
+                    tone="caution"
+                    className="mt-6"
+                    role="alert"
+                    title="Please wait before sending another message"
+                  >
+                    <p>
+                      Several recent inquiries were submitted using this email
+                      address. Please wait before trying again.
+                    </p>
+                  </Callout>
+                ) : null}
 
-              <Card inset>
-                <CardBody>
-                  <p className="eyebrow text-ink-500">
-                    Westforge Holdings Inc.
+                {params.status ===
+                "unavailable" ? (
+                  <Callout
+                    tone="critical"
+                    className="mt-6"
+                    role="alert"
+                    title="Message could not be submitted"
+                  >
+                    <p>
+                      Please try again later or email DueQuity directly at{" "}
+                      <a
+                        href={`mailto:${DUEQUITY_CONTACT_EMAIL}`}
+                        className="font-medium underline"
+                      >
+                        {DUEQUITY_CONTACT_EMAIL}
+                      </a>
+                      .
+                    </p>
+                  </Callout>
+                ) : null}
+
+                <Card className="mt-7">
+                  <CardHeader
+                    title="Contact form"
+                    description="Required fields must be completed before your message can be submitted."
+                  />
+
+                  <CardBody>
+                    <form
+                      action={
+                        submitPublicContactInquiry
+                      }
+                      className="space-y-5"
+                    >
+                      <div
+                        aria-hidden="true"
+                        className="absolute -left-[10000px] top-auto h-px w-px overflow-hidden"
+                      >
+                        <label htmlFor="website">
+                          Website
+                        </label>
+
+                        <input
+                          id="website"
+                          name="website"
+                          type="text"
+                          tabIndex={-1}
+                          autoComplete="off"
+                        />
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label
+                            htmlFor="name"
+                            className="block text-sm font-medium text-ink-800"
+                          >
+                            Full name
+                          </label>
+
+                          <input
+                            id="name"
+                            name="name"
+                            type="text"
+                            autoComplete="name"
+                            maxLength={120}
+                            required
+                            className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label
+                            htmlFor="email"
+                            className="block text-sm font-medium text-ink-800"
+                          >
+                            Email
+                          </label>
+
+                          <input
+                            id="email"
+                            name="email"
+                            type="email"
+                            autoComplete="email"
+                            maxLength={254}
+                            required
+                            className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label
+                            htmlFor="phone"
+                            className="block text-sm font-medium text-ink-800"
+                          >
+                            Phone{" "}
+                            <span className="font-normal text-ink-500">
+                              optional
+                            </span>
+                          </label>
+
+                          <input
+                            id="phone"
+                            name="phone"
+                            type="tel"
+                            autoComplete="tel"
+                            maxLength={40}
+                            className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label
+                            htmlFor="category"
+                            className="block text-sm font-medium text-ink-800"
+                          >
+                            Inquiry type
+                          </label>
+
+                          <select
+                            id="category"
+                            name="category"
+                            defaultValue="general"
+                            required
+                            className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                          >
+                            <option value="general">
+                              General inquiry
+                            </option>
+
+                            <option value="claim_question">
+                              Surplus recovery question
+                            </option>
+
+                            <option value="partnership">
+                              Partnership or business
+                            </option>
+
+                            <option value="media">
+                              Media
+                            </option>
+
+                            <option value="other">
+                              Other
+                            </option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="subject"
+                          className="block text-sm font-medium text-ink-800"
+                        >
+                          Subject
+                        </label>
+
+                        <input
+                          id="subject"
+                          name="subject"
+                          type="text"
+                          maxLength={200}
+                          required
+                          className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label
+                          htmlFor="message"
+                          className="block text-sm font-medium text-ink-800"
+                        >
+                          Message
+                        </label>
+
+                        <textarea
+                          id="message"
+                          name="message"
+                          rows={8}
+                          maxLength={10000}
+                          required
+                          className="w-full resize-y rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm leading-6 text-ink-900 outline-none transition focus:border-ink-500"
+                        />
+                      </div>
+
+                      <Callout
+                        tone="neutral"
+                        title="Protect your information"
+                      >
+                        <p>
+                          Do not submit Social Security numbers, bank account
+                          information, passwords, full government identification
+                          numbers, or images of identity documents through this
+                          public form.
+                        </p>
+                      </Callout>
+
+                      <p className="text-xs leading-relaxed text-ink-500">
+                        Submitting this form does not create a claim, establish
+                        entitlement to funds, or create an attorney-client
+                        relationship.
+                      </p>
+
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          className="rounded-xl bg-ink-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                        >
+                          Send message
+                        </button>
+                      </div>
+                    </form>
+                  </CardBody>
+                </Card>
+
+                <Callout
+                  tone="neutral"
+                  className="mt-6"
+                  title="You can always claim directly"
+                >
+                  <p>
+                    You may pursue surplus funds yourself directly with the
+                    government agency or court holding the funds without using
+                    DueQuity. See{" "}
+                    <TextLink href="/fees">
+                      how fees work
+                    </TextLink>{" "}
+                    for more information.
                   </p>
-                  <p className="mt-2 text-sm leading-relaxed text-ink-600">
-                    Duequity is a product of Westforge Holdings Inc.
-                    Correspondence regarding the company should be directed to
-                    the compliance address above.
+                </Callout>
+              </div>
+
+              <aside className="min-w-0 space-y-6">
+                <Card>
+                  <CardHeader title="Contact DueQuity" />
+
+                  <CardBody>
+                    <DataList>
+                      <DataItem label="Email">
+                        <a
+                          href={`mailto:${DUEQUITY_CONTACT_EMAIL}`}
+                          className="font-mono text-sm hover:underline"
+                        >
+                          {DUEQUITY_CONTACT_EMAIL}
+                        </a>
+                      </DataItem>
+
+                      <DataItem label="Phone">
+                        <a
+                          href="tel:+18886692551"
+                          className="font-mono text-sm hover:underline"
+                        >
+                          {DUEQUITY_CONTACT_PHONE}
+                        </a>
+                      </DataItem>
+                    </DataList>
+                  </CardBody>
+                </Card>
+
+                <Callout
+                  tone="caution"
+                  title="Verify before you share"
+                >
+                  <p>
+                    If you received a letter, email, or call claiming to be
+                    DueQuity, verify it before sharing sensitive information.
+                    Enter the code from the communication at{" "}
+                    <TextLink href="/verify">
+                      duequity.com/verify
+                    </TextLink>
+                    , or contact us directly at{" "}
+                    <a
+                      href={`mailto:${DUEQUITY_CONTACT_EMAIL}`}
+                      className="font-medium underline"
+                    >
+                      {DUEQUITY_CONTACT_EMAIL}
+                    </a>
+                    .
                   </p>
-                </CardBody>
-              </Card>
-            </aside>
-          </div>
+                </Callout>
+
+                <Card inset>
+                  <CardBody>
+                    <p className="eyebrow text-ink-500">
+                      Westforge Holdings Inc.
+                    </p>
+
+                    <Prose>
+                      <p>
+                        DueQuity is a product of Westforge Holdings Inc.
+                      </p>
+
+                      <p>
+                        DueQuity is not a law firm and does not provide legal
+                        advice.
+                      </p>
+                    </Prose>
+                  </CardBody>
+                </Card>
+              </aside>
+            </div>
+          )}
         </Container>
       </Section>
     </>

@@ -105,19 +105,33 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "attorney.refer",
   ],
 
+  communications_specialist: [
+    "contact.read",
+    "contact.reply",
+    "contact.manage",
+  ],
+
   administrator: [
     "opportunity.read",
     "opportunity.write",
+    "opportunity.disqualify",
     "claim.read",
     "claim.write",
+    "claim.submit",
+    "claim.close",
     "claimant.read",
     "claimant.write",
+    "claimant.read_sensitive",
     "document.read",
+    "document.read_restricted",
     "document.review",
     "jurisdiction.read",
     "jurisdiction.write",
+    "fee_agreement.write",
     "attorney.read",
+    "attorney.refer",
     "recovery.read",
+    "recovery.write",
     "report.read",
     "audit.read",
     "user.manage",
@@ -152,6 +166,14 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "recovery.approve",
     "report.read",
     "audit.read",
+
+    /*
+     * Owner emergency oversight is intentionally read-only for public
+     * inquiries. Operational replies and workflow management belong to the
+     * Communications Specialist account.
+     */
+    "contact.read",
+
     "user.manage",
     "settings.manage",
   ],
@@ -164,6 +186,7 @@ const USER_ROLES: UserRole[] = [
   "compliance_officer",
   "claims_manager",
   "attorney_liaison",
+  "communications_specialist",
   "administrator",
   "super_admin",
 ];
@@ -303,13 +326,6 @@ function localDevelopmentStaffUser(): StaffUser {
 /* Local development staff session                                             */
 /* ========================================================================== */
 
-/**
- * Development-only compatibility session.
- *
- * Production staff authentication is resolved by the server-side Supabase auth
- * adapter. Existing call sites stay operational during the controlled migration
- * because this function remains unchanged for `next dev`.
- */
 export function tryGetStaffSession(): StaffSession | null {
   if (
     !localDevelopmentSessionAdapterActive()
@@ -382,10 +398,6 @@ export function clearedForState(
 /* Claimant local development session                                          */
 /* ========================================================================== */
 
-/**
- * Claimant production authentication remains a separate audience and will be
- * connected after staff authentication is complete.
- */
 export function tryGetClaimantSession(): ClaimantSession | null {
   if (
     !localDevelopmentSessionAdapterActive()

@@ -10,7 +10,10 @@ import type {
  *
  * Role + permissions determine ordinary workspace access.
  *
- * DueQuity Mail is available to every authenticated operational staff role.
+ * DueQuity Mail is available to authenticated operational staff roles.
+ *
+ * Public Contact is intentionally separate from internal DueQuity Mail.
+ * Communications Specialists receive only the public-inquiry workspace.
  *
  * Discovered Records is intentionally different:
  *
@@ -48,6 +51,18 @@ const PRO_ROUTE_RULES: readonly ProRouteRule[] = [
 
     roles: [
       "super_admin",
+    ],
+  },
+
+  {
+    path:
+      "/pro/contact",
+
+    permission:
+      "contact.read",
+
+    roles: [
+      "communications_specialist",
     ],
   },
 
@@ -440,6 +455,9 @@ export function staffLandingPath(
     case "attorney_liaison":
       return "/pro/attorneys";
 
+    case "communications_specialist":
+      return "/pro/contact";
+
     case "administrator":
       return "/pro/manager";
 
@@ -481,6 +499,10 @@ export function canAccessProPath(
     );
   }
 
+  /*
+   * Super Admin retains emergency oversight of every ordinary controlled
+   * workspace, including public inquiries.
+   */
   if (
     role ===
     "super_admin"

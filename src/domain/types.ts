@@ -272,12 +272,6 @@ export interface PriorOwner {
 /* Jurisdiction and compliance                                                 */
 /* ========================================================================== */
 
-/**
- * Operational clearance for a jurisdiction.
- *
- * Duequity may not accept a claimant in a jurisdiction that has not been
- * cleared. The platform enforces this rather than relying upon staff memory.
- */
 export type ComplianceStatus =
   | "research_required"
   | "under_legal_review"
@@ -286,7 +280,6 @@ export type ComplianceStatus =
   | "restricted"
   | "paused";
 
-/** Fee models a jurisdiction may permit. */
 export type FeeModel = "flat" | "percentage" | "capped_success" | "no_fee";
 
 export type ClaimSubmissionMethod =
@@ -297,69 +290,37 @@ export type ClaimSubmissionMethod =
   | "court_filing"
   | "attorney_filing";
 
-/**
- * The jurisdiction rule record.
- *
- * Every field here exists because it can change whether, how, and at what price
- * Duequity may act.
- */
 export interface Jurisdiction {
   id: string;
   state: StateCode;
   stateName: string;
-  /** Null for a statewide rule such as an unclaimed property office. */
   county?: string;
-  /** The agency that receives and adjudicates the claim. */
   agencyName: string;
   custodian: SurplusCustodian;
   agencyWebsite?: string;
   agencyPhone?: string;
   agencyAddress?: Omit<Address, "id" | "county">;
-
   claimMethod: ClaimSubmissionMethod;
   claimFormUrl?: string;
-  /** Documents this agency requires, by DocumentKind. */
   requiredDocuments: DocumentKind[];
-
-  /** Statutory window to claim, counted in days from the sale date. */
   claimDeadlineDays?: number;
-  /** Controlling statute, rule, order or published agency procedure. */
   statuteReference?: string;
-
-  /* ---- fee and licensing rules ---- */
   permittedFeeModels: FeeModel[];
-  /** Recorded legal ceiling on a percentage fee, expressed 0 to 1. */
   feeCapPercent?: number;
-  /** Recorded legal ceiling on a fee amount. */
   feeCapAmount?: Cents;
-  /** Whether a surplus claim may be assigned or purchased. */
   assignmentPermitted: boolean;
-  /** Whether a power of attorney is accepted for claim submission. */
   powerOfAttorneyAccepted: boolean;
   finderLicenseRequired: boolean;
   bondRequired: boolean;
   attorneyRequired: boolean;
-  /** Contract language the jurisdiction mandates verbatim. */
   mandatoryContractLanguage?: string[];
-  /** Recorded cancellation window in days. */
   cancellationPeriodDays?: number;
-  /** How the agency issues payment. */
   paymentRoutingNote?: string;
-  /** Whether an opened estate is required when the owner is deceased. */
   probateRequiredWhenDeceased: boolean;
-
   complianceStatus: ComplianceStatus;
   lastLegalReview?: IsoDate;
   reviewedBy?: string;
   internalNotes?: string;
-
-  /**
-   * Optional governance metadata for production legal review.
-   *
-   * Legacy local-validation records may omit these fields. Production records must retain
-   * authoritative sources and version information so later rule changes can be
-   * distinguished from the rules in effect when an agreement was signed.
-   */
   legalRuleVersion?: number;
   legalRuleEffectiveFrom?: IsoDate;
   legalRuleEffectiveThrough?: IsoDate;
@@ -367,17 +328,6 @@ export interface Jurisdiction {
   legalSourceUrls?: string[];
   legalApprovedByUserId?: string;
   legalApprovedAt?: IsoInstant;
-
-  /**
-   * How this jurisdiction treats administrative assistance.
-   *
-   * Distinct from complianceStatus, which answers whether Duequity may operate
-   * here at all. This answers what an attorney must do when Duequity does operate
-   * here.
-   *
-   * Optional. Where absent it is inferred from complianceStatus and
-   * attorneyRequired by jurisdictionLegalRule() in src/domain/legal.ts.
-   */
   legalProcessingRule?: import("./legal").LegalProcessingRule;
 }
 
@@ -385,30 +335,11 @@ export interface Jurisdiction {
 /* Commercial pricing policy                                                   */
 /* ========================================================================== */
 
-/**
- * Commercial pricing is intentionally separate from jurisdiction compliance.
- *
- * Jurisdiction records define what may legally be charged.
- * Commercial fee policies define what Duequity chooses to charge.
- *
- * A commercial policy must always remain inside the recorded legal ceiling.
- */
 export type CommercialFeePolicyStatus =
   "draft" | "approved" | "paused" | "retired";
 
-/**
- * Why a commercial quote is being calculated.
- *
- * Estimated recovery may be used for internal viability analysis before agency
- * confirmation. A confirmed recovery is preferred before a claimant is quoted.
- */
 export type FeeQuoteRecoveryBasis = "estimated" | "confirmed";
 
-/**
- * Commercial viability outcome.
- *
- * This is an internal business decision, never a legal determination.
- */
 export type CommercialViabilityStatus =
   | "not_evaluated"
   | "viable"
@@ -416,9 +347,6 @@ export type CommercialViabilityStatus =
   | "below_minimum_revenue"
   | "declined";
 
-/**
- * Approval state for a case-specific commercial fee quote.
- */
 export type FeeQuoteApprovalStatus =
   | "draft"
   | "staff_approved"
@@ -427,226 +355,78 @@ export type FeeQuoteApprovalStatus =
   | "rejected"
   | "locked";
 
-/**
- * One recovery-value band inside a Duequity commercial fee policy.
- *
- * Bands allow Duequity to charge a lower percentage on larger recoveries rather
- * than applying one nationwide percentage regardless of case value.
- */
 export interface CommercialFeeTier {
   id: string;
   label: string;
-
-  /** Inclusive lower bound for the recovery amount. */
   minimumRecovery: Cents;
-
-  /** Inclusive upper bound. Omit for the highest open-ended band. */
   maximumRecovery?: Cents;
-
-  /** Commercial model Duequity intends to use within this band. */
   model: FeeModel;
-
-  /**
-   * Default percentage offered by Duequity, expressed 0 to 1.
-   * Used by percentage and capped-success models.
-   */
   defaultPercentage?: number;
-
-  /**
-   * Lowest percentage ordinary staff may quote without manager approval.
-   * This is a commercial floor, not a legal floor.
-   */
   staffFloorPercentage?: number;
-
-  /**
-   * Highest percentage ordinary staff may quote.
-   * Must never exceed the jurisdiction legal ceiling.
-   */
   staffCeilingPercentage?: number;
-
-  /**
-   * Highest percentage a manager may approve as an exception.
-   * Must never exceed the jurisdiction legal ceiling.
-   */
   managerExceptionCeilingPercentage?: number;
-
-  /** Default flat amount for flat-fee models. */
   defaultFlatAmount?: Cents;
-
-  /** Lowest flat fee ordinary staff may quote. */
   staffFloorAmount?: Cents;
-
-  /** Highest flat fee ordinary staff may quote. */
   staffCeilingAmount?: Cents;
-
-  /** Highest flat fee a manager may approve as an exception. */
   managerExceptionCeilingAmount?: Cents;
-
-  /**
-   * Minimum projected Duequity revenue required for the opportunity to be
-   * commercially viable without manager review.
-   */
   minimumViableFee?: Cents;
-
-  /**
-   * Optional internal hard cap lower than the legal jurisdiction cap.
-   * Duequity may voluntarily cap its own fee below what the law permits.
-   */
   internalFeeCapAmount?: Cents;
-
   active: boolean;
 }
 
-/**
- * Duequity's commercial pricing policy for a jurisdiction.
- *
- * A jurisdiction may eventually have more than one policy where sale type,
- * custodian or recovery process materially changes the economics.
- */
 export interface CommercialFeePolicy {
   id: string;
   jurisdictionId: string;
-
-  /**
-   * Optional narrowing by sale type. Empty or absent means the policy applies to
-   * every sale type currently cleared under the jurisdiction record.
-   */
   saleTypes?: SaleType[];
-
-  /**
-   * Optional narrowing by custodian. Empty or absent means the policy applies to
-   * every custodian currently cleared under the jurisdiction record.
-   */
   custodians?: SurplusCustodian[];
-
   status: CommercialFeePolicyStatus;
-
-  /**
-   * Monotonically increasing policy version.
-   *
-   * Signed agreements retain the version used at signature even when a newer
-   * commercial policy later replaces it.
-   */
   version: number;
-
   effectiveFrom: IsoDate;
   effectiveThrough?: IsoDate;
-
   tiers: CommercialFeeTier[];
-
-  /** User who approved publication of this commercial policy. */
   approvedByUserId?: string;
-
-  /** Exact approval instant. */
   approvedAt?: IsoInstant;
-
-  /** When the commercial policy was most recently reviewed. */
   lastReviewedAt?: IsoDate;
-
-  /** Internal review deadline. */
   reviewDueAt?: IsoDate;
-
-  /**
-   * Human readable internal rationale.
-   *
-   * This may discuss margins, workload, acquisition cost or strategic pricing.
-   * It is never shown to a claimant.
-   */
   internalNotes?: string;
 }
 
-/**
- * A case-specific commercial quote computed before outreach.
- *
- * The quote preserves both legal and commercial ceilings as snapshots so the
- * system can later prove what rules were applied at the time.
- */
 export interface CommercialFeeQuote {
   id: string;
-
   opportunityId: string;
   jurisdictionId: string;
-
-  /** Commercial policy and exact version used to calculate this quote. */
   commercialPolicyId: string;
   commercialPolicyVersion: number;
   commercialTierId: string;
-
-  /** Amount used to price the opportunity. */
   recoveryAmount: Cents;
   recoveryBasis: FeeQuoteRecoveryBasis;
-
   model: FeeModel;
-
-  /** Selected percentage, expressed 0 to 1 where applicable. */
   selectedPercentage?: number;
-
-  /** Selected flat amount where applicable. */
   selectedFlatAmount?: Cents;
-
-  /** Fee calculated from the selected commercial terms. */
   projectedFee: Cents;
-
-  /** Recovery less the projected Duequity service fee. */
   projectedClaimantNet: Cents;
-
-  /* ---- legal rule and ceiling snapshot ---- */
-
-  /**
-   * Exact approved jurisdiction legal-rule version used when this quote was
-   * calculated.
-   *
-   * Optional for legacy/local validation records. Production quotes must
-   * populate this before approval, outreach, agreement creation or conversion.
-   *
-   * This is separate from the commercial policy version. It allows Duequity to
-   * prove which legal rule was applied when pricing was created and to block a
-   * later filing if the jurisdiction rule has since changed.
-   */
   legalRuleVersionSnapshot?: number;
-
   legalFeeCapPercentSnapshot?: number;
   legalFeeCapAmountSnapshot?: Cents;
-
-  /* ---- Duequity commercial ceiling snapshot ---- */
-
   commercialStaffFloorPercentSnapshot?: number;
   commercialStaffCeilingPercentSnapshot?: number;
   commercialManagerCeilingPercentSnapshot?: number;
-
   commercialStaffFloorAmountSnapshot?: Cents;
   commercialStaffCeilingAmountSnapshot?: Cents;
   commercialManagerCeilingAmountSnapshot?: Cents;
-
   internalFeeCapAmountSnapshot?: Cents;
   minimumViableFeeSnapshot?: Cents;
-
-  /* ---- decisioning ---- */
-
   viabilityStatus: CommercialViabilityStatus;
   approvalStatus: FeeQuoteApprovalStatus;
-
-  /** Plain-language internal reason when manager review is required. */
   approvalReason?: string;
-
   createdByUserId: string;
   createdAt: IsoInstant;
-
   approvedByUserId?: string;
   approvedAt?: IsoInstant;
-
-  /**
-   * Outreach may not begin until compliance and commercial approval both pass.
-   */
   outreachApprovedAt?: IsoInstant;
   outreachApprovedByUserId?: string;
-
-  /**
-   * Once an agreement is signed, this quote becomes immutable.
-   */
   lockedAt?: IsoInstant;
   lockedFeeAgreementId?: string;
-
   internalNote?: string;
 }
 
@@ -654,12 +434,6 @@ export interface CommercialFeeQuote {
 /* Opportunity pipeline                                                        */
 /* ========================================================================== */
 
-/**
- * Opportunity stages.
- *
- * Owner research and surplus confirmation frequently run in parallel, so stage
- * is a summary of where the record sits while detail lives in other fields.
- */
 export type OpportunityStatus =
   | "new"
   | "researching"
@@ -684,7 +458,6 @@ export type OwnerLocatedStatus =
   | "deceased_heirs_needed"
   | "unlocatable";
 
-/** Confidence that the located contact details reach the right person. */
 export type ContactConfidence =
   "none" | "low" | "medium" | "high" | "confirmed";
 
@@ -700,64 +473,27 @@ export type DisqualificationReason =
   | "data_invalid"
   | "commercially_unviable";
 
-/**
- * A researched possibility, before any person has agreed to become a claimant.
- * An opportunity is a Duequity internal record. It is never a promise of money.
- */
 export interface Opportunity {
   id: string;
-  /** Short human reference, for example "OPP-2026-0417". */
   reference: string;
   propertyId: string;
   jurisdictionId: string;
   sale: SaleRecord;
   priorOwners: PriorOwner[];
-
-  /**
-   * Estimated surplus, derived arithmetically from the sale record.
-   * Always presented as an estimate until the agency confirms a figure.
-   */
   estimatedSurplus: MonetaryFact;
-
-  /** Present only once the responsible agency states a figure in writing. */
   confirmedSurplus?: MonetaryFact;
-
   custodian: SurplusCustodian;
-
-  /** Absolute statutory deadline, computed from the jurisdiction rule. */
   claimDeadline?: IsoDate;
-
   status: OpportunityStatus;
   ownerLocated: OwnerLocatedStatus;
   contactConfidence: ContactConfidence;
-
-  /* ---- research flags that gate how the case may proceed ---- */
   flags: RiskFlag[];
-
-  /** Analyst-assigned priority, 1 highest. */
   priority: 1 | 2 | 3;
-
-  /**
-   * Composite risk score, 0 to 100, higher means more complicated.
-   * Advisory only. It never produces a legal conclusion or automated decision.
-   */
   riskScore: number;
-
-  /**
-   * Active internal commercial quote.
-   *
-   * Optional for legacy local-validation records. Production outreach requires an
-   * approved quote before contact begins.
-   */
   activeCommercialFeeQuoteId?: string;
-
   assignedToUserId?: string;
-
-  /** Set once the opportunity becomes a claim. */
   convertedClaimId?: string;
-
   disqualifiedReason?: DisqualificationReason;
-
   createdAt: IsoDate;
   lastActivityAt: IsoDate;
   provenance: Provenance;
@@ -768,12 +504,6 @@ export interface Opportunity {
 /* Risk flags                                                                  */
 /* ========================================================================== */
 
-/**
- * Conditions that change how a case must be handled.
- *
- * These assist human review. The engine raises flags, it never draws a legal
- * conclusion.
- */
 export type RiskFlagKind =
   | "deceased_owner"
   | "multiple_owners"
@@ -799,7 +529,6 @@ export type RiskSeverity = "informational" | "attention" | "blocking";
 export interface RiskFlag {
   kind: RiskFlagKind;
   severity: RiskSeverity;
-  /** Why this flag was raised, in plain language, for the reviewing human. */
   detail: string;
   raisedAt: IsoDate;
   raisedBy: string;
@@ -811,7 +540,6 @@ export interface RiskFlag {
 /* Claimants, estates and heirs                                                */
 /* ========================================================================== */
 
-/** How a claimant connects to the former owner of record. */
 export type ClaimantRelationship =
   | "self_former_owner"
   | "surviving_spouse"
@@ -843,67 +571,39 @@ export interface ContactMethod {
   value: string;
   isPrimary: boolean;
   verified: boolean;
-  /** Express consent to be contacted on this channel, required for SMS and calls. */
   consentGivenAt?: IsoDate;
   optedOutAt?: IsoDate;
 }
 
-/**
- * A person or entity asserting entitlement.
- *
- * Sensitive identifiers are deliberately absent from this type. Duequity does
- * not collect a Social Security number unless an approved jurisdiction workflow
- * requires one.
- */
 export interface Claimant {
   id: string;
   reference: string;
   legalName: string;
   preferredName?: string;
-
-  /** Present only where a jurisdiction requires date of birth to adjudicate. */
   dateOfBirth?: IsoDate;
-
   entityType: "individual" | "estate" | "trust" | "business";
-
   contactMethods: ContactMethod[];
   mailingAddress?: Address;
   preferredContactChannel: ConsentChannel;
-
-  /** Written or recorded consent to be contacted at all. */
   consentRecordedAt?: IsoDate;
   consentSource?: string;
-
   identityVerification: IdentityVerificationStatus;
   identityVerifiedAt?: IsoDate;
-
-  /**
-   * Opaque reference issued by the identity verification provider.
-   * No document images or government identifiers are stored on this record.
-   */
   identityProviderRef?: string;
-
-  /** Language preference, ISO 639-1. Drives correspondence templates. */
   preferredLanguage: string;
   accessibilityNote?: string;
-
   fraudFlags: RiskFlag[];
   createdAt: IsoDate;
   notes: Note[];
 }
 
-/** An opened or unopened estate, where the owner of record has died. */
 export interface Estate {
   id: string;
   decedentName: string;
   dateOfDeath: IsoDate;
-
-  /** Probate case number, when an estate has been opened. */
   probateCaseNumber?: string;
-
   probateCounty?: string;
   probateState?: StateCode;
-
   probateStatus:
     | "not_opened"
     | "petition_filed"
@@ -911,12 +611,8 @@ export interface Estate {
     | "closed"
     | "reopened_required"
     | "small_estate_procedure";
-
   personalRepresentativeName?: string;
-
-  /** Letters of administration or testamentary on file. */
   lettersOnFile: boolean;
-
   willOnFile?: boolean;
   heirs: Heir[];
   provenance: Provenance;
@@ -926,18 +622,10 @@ export interface Heir {
   id: string;
   name: string;
   relationship: ClaimantRelationship;
-
-  /** Fractional interest asserted, 0 to 1. Sum across heirs should reach 1. */
   assertedShare?: number;
-
-  /** Linked once this heir is onboarded as a claimant in their own right. */
   claimantId?: string;
-
   contacted: boolean;
-
-  /** Whether this heir has signed a consent or waiver, where required. */
   consentOnFile: boolean;
-
   note?: string;
 }
 
@@ -958,17 +646,10 @@ export type ClaimStatus =
   | "denied"
   | "withdrawn";
 
-/**
- * A configurable recovery stage.
- *
- * Claimant timeline stages are data rather than a hard-coded list.
- */
 export interface RecoveryStage {
   key: string;
   ordinal: number;
-  /** Label shown to the claimant. Written for a non-specialist reader. */
   claimantLabel: string;
-  /** Label shown to operations staff. May use internal terminology. */
   internalLabel: string;
   claimantDescription: string;
 }
@@ -987,133 +668,59 @@ export interface ClaimParticipant {
   claimantId: string;
   role: ClaimParticipantRole;
   relationship: ClaimantRelationship;
-
-  /** Asserted fractional entitlement, 0 to 1. */
   assertedShare?: number;
-
-  /** Share as adjudicated by the agency or court, once determined. */
   determinedShare?: number;
-
-  /** True where this participant contests another participant's entitlement. */
   contesting?: boolean;
-
   addedAt: IsoDate;
 }
 
-/**
- * The fee agreement.
- *
- * Every field is a compliance control. Duequity never takes custody of claimant
- * funds. Fees are disclosed and must remain within the applicable jurisdiction
- * rule and the approved Duequity commercial pricing policy.
- */
 export interface FeeAgreement {
   id: string;
   model: FeeModel;
-
-  /** Percentage expressed 0 to 1, present only for percentage models. */
   percentage?: number;
-
-  /** Flat amount, present for flat and capped models. */
   flatAmount?: Cents;
-
-  /** Hard ceiling applied regardless of model, from the jurisdiction rule. */
   capAmount?: Cents;
-
-  /** The jurisdiction rule this agreement was validated against. */
   jurisdictionId: string;
-
-  /**
-   * Case-specific commercial quote that produced this agreement.
-   *
-   * Optional on legacy local-validation records. Production agreements always retain it.
-   */
   commercialFeeQuoteId?: string;
-
-  /**
-   * Duequity commercial policy snapshot used when the agreement was created.
-   */
   commercialPolicyId?: string;
   commercialPolicyVersion?: number;
-
-  /**
-   * Legal rule snapshot used when the agreement was created.
-   */
   legalRuleVersionSnapshot?: number;
   legalFeeCapPercentSnapshot?: number;
   legalFeeCapAmountSnapshot?: Cents;
-
-  /** Disclosures presented to and acknowledged by the claimant. */
   disclosuresAcknowledged: string[];
-
   signedAt?: IsoDate;
-
-  /** Statutory cancellation deadline, computed at signature. */
   cancellationDeadline?: IsoDate;
-
   cancelledAt?: IsoDate;
-
-  /** Written confirmation that the claimant was told they may claim for free. */
   freeClaimOptionDisclosedAt?: IsoDate;
-
   documentId?: string;
 }
 
 export interface Claim {
   id: string;
-
-  /** Claimant-facing reference, for example "DQ-4471-MD". */
   reference: string;
-
   opportunityId: string;
   propertyId: string;
   jurisdictionId: string;
-
   participants: ClaimParticipant[];
-
-  /** Present where the owner of record is deceased. */
   estateId?: string;
-
   status: ClaimStatus;
-
-  /** Key into the configured RecoveryStage list. */
   stageKey: string;
-
-  /** Statutory basis for the claim, in plain language plus a statute reference. */
   legalBasis: string;
-
   filingDeadline?: IsoDate;
-
   estimatedRecovery: MonetaryFact;
   confirmedRecovery?: MonetaryFact;
-
   feeAgreement?: FeeAgreement;
-
   custodian: SurplusCustodian;
   agencyContactName?: string;
   agencyReference?: string;
   submittedAt?: IsoDate;
   agencyResponseAt?: IsoDate;
   agencyResponseSummary?: string;
-
   attorneyAssignment?: AttorneyAssignment;
-
-  /**
-   * Legal complexity classification.
-   *
-   * Defined in src/domain/legal.ts. Optional on the type so existing records
-   * remain valid.
-   */
   legalReview?: import("./legal").LegalReviewRecord;
-
   flags: RiskFlag[];
-
-  /** The single next thing the claimant must do, or null when nothing is needed. */
   nextClaimantAction?: string;
-
-  /** The single next thing operations must do. */
   nextInternalAction?: string;
-
   assignedSpecialistId?: string;
   createdAt: IsoDate;
   lastActivityAt: IsoDate;
@@ -1149,10 +756,6 @@ export type DocumentKind =
   | "utility_bill_proof_of_residence"
   | "other";
 
-/**
- * Sensitivity governs how a document may be displayed, who may open it, and how
- * long the signed access URL lives.
- */
 export type DocumentSensitivity =
   "public_record" | "internal" | "sensitive" | "restricted";
 
@@ -1172,59 +775,34 @@ export interface StoredDocument {
   opportunityId?: string;
   claimantId?: string;
   kind: DocumentKind;
-
-  /** Display name. Never the raw client filename without sanitisation. */
   title: string;
-
   originalFileName?: string;
   mimeType: string;
   byteSize: number;
   sensitivity: DocumentSensitivity;
   status: DocumentStatus;
-
-  /**
-   * Opaque object storage key.
-   *
-   * Access is always brokered through a short-lived signed URL issued after a
-   * server-side authorisation check.
-   */
   storageKey: string;
-
   uploadedByUserId?: string;
   uploadedByClaimantId?: string;
   uploadedAt?: IsoInstant;
-
   reviewedByUserId?: string;
   reviewedAt?: IsoInstant;
-
   rejectionReason?: string;
-
-  /** Page count, for multi-page scans of court records. */
   pageCount?: number;
-
-  /** Set where the document itself expires. */
   expiresAt?: IsoDate;
 }
 
-/** An outstanding request for a specific document from a specific party. */
 export interface DocumentRequest {
   id: string;
   claimId: string;
   kind: DocumentKind;
-
-  /** Why the agency or Duequity needs it, written for the claimant. */
   reason: string;
-
   requestedFromClaimantId?: string;
   requestedAt: IsoDate;
   dueBy?: IsoDate;
   required: boolean;
-
   status: "outstanding" | "received" | "accepted" | "waived" | "overdue";
-
-  /** Guidance shown at the upload control. */
   guidance?: string;
-
   fulfilledByDocumentId?: string;
   waivedReason?: string;
 }
@@ -1284,19 +862,13 @@ export interface Communication {
   claimantId?: string;
   channel: CommunicationChannel;
   direction: CommunicationDirection;
-
-  /** Display name of the sender. */
   authorName: string;
-
   authorRole: "claimant" | "specialist" | "attorney" | "agency" | "system";
-
   subject?: string;
   body: string;
   sentAt: IsoInstant;
   readAt?: IsoInstant;
   attachmentDocumentIds?: string[];
-
-  /** True where the message is visible to the claimant in the portal. */
   claimantVisible: boolean;
 }
 
@@ -1312,12 +884,6 @@ export type OutreachStatus =
   | "opted_out"
   | "no_response";
 
-/**
- * A proof-first outreach attempt.
- *
- * Production workflows should only create an outreach attempt after both the
- * jurisdiction compliance gate and Duequity commercial pricing gate have passed.
- */
 export interface OutreachAttempt {
   id: string;
   opportunityId: string;
@@ -1327,27 +893,14 @@ export interface OutreachAttempt {
   sentAt?: IsoDate;
   respondedAt?: IsoDate;
   optedOutAt?: IsoDate;
-
-  /** Legal basis relied upon for this contact. */
   consentBasis:
     | "public_record_mail"
     | "express_written"
     | "express_oral"
     | "inbound_request";
-
-  /** Screened against the national and state do-not-contact registries. */
   doNotContactScreenedAt?: IsoDate;
-
-  /** Verification code printed on the outreach. */
   verificationCode?: string;
-
-  /**
-   * Commercial quote approved before this outreach began.
-   *
-   * Optional for legacy local-validation records. Production outreach retains it.
-   */
   commercialFeeQuoteId?: string;
-
   sentByUserId: string;
   followUpAt?: IsoDate;
   outcomeNote?: string;
@@ -1383,43 +936,27 @@ export interface Attorney {
   id: string;
   name: string;
   firmId: string;
-
-  /** States of licensure with bar numbers. */
   licenses: {
     state: StateCode;
     barNumber: string;
     admittedYear: number;
   }[];
-
   practiceAreas: AttorneyMatterKind[];
-
-  /** Counties the attorney will accept matters in. */
   countiesServed: {
     state: StateCode;
     county: string;
   }[];
-
   languages: string[];
   email: string;
   phone: string;
-
   availability: "accepting" | "limited" | "not_accepting";
-
   activeMatterCount: number;
-
-  /** Historical outcomes, for internal referral quality only. */
   metrics?: {
     mattersCompleted: number;
     medianDaysToResolution: number;
   };
-
   engagementStatus: "active" | "onboarding" | "inactive";
-
   conflictCheckStatus: "clear" | "pending" | "conflict_identified";
-
-  /**
-   * Optional production governance.
-   */
   barStatusLastVerifiedAt?: IsoDate;
   malpracticeInsuranceStatus?: "verified" | "pending" | "not_verified";
   malpracticeInsuranceVerifiedAt?: IsoDate;
@@ -1427,24 +964,13 @@ export interface Attorney {
   disciplinaryReviewAt?: IsoDate;
 }
 
-/**
- * An escalation to independent counsel.
- *
- * Duequity does not share legal fees and does not receive referral compensation.
- */
 export interface AttorneyAssignment {
   id: string;
   attorneyId: string;
   matterKind: AttorneyMatterKind;
-
-  /** Why the matter requires counsel, in plain language. */
   escalationReason: string;
-
   referredAt: IsoDate;
-
-  /** Set when the claimant signs an engagement letter directly with the firm. */
   engagementSignedAt?: IsoDate;
-
   status:
     | "referred"
     | "conflict_check"
@@ -1452,29 +978,11 @@ export interface AttorneyAssignment {
     | "declined"
     | "completed"
     | "withdrawn";
-
-  /**
-   * Always false.
-   *
-   * Retained as an explicit, auditable statement that no fee-sharing arrangement
-   * exists on any matter.
-   */
   feeSharedWithDuequity: false;
-
-  /** Confirmation that the claimant was told the engagement is separate. */
   separateEngagementDisclosedAt?: IsoDate;
-
-  /** Conflict check outcome for this specific matter. */
   conflictCheckedAt?: IsoDate;
-
-  /**
-   * The firm's own fee, held entirely separately from any Duequity service fee.
-   */
   independentLegalFee?: import("./legal").IndependentLegalFee;
-
-  /** Documents released to counsel as part of the handoff package. */
   handoffDocumentIds?: string[];
-
   note?: string;
 }
 
@@ -1482,11 +990,6 @@ export interface AttorneyAssignment {
 /* Recovery and payment                                                        */
 /* ========================================================================== */
 
-/**
- * Where the money went.
- *
- * Duequity is never a payment destination for claimant funds.
- */
 export type PaymentDestination =
   | "claimant_direct"
   | "estate_account"
@@ -1506,15 +1009,9 @@ export interface PaymentRecord {
   id: string;
   amount: Cents;
   source: PaymentSource;
-
-  /** The specific agency that issued payment. */
   sourceName: string;
-
   destination: PaymentDestination;
-
-  /** Instrument type. Duequity never endorses or deposits a claimant instrument. */
   instrument: "check" | "ach" | "wire" | "court_disbursement";
-
   issuedAt: IsoDate;
   clearedAt?: IsoDate;
   reference?: string;
@@ -1523,31 +1020,17 @@ export interface PaymentRecord {
 export interface Recovery {
   id: string;
   claimId: string;
-
-  /** Gross amount approved by the agency. */
   approvedAmount: Cents;
-
   approvedAt: IsoDate;
   payments: PaymentRecord[];
-
-  /** Duequity service fee, computed against the fee agreement and cap. */
   serviceFee: Cents;
-
-  /** Human-readable explanation of exactly how the fee was computed. */
   feeBasis: string;
-
-  /** Fee invoice settlement. Separate from the government disbursement. */
   feeSettledAt?: IsoDate;
-
-  /** Net amount to the claimant after the disclosed service fee. */
   netToClaimant: Cents;
-
-  /** Third-party deductions the agency withheld. */
   agencyDeductions?: {
     label: string;
     amount: Cents;
   }[];
-
   completedAt?: IsoDate;
   closingDocumentIds: string[];
 }
@@ -1560,26 +1043,13 @@ export interface TimelineEvent {
   id: string;
   claimId?: string;
   opportunityId?: string;
-
-  /** Stage key this event advanced the case into, where applicable. */
   stageKey?: string;
-
   occurredAt: IsoDate;
-
-  /** Label written for a claimant audience. */
   claimantLabel: string;
-
-  /** Additional context, claimant-facing. */
   claimantDetail?: string;
-
-  /** Internal label, may use operational terminology. */
   internalLabel?: string;
-
   actorName?: string;
-
   actorRole?: "claimant" | "specialist" | "attorney" | "agency" | "system";
-
-  /** Whether the claimant sees this event in their portal timeline. */
   claimantVisible: boolean;
 }
 
@@ -1588,18 +1058,10 @@ export interface Note {
   body: string;
   authorName: string;
   createdAt: IsoDate;
-
-  /** Internal notes are never exposed on a claimant surface. */
   visibility: "internal" | "claimant_visible";
-
   pinned?: boolean;
 }
 
-/**
- * Immutable audit record.
- *
- * Sensitive actions are logged with actor, action, target and outcome.
- */
 export interface AuditEvent {
   id: string;
   occurredAt: IsoInstant;
@@ -1608,7 +1070,6 @@ export interface AuditEvent {
   actorRole: UserRole;
   action: AuditAction;
 
-  /** Entity type and identifier the action was performed against. */
   targetType:
     | "claim"
     | "opportunity"
@@ -1620,19 +1081,14 @@ export interface AuditEvent {
     | "fee_agreement"
     | "user"
     | "recovery"
+    | "contact_inquiry"
     | "session";
 
   targetId: string;
   targetLabel?: string;
-
   outcome: "success" | "denied" | "failed";
-
-  /** Coarse network origin. */
   ipPrefix?: string;
-
   deviceSummary?: string;
-
-  /** Structured, non-sensitive detail about what changed. */
   detail?: string;
 }
 
@@ -1693,6 +1149,13 @@ export type AuditAction =
   | "recovery.approved"
   | "recovery.payment_recorded"
   | "recovery.completed"
+
+  /* ---- public contact inquiries ---- */
+  | "contact.inquiry_created"
+  | "contact.inquiry_viewed"
+  | "contact.reply_sent"
+  | "contact.status_changed"
+
   | "export.generated"
   | "permission.denied";
 
@@ -1707,15 +1170,10 @@ export type UserRole =
   | "compliance_officer"
   | "claims_manager"
   | "attorney_liaison"
+  | "communications_specialist"
   | "administrator"
   | "super_admin";
 
-/**
- * Permission keys.
- *
- * These are the vocabulary of authorisation. Every check runs server-side. A
- * hidden button is not access control.
- */
 export type Permission =
   | "opportunity.read"
   | "opportunity.write"
@@ -1752,6 +1210,12 @@ export type Permission =
   | "recovery.approve"
   | "report.read"
   | "audit.read"
+
+  /* ---- public contact inquiries ---- */
+  | "contact.read"
+  | "contact.reply"
+  | "contact.manage"
+
   | "user.manage"
   | "settings.manage";
 
@@ -1761,10 +1225,7 @@ export interface StaffUser {
   email: string;
   role: UserRole;
   title: string;
-
-  /** States the user is cleared to operate in. Empty means all. */
   statesCleared: StateCode[];
-
   mfaEnrolled: boolean;
   lastActiveAt?: IsoDate;
   status: "active" | "suspended" | "invited";

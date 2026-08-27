@@ -32,27 +32,15 @@ export const metadata: Metadata = {
 export const dynamic =
   "force-dynamic";
 
-/* ========================================================================== */
-/* Types                                                                       */
-/* ========================================================================== */
-
 interface StaffUserRow {
   id: string;
-
   name: string;
-
   email: string;
-
   role: string;
-
   title: string;
-
   states_cleared: string[] | null;
-
   mfa_enrolled: boolean;
-
   status: string;
-
   created_at: string;
 }
 
@@ -61,10 +49,6 @@ interface StaffManagementPageProps {
     status?: string;
   }>;
 }
-
-/* ========================================================================== */
-/* Constants                                                                   */
-/* ========================================================================== */
 
 const STATES = [
   ["AL", "Alabama"],
@@ -156,11 +140,14 @@ const ORDINARY_STAFF_ROLES = [
     label:
       "Attorney Liaison",
   },
-] as const;
+  {
+    value:
+      "communications_specialist",
 
-/* ========================================================================== */
-/* Helpers                                                                     */
-/* ========================================================================== */
+    label:
+      "Communications Specialist",
+  },
+] as const;
 
 function roleLabel(
   role: string,
@@ -189,10 +176,6 @@ function statusTone(
       return "neutral";
   }
 }
-
-/* ========================================================================== */
-/* Page                                                                        */
-/* ========================================================================== */
 
 export default async function StaffManagementPage({
   searchParams,
@@ -308,7 +291,6 @@ export default async function StaffManagementPage({
 
   return (
     <div className="space-y-5">
-      {/* ================================================================= header */}
       <div>
         <p className="eyebrow text-ink-500">
           Administration
@@ -325,7 +307,6 @@ export default async function StaffManagementPage({
         </p>
       </div>
 
-      {/* ================================================================= stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
           label="Staff profiles"
@@ -352,7 +333,6 @@ export default async function StaffManagementPage({
         />
       </div>
 
-      {/* ============================================================ messages */}
       {params.status === "invited" ? (
         <Callout
           tone="positive"
@@ -391,7 +371,6 @@ export default async function StaffManagementPage({
         </Callout>
       ) : null}
 
-      {/* =============================================================== invite */}
       <Card>
         <CardHeader
           title="Invite staff member"
@@ -519,8 +498,8 @@ export default async function StaffManagementPage({
 
               <p className="text-xs leading-relaxed text-ink-500">
                 Select the states this employee is authorized to work. Leave
-                this blank only when the staff role is intentionally cleared
-                for all states.
+                this blank for Communications Specialists and for staff roles
+                intentionally cleared for all states.
               </p>
             </div>
 
@@ -547,7 +526,6 @@ export default async function StaffManagementPage({
         </CardBody>
       </Card>
 
-      {/* =============================================================== roster */}
       <Card className="overflow-hidden">
         <CardHeader
           title="Staff roster"

@@ -333,13 +333,6 @@ export const DATA_QUALITY: Record<DataQuality, StatusDescriptor> = {
   },
 };
 
-/**
- * The two words that matter most in this product.
- *
- * A figure is either an estimate Duequity calculated, or a figure the agency
- * confirmed. There is no third presentation, and the distinction is never left
- * to a caller's choice of wording.
- */
 export function monetaryCertainty(quality: DataQuality): {
   word: "Estimated" | "Confirmed" | "Unverified";
   tone: Tone;
@@ -426,7 +419,6 @@ export const DOCUMENT_KIND_LABEL: Record<DocumentKind, string> = {
   other: "Other document",
 };
 
-/** Default sensitivity per document kind, so callers cannot under classify. */
 export const DOCUMENT_KIND_SENSITIVITY: Record<
   DocumentKind,
   "public_record" | "internal" | "sensitive" | "restricted"
@@ -694,10 +686,6 @@ export const SUBMISSION_METHOD_LABEL: Record<ClaimSubmissionMethod, string> = {
   attorney_filing: "Attorney filing",
 };
 
-/**
- * State names for the states with recorded jurisdictions.
- * Kept here rather than a full fifty state table because only recorded states appear.
- */
 export const STATE_NAME: Partial<Record<string, string>> = {
   CA: "California",
   FL: "Florida",
@@ -714,6 +702,7 @@ export const USER_ROLE_LABEL: Record<UserRole, string> = {
   compliance_officer: "Compliance officer",
   claims_manager: "Claims manager",
   attorney_liaison: "Attorney liaison",
+  communications_specialist: "Communications specialist",
   administrator: "Administrator",
   super_admin: "Super admin",
 };
