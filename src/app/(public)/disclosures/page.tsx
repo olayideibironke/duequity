@@ -6,15 +6,17 @@ import { TextLink } from "@/components/ui/button";
 export const metadata: Metadata = {
   title: "Disclosures",
   description:
-    "Required Duequity disclosures: not a government agency, not a law firm, the free claim option, fee structure, no fund custody, and no guarantee of recovery.",
+    "DueQuity disclosures covering government affiliation, self-claim options, legal services, jurisdiction-specific payment routing, fees, privacy, and recovery limitations.",
 };
 
 /**
  * DISCLOSURES
  *
- * The consolidated statement of every disclosure Duequity makes. Kept as a single
- * canonical page so the same wording appears in the service agreement, the intake
- * flow and the footer without drifting.
+ * The consolidated statement of DueQuity's standing public disclosures.
+ *
+ * Jurisdiction-specific filing, authorization, payment, fee, cancellation, and
+ * legal requirements may differ. DueQuity follows the verified operating route
+ * recorded for the jurisdiction handling each recovery.
  */
 export default function DisclosuresPage() {
   return (
@@ -22,11 +24,17 @@ export default function DisclosuresPage() {
       <Section tone="ink" size="sm">
         <Container>
           <p className="eyebrow text-accent-300">Legal</p>
-          <h1 className="mt-3 text-3xl text-white sm:text-4xl">Disclosures</h1>
+
+          <h1 className="mt-3 text-3xl text-white sm:text-4xl">
+            Disclosures
+          </h1>
+
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-ink-300">
-            These statements apply to every Duequity engagement in every
-            jurisdiction. You will receive them again in writing, individually
-            acknowledged, before any agreement is signed.
+            These are DueQuity&apos;s standing public disclosures. Additional
+            terms may apply to a particular recovery depending on the
+            jurisdiction, payment route, claimant circumstances, and services
+            involved. Applicable terms are disclosed before you enter into a
+            service agreement.
           </p>
         </Container>
       </Section>
@@ -34,155 +42,245 @@ export default function DisclosuresPage() {
       <Section tone="paper" size="md">
         <Container width="reading">
           <Prose>
-            <h2>Duequity is not a government agency</h2>
+            <h2>DueQuity is not a government agency</h2>
+
             <p>
-              Duequity is a private company operated by Westforge Holdings Inc.
-              Duequity is not a government agency, is not affiliated with any
-              government agency, and does not act on behalf of any court,
-              county, sheriff, trustee, or state office. Duequity does not
-              represent itself as a government agency in any communication.
+              DueQuity is a private company operated by Westforge Holdings Inc.
+              DueQuity is not a government agency, is not affiliated with or
+              endorsed by any government agency, and does not represent itself
+              as a court, county, sheriff, trustee, tax authority, or state
+              office.
             </p>
 
-            <h2>You may be able to claim funds yourself at no cost</h2>
+            <h2>You may be able to claim surplus funds yourself at no cost</h2>
+
             <p>
-              In most jurisdictions a former property owner or an eligible heir
-              may file a surplus claim directly with the agency holding the
-              funds, without using a recovery service and without paying a
-              service fee. Duequity will identify the responsible agency and
-              provide its published contact information whether or not you
-              choose to work with Duequity. See{" "}
-              <TextLink href="/states">where we operate</TextLink> for agency
-              details by jurisdiction.
+              Depending on the jurisdiction and your eligibility, you may be
+              able to submit a surplus claim directly to the agency, court,
+              trustee, or other authority responsible for the funds without
+              using a recovery service and without paying DueQuity a service
+              fee.
             </p>
 
-            <h2>Duequity is not a law firm</h2>
             <p>
-              Duequity does not practise law, does not provide legal advice, and
-              does not represent claimants in court. Nothing produced by
-              Duequity is legal advice. Where a matter requires legal
-              representation, Duequity may refer you to an independent attorney
-              whom you engage directly under a separate engagement agreement
-              with that attorney or firm.
-            </p>
-            <p>
-              <strong>
-                Duequity does not share in attorney fees and receives no
-                referral fee, finder&apos;s fee, commission, or other
-                compensation from any attorney or law firm.
-              </strong>{" "}
-              You are free to select your own attorney.
+              DueQuity can identify the responsible authority and explain the
+              recovery route we have established for the jurisdiction whether
+              or not you choose to engage DueQuity. See{" "}
+              <TextLink href="/states">where we operate</TextLink> for
+              jurisdiction information.
             </p>
 
-            <h2>Duequity does not take custody of claimant funds</h2>
+            <h2>DueQuity is not a law firm</h2>
+
             <p>
-              Payment of a surplus is issued by the responsible agency directly
-              to the claimant, to the estate of a deceased owner, or to an
-              attorney trust account where counsel is engaged. Duequity does not
-              receive, hold, deposit, endorse, or disburse claimant funds, and
-              is not a payee on an agency disbursement.
+              DueQuity does not practice law, provide legal advice, or represent
+              claimants as attorneys. DueQuity provides recovery-related
+              research, document coordination, administrative assistance,
+              operational communication, and other non-legal services that are
+              permitted for the applicable jurisdiction.
             </p>
 
-            <h2>Duequity does not purchase claims</h2>
             <p>
-              Duequity does not purchase surplus claims, does not take
-              assignments of surplus rights, and does not acquire an ownership
-              interest in a claimant&apos;s entitlement. Duequity acts as a
-              service provider only. Several jurisdictions prohibit the
-              assignment of a surplus claim, and Duequity does not do so in any
-              jurisdiction regardless of local rules.
+              When a recovery requires legal advice, court representation, an
+              estate proceeding, resolution of competing legal interests, or
+              other work that must be performed by licensed counsel, you may
+              engage an independent attorney of your choice. DueQuity may
+              continue coordinating the non-legal portions of the recovery where
+              appropriate.
+            </p>
+
+            <p>
+              Any attorney-client relationship is separate from your
+              relationship with DueQuity. Attorney services and attorney fees
+              are governed by your agreement with the attorney or law firm.
+              DueQuity does not share in attorney fees.
+            </p>
+
+            <h2>Payment procedures vary by jurisdiction</h2>
+
+            <p>
+              The permitted payment route depends on the rules and procedures
+              applicable to the authority handling the recovery. Funds may be
+              paid directly to the claimant, an estate, authorized counsel, or
+              through an authorized representative payment process where that
+              route is permitted.
+            </p>
+
+            <p>
+              Where applicable law, the jurisdiction&apos;s approved process,
+              and your written authorization permit representative payment,
+              DueQuity may receive or process recovery funds through that
+              approved route. Where payment must instead be made directly to the
+              claimant, estate, or counsel, DueQuity follows that requirement.
+            </p>
+
+            <p>
+              The payment route applicable to your recovery is disclosed before
+              DueQuity files or coordinates submission of the recovery package.
+            </p>
+
+            <h2>DueQuity does not purchase claims</h2>
+
+            <p>
+              DueQuity does not purchase surplus claims, take assignments of
+              surplus ownership rights, or acquire an ownership interest in a
+              claimant&apos;s recovery. DueQuity provides recovery services
+              under a written service agreement.
+            </p>
+
+            <p>
+              Receiving or processing a payment through an authorized
+              representative payment route, where legally permitted, does not
+              transfer ownership of the underlying surplus claim or recovery
+              rights to DueQuity.
             </p>
 
             <h2>No guarantee of recovery</h2>
+
             <p>
-              Duequity does not guarantee that a claim will be approved, that
-              any amount will be recovered, or that recovery will occur within
-              any particular period. Determinations are made by the agency or
-              court holding the funds. A surplus may be reduced or eliminated by
-              recorded liens, senior interests, statutory costs, or competing
-              claims, and a claim deadline may already have expired.
+              DueQuity does not guarantee that a claim will be approved, that
+              any particular amount will be recovered, or that recovery will
+              occur within a particular period.
+            </p>
+
+            <p>
+              Decisions and payment timing may be controlled by an agency,
+              court, county, trustee, tax authority, or other responsible
+              authority. A potential recovery may also be affected by liens,
+              judgments, taxes, senior interests, probate requirements,
+              competing claims, filing deadlines, ownership issues, or other
+              circumstances.
             </p>
 
             <h2>Fees</h2>
+
             <p>
-              Duequity charges a single service fee, disclosed in writing before
-              any agreement is signed. The fee structure and any ceiling on it
-              are determined by the rules of the jurisdiction in which the claim
-              is made. Where a jurisdiction caps what a recovery service may
-              charge, Duequity charges no more than that cap.
+              DueQuity&apos;s service fee is disclosed in writing before you
+              enter into a service agreement. The applicable fee structure,
+              timing, permitted collection method, and any statutory or
+              regulatory ceiling depend on the jurisdiction and recovery route.
             </p>
+
             <p>
-              There is no application fee, search fee, retainer, or recurring
-              charge. If no amount is recovered, no service fee is charged.
-              Duequity invoices its fee separately after the agency has paid the
-              claimant, and does not deduct a fee from an agency disbursement.
-              See <TextLink href="/fees">fees</TextLink> for a worked example.
+              Where a jurisdiction limits the amount a recovery service may
+              charge, DueQuity will not charge more than the permitted limit.
+              If no amount is recovered, no DueQuity recovery service fee is
+              charged.
+            </p>
+
+            <p>
+              Where recovery funds are paid directly to you, the agreed service
+              fee may be handled separately in accordance with your agreement.
+              Where an authorized representative payment route permits fee
+              handling through the recovery or disbursement process, that method
+              is disclosed in writing before you authorize it.
+            </p>
+
+            <p>
+              See <TextLink href="/fees">fees</TextLink> for additional
+              information about DueQuity&apos;s fee structure.
             </p>
 
             <h2>Right to cancel</h2>
+
             <p>
-              Where a jurisdiction provides a cancellation period, that period
-              applies and is stated in your agreement. You may cancel within it
-              at no cost. The applicable period for each recorded jurisdiction
-              is published on that jurisdiction&apos;s page.
+              Cancellation rights and required cancellation periods vary by
+              jurisdiction. Where applicable law provides a cancellation
+              period, the applicable right and procedure are stated in your
+              service agreement.
+            </p>
+
+            <p>
+              DueQuity follows the cancellation requirements established for
+              the jurisdiction governing the recovery.
             </p>
 
             <h2>Not a foreclosure rescue or debt relief service</h2>
+
             <p>
-              Duequity does not provide foreclosure rescue, loan modification,
+              DueQuity does not provide foreclosure rescue, loan modification,
               mortgage negotiation, credit repair, or debt relief services.
-              Duequity does not claim any ability to stop or reverse a
-              foreclosure. Duequity&apos;s work relates only to surplus funds
-              arising after a property sale has already occurred.
+              DueQuity does not claim an ability to stop or reverse a
+              foreclosure.
+            </p>
+
+            <p>
+              DueQuity&apos;s surplus recovery services concern funds that may
+              remain after a foreclosure, tax sale, or similar property sale has
+              already occurred.
             </p>
 
             <h2>Communications and consent</h2>
+
             <p>
-              Duequity contacts prospective claimants only where permitted by
-              applicable federal and state law, including restrictions on
-              telephone and text message contact. Written outreach identifies
-              Duequity by name, states that Duequity is not a government agency,
-              cites the public record on which it is based, and includes a
-              verification code. You may opt out of contact at any time and
-              Duequity will honour that request on every channel.
+              DueQuity conducts outreach and claimant communications subject to
+              applicable federal and state requirements and any restrictions
+              that apply to the communication channel or jurisdiction.
+            </p>
+
+            <p>
+              DueQuity identifies itself as a private recovery service and does
+              not represent outreach as coming from a government agency. You
+              may request that DueQuity stop contacting you, and applicable
+              opt-out requests are honored across the relevant communication
+              channels.
             </p>
 
             <h2>Data and privacy</h2>
+
             <p>
-              Duequity collects the minimum information necessary to evaluate
-              and pursue a claim. Duequity does not request a Social Security
-              number to perform a property search, and does not request identity
-              documents before you have seen the underlying record and chosen to
-              proceed. See <TextLink href="/privacy">privacy</TextLink> and{" "}
-              <TextLink href="/security">security</TextLink>.
+              DueQuity seeks to collect only information reasonably necessary
+              for the applicable stage of a recovery. A public property search
+              does not require you to provide a Social Security number.
+            </p>
+
+            <p>
+              Sensitive identity or supporting documents are requested only
+              where they are reasonably necessary for claimant verification,
+              authorization, filing, payment, compliance, or another legitimate
+              recovery requirement.
+            </p>
+
+            <p>
+              See <TextLink href="/privacy">privacy</TextLink> and{" "}
+              <TextLink href="/security">security</TextLink> for additional
+              information.
             </p>
           </Prose>
 
           <Callout
-            tone="caution"
+            tone="neutral"
             className="mt-10"
-            title="Duequity is pre-launch"
+            title="Jurisdiction-specific requirements control"
           >
             <div className="space-y-2">
               <p>
-                Duequity has not activated any jurisdiction, has not accepted
-                any claimant, and has not completed any recovery. No claim is
-                currently being handled and no claimant data is held.
+                Surplus recovery procedures are not uniform nationwide. Filing
+                authority, claimant eligibility, representation rules, payment
+                routing, fee limits, deadlines, cancellation rights, and legal
+                requirements can differ by state, county, court, agency, and
+                type of sale.
               </p>
+
               <p>
-                Jurisdiction rules, fee ceilings, deadlines and statutory
-                references appear on this site only where they have been
-                recorded against the official sources named in that
-                jurisdiction&apos;s compliance record. Where a value has not
-                been established, the relevant page states that rather than
-                filling the gap. A jurisdiction is not opened for intake until
-                its rules and its payment routing have both been verified.
+                DueQuity uses the recovery route established for the applicable
+                jurisdiction rather than applying one national process to every
+                claim. A jurisdiction&apos;s operating route may require direct
+                claimant payment, may permit authorized representative payment,
+                or may require attorney involvement for particular steps.
               </p>
+
               <p>
-                Nothing on this site constitutes legal advice or an offer of
-                service in any jurisdiction. Duequity is not a law firm and is
-                not a government agency. Before Duequity accepts any claimant,
-                that jurisdiction&apos;s rules are reviewed and recorded, and
-                this page will be reviewed by counsel as well.
+                Where a material jurisdictional requirement has not been
+                established with sufficient confidence, DueQuity does not treat
+                the missing information as permission to proceed. The recovery
+                remains subject to additional review until the appropriate route
+                is established.
+              </p>
+
+              <p>
+                Nothing on this page is legal advice. DueQuity is not a law firm
+                and is not a government agency.
               </p>
             </div>
           </Callout>

@@ -21,7 +21,7 @@ export function Logo({
 }: {
   tone?: "dark" | "light";
   size?: "sm" | "md" | "lg";
-  /** Show the Westforge Holdings attribution beneath the wordmark. */
+  /** Show the Westforge Holdings Inc. attribution beneath the wordmark. */
   showParent?: boolean;
   href?: string | null;
   className?: string;
@@ -36,6 +36,7 @@ export function Logo({
         size={markSize}
         className={tone === "light" ? "text-accent-300" : "text-accent-600"}
       />
+
       <span className="inline-flex flex-col leading-none">
         <span
           className={cn(
@@ -44,8 +45,9 @@ export function Logo({
             tone === "light" ? "text-white" : "text-ink-900",
           )}
         >
-          Duequity
+          DueQuity
         </span>
+
         {showParent && (
           <span
             className={cn(
@@ -53,7 +55,7 @@ export function Logo({
               tone === "light" ? "text-ink-400" : "text-ink-500",
             )}
           >
-            A Westforge Holdings Product
+            A Westforge Holdings Inc. product
           </span>
         )}
       </span>
@@ -66,7 +68,7 @@ export function Logo({
     <Link
       href={href}
       className="inline-flex rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent-500"
-      aria-label="Duequity home"
+      aria-label="DueQuity home"
     >
       {content}
     </Link>

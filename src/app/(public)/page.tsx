@@ -135,32 +135,32 @@ export default async function HomePage() {
               <div className="rounded-xl border border-ink-800 bg-ink-900/80 p-5 shadow-lg backdrop-blur-sm">
                 <div className="flex items-center justify-between gap-3">
                   <p className="eyebrow text-ink-400">
-                    What a verified record shows
+                    What the public record confirms
                   </p>
                 </div>
 
                 <div className="mt-4 space-y-3.5 border-t border-ink-800 pt-4">
-                  <Row label="Former property">
-                    The street address on the recorded instrument
+                  <Row label="Property">
+                    The property identified in the official sale record
                   </Row>
 
-                  <Row label="County">
-                    The county and state that conducted the sale
+                  <Row label="Jurisdiction">
+                    The county and state governing the recovery
                   </Row>
 
                   <Row
-                    label="Case number"
+                    label="Official reference"
                     mono
                   >
-                    The public case or list reference we relied on
+                    The case, docket, or sale reference tied to the record
                   </Row>
 
                   <Row label="Sale date">
-                    The date the sale actually took place
+                    The recorded date of the property sale
                   </Row>
 
-                  <Row label="Funds held by">
-                    The named agency currently holding the surplus
+                  <Row label="Holding authority">
+                    The agency or authority identified as holding the funds
                   </Row>
 
                   <div className="flex items-baseline justify-between gap-3 pt-1">
@@ -172,16 +172,16 @@ export default async function HomePage() {
                       tone="neutral"
                       size="md"
                     >
-                      Estimated until the agency confirms
+                      Amount not yet confirmed
                     </Badge>
                   </div>
                 </div>
 
                 <div className="mt-4 rounded-md border border-ink-800 bg-ink-950/60 px-3.5 py-3">
                   <p className="text-xs leading-relaxed text-ink-400">
-                    Every Duequity record presented to a potential claimant
-                    identifies the public source and the agency that holds the
-                    funds, so the information can be verified independently.
+                    Each DueQuity record is grounded in identifiable public
+                    source material, allowing the property, responsible
+                    authority, and recovery record to be independently verified.
                   </p>
                 </div>
               </div>

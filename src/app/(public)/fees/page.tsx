@@ -38,7 +38,7 @@ import {
 export const metadata: Metadata = {
   title: "Fees",
   description:
-    "How Duequity service fees are set: one disclosed fee, capped by the rules of the jurisdiction, agreed in writing before any work begins. No recovery, no fee.",
+    "How DueQuity service fees are set: one disclosed fee, subject to jurisdiction-specific rules and agreed in writing before recovery work begins. No recovery, no fee.",
 };
 
 export const dynamic = "force-dynamic";
@@ -46,20 +46,25 @@ export const dynamic = "force-dynamic";
 /**
  * FEES
  *
- * No fee structure is hard coded globally, and the free claim option is never
- * hidden. This page renders the recorded caps from persisted jurisdiction rule
- * packages, so the ceilings shown are the ceilings the platform enforces.
+ * No fee structure is hard-coded globally, and the direct-claim option is never
+ * hidden. This page renders recorded fee rules from persisted jurisdiction rule
+ * packages so the public explanation follows the same jurisdiction intelligence
+ * used by the operating platform.
  *
- * Public visitors cannot run property discovery or surplus-search tooling.
- * Duequity staff performs discovery internally and contacts legitimate potential
- * claimants before secure onboarding begins.
+ * Payment routing is also jurisdiction-specific. Some authorities pay the
+ * claimant, estate, or counsel directly. Others may permit an authorized
+ * representative payment route. Fee handling follows the permitted route and
+ * the claimant's written agreement.
+ *
+ * Public visitors cannot run internal property-discovery or claimant-research
+ * tooling. DueQuity performs those functions through its controlled operating
+ * environment.
  *
  * THE WORKED EXAMPLE IS AN ILLUSTRATION
  *
- * The calculation shown is arithmetic on hypothetical figures and is labelled as
- * such. Duequity has not completed a recovery, and this page does not present an
- * invented case as though it had. A claimant deciding whether to sign needs to
- * understand the order of operations; they do not need a fabricated success story.
+ * The calculation below uses hypothetical figures only to explain fee arithmetic.
+ * It does not represent a particular claimant, recovery, jurisdiction, payment
+ * route, or historical DueQuity transaction.
  */
 
 /** Hypothetical approved amount used only to demonstrate the arithmetic. */
@@ -143,13 +148,15 @@ export default async function FeesPage() {
           </p>
 
           <h1 className="mt-3 max-w-3xl text-3xl text-white sm:text-4xl">
-            One disclosed fee, capped by your jurisdiction
+            One disclosed fee, governed by your jurisdiction
           </h1>
 
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-ink-300">
-            You will know the exact fee and how it is calculated before you sign
-            anything. There are no application fees, no upfront costs, no
-            monthly charges, and no fee at all if nothing is recovered.
+            You will know the DueQuity fee, how it is calculated, and how the
+            permitted payment route affects fee handling before you sign an
+            agreement. There are no application fees, no upfront DueQuity
+            recovery fees, no monthly charges, and no recovery service fee if
+            nothing is recovered.
           </p>
         </Container>
       </Section>
@@ -172,8 +179,9 @@ export default async function FeesPage() {
                 </p>
 
                 <p className="mt-2 text-md leading-relaxed text-ink-600">
-                  If your claim is not approved, or the agency pays nothing, you
-                  owe Duequity nothing. We carry the research cost.
+                  If no amount is recovered, no DueQuity recovery service fee is
+                  charged. DueQuity carries its own research and operational
+                  costs associated with evaluating the recovery.
                 </p>
               </CardBody>
             </Card>
@@ -189,9 +197,10 @@ export default async function FeesPage() {
                 </p>
 
                 <p className="mt-2 text-md leading-relaxed text-ink-600">
-                  No application fee, no retainer and no subscription. Duequity
-                  does not ask a claimant for payment before recovery under an
-                  agreed service arrangement.
+                  No application fee, retainer, or subscription is required for
+                  DueQuity&apos;s recovery service. The applicable service fee
+                  becomes due only under the terms stated in your written
+                  agreement.
                 </p>
               </CardBody>
             </Card>
@@ -199,17 +208,18 @@ export default async function FeesPage() {
             <Card>
               <CardBody>
                 <p className="eyebrow text-accent-700">
-                  Capped by law
+                  Jurisdiction controlled
                 </p>
 
                 <p className="mt-2 text-3xl font-semibold text-ink-900">
-                  Jurisdiction set
+                  Rules apply
                 </p>
 
                 <p className="mt-2 text-md leading-relaxed text-ink-600">
-                  Where a state or county caps what a recovery service may
-                  charge, our system enforces that cap. It cannot be exceeded by
-                  agreement.
+                  Where applicable law limits what a recovery service may
+                  charge, the DueQuity fee cannot exceed the permitted limit.
+                  Fee models and payment methods are controlled by the rules
+                  established for the applicable jurisdiction.
                 </p>
               </CardBody>
             </Card>
@@ -228,63 +238,69 @@ export default async function FeesPage() {
               <SectionIntro
                 eyebrow="How the arithmetic runs"
                 title="A worked illustration"
-                lede="This is an illustration of the calculation, not a record of anyone's claim. Your own figures appear in your agreement and again on your closing statement."
+                lede="This is an illustration of fee arithmetic, not a record of a claimant or a representation of a particular payment route. Your actual fee and payment structure are stated in your agreement."
               />
 
               <Prose className="mt-6">
                 <p>
-                  The illustration below applies a capped success fee to a
-                  hypothetical approved amount. It uses round numbers on
-                  purpose: it is here to show the order of operations, not to
-                  suggest a typical recovery.
+                  The illustration below applies a hypothetical percentage
+                  service fee to a hypothetical approved recovery amount. Round
+                  numbers are used only to make the arithmetic easy to follow.
                 </p>
 
                 <p>
-                  The ceiling that applies to you is the one recorded for your
-                  jurisdiction. In a jurisdiction with a lower ceiling, the
-                  lower figure applies. In a jurisdiction that permits only a
-                  flat fee, a percentage cannot be used at all. In a
-                  jurisdiction we have not cleared, we do not take the claim.
+                  The fee structure that applies to your recovery is the one
+                  permitted for your jurisdiction and recorded in your written
+                  agreement. A jurisdiction may permit a percentage fee, a flat
+                  fee, another permitted structure, or may restrict or prohibit
+                  a particular model entirely.
+                </p>
+
+                <p>
+                  Payment routing is a separate question. The authority handling
+                  the recovery may pay the claimant, estate, or authorized
+                  counsel directly, or may permit an authorized representative
+                  payment process. DueQuity follows the route permitted for the
+                  applicable recovery.
                 </p>
               </Prose>
 
               <Callout
                 tone="neutral"
                 className="mt-6"
-                title="On the fee cap"
+                title="On fee ceilings"
               >
                 <p>
-                  A cap is not a target. Where a matter is straightforward we
-                  may charge less than the ceiling, and the figure in your
-                  agreement is the figure that governs. The cap exists so that
-                  no agreement can quietly exceed what your jurisdiction
-                  permits.
+                  A statutory or regulatory ceiling is a maximum, not a target.
+                  The fee stated in your agreement is the fee that governs,
+                  provided it remains within the limits and structures permitted
+                  for the applicable jurisdiction.
                 </p>
               </Callout>
 
               <Callout
                 tone="caution"
                 className="mt-4"
-                title="No completed recovery is being shown"
+                title="Illustration only"
               >
                 <p>
-                  Duequity has not yet completed a recovery. This page will not
-                  present an invented case as evidence that it has. The
-                  illustration is arithmetic only.
+                  The figures shown here are hypothetical. They do not represent
+                  a historical DueQuity recovery, a typical recovery amount, or
+                  a promise about what any claimant will receive.
                 </p>
               </Callout>
             </div>
 
             <Card elevated>
               <CardHeader
-                title="Illustrative settlement statement"
-                description="Hypothetical figures shown to explain the calculation."
+                title="Illustrative recovery calculation"
+                description="Hypothetical figures shown only to explain the fee calculation."
                 eyebrow="Illustration only"
               />
 
               <CardBody className="space-y-0">
                 <Line
-                  label="Amount approved by the agency"
+                  label="Illustrative approved recovery"
                   value={
                     formatCents(
                       ILLUSTRATIVE_RECOVERY,
@@ -293,25 +309,15 @@ export default async function FeesPage() {
                   strong
                 />
 
-                <Line
-                  label="Paid by the agency directly to the claimant"
-                  value={
-                    formatCents(
-                      ILLUSTRATIVE_RECOVERY,
-                    )
-                  }
-                  muted
-                />
-
                 <div className="my-3 border-t border-line" />
 
                 <p className="eyebrow mb-2 text-ink-500">
-                  Duequity service fee
+                  DueQuity service fee
                 </p>
 
                 <Line
-                  label="Fee model"
-                  value="Capped success fee"
+                  label="Illustrative fee model"
+                  value="Percentage success fee"
                   muted
                 />
 
@@ -325,7 +331,7 @@ export default async function FeesPage() {
                 />
 
                 <Line
-                  label="Fee charged"
+                  label="Illustrative fee"
                   value={
                     formatCents(
                       illustrativeFee,
@@ -339,7 +345,7 @@ export default async function FeesPage() {
 
                 <div className="flex items-baseline justify-between gap-4">
                   <p className="text-base font-semibold text-ink-900">
-                    Net to the claimant
+                    Illustrative amount after fee
                   </p>
 
                   <p className="tnum text-2xl font-semibold text-accent-700">
@@ -365,17 +371,20 @@ export default async function FeesPage() {
                     {formatCents(
                       ILLUSTRATIVE_RECOVERY,
                     )}
-                    , subject to whatever ceiling the recorded jurisdiction rule
-                    imposes.
+                    , subject to the fee rules and limits applicable to the
+                    actual jurisdiction.
                   </p>
                 </div>
 
                 <div className="mt-3 rounded-md border border-line bg-inset px-3.5 py-3">
                   <p className="text-xs leading-relaxed text-ink-600">
-                    The agency pays the approved amount to the claimant.
-                    Duequity invoices its fee separately after payment clears.
-                    Duequity does not receive, hold, or deduct from an agency
-                    disbursement at any point.
+                    This calculation does not assume a particular payment route.
+                    Where funds are paid directly to the claimant, estate, or
+                    counsel, the DueQuity fee may be handled separately under
+                    the service agreement. Where an authorized representative
+                    payment route permits fee handling through the recovery or
+                    disbursement process, that method is disclosed before the
+                    claimant authorizes it.
                   </p>
                 </div>
               </CardBody>
@@ -393,7 +402,7 @@ export default async function FeesPage() {
           <SectionIntro
             eyebrow="Recorded rules"
             title="What each jurisdiction permits"
-            lede="Fee rules are recorded per jurisdiction and enforced by the platform. Where a jurisdiction is not cleared for intake, no fee arrangement is available at all."
+            lede="Fee rules are recorded per jurisdiction and enforced by the platform. Where a jurisdiction is not cleared for intake, DueQuity does not offer a recovery fee arrangement for it."
           />
 
           {jurisdictions.length ===
@@ -401,12 +410,11 @@ export default async function FeesPage() {
             <div className="mt-8">
               <EmptyState
                 title="No jurisdiction fee rules are published yet"
-                description="Fee rules appear here per jurisdiction as each one completes legal review. Until a jurisdiction is activated, no fee arrangement is offered in it and none is shown here."
+                description="Fee rules appear here as jurisdiction-specific requirements are established and approved for public use."
               />
             </div>
           ) : (
             <Card className="mt-8 overflow-hidden">
-              {/* Desktop table */}
               <div className="hidden md:block">
                 <TableRegion label="Fee rules by jurisdiction">
                   <Table caption="Permitted fee models and recorded caps by jurisdiction">
@@ -548,7 +556,6 @@ export default async function FeesPage() {
                 </TableRegion>
               </div>
 
-              {/* Mobile list */}
               <div className="md:hidden">
                 <RecordList>
                   {jurisdictions.map(
@@ -638,9 +645,8 @@ export default async function FeesPage() {
           )}
 
           <p className="mt-4 text-sm text-ink-500">
-            Recorded rules are reviewed against official sources before a
-            jurisdiction is activated, and the review date is shown on each
-            jurisdiction page. See{" "}
+            Recorded rules are reviewed against authoritative jurisdiction
+            sources before they are used for intake. See{" "}
             <TextLink href="/states">
               where we operate
             </TextLink>
@@ -657,61 +663,69 @@ export default async function FeesPage() {
         <Container width="reading">
           <SectionIntro
             eyebrow="Your alternative"
-            title="You can do this yourself, and here is how"
-            lede="We are not going to bury this. In most jurisdictions a former owner or eligible heir can file a surplus claim directly with the agency and pay no service fee at all."
+            title="You may be able to pursue the recovery yourself"
+            lede="Depending on the jurisdiction and your eligibility, you may be able to submit a surplus claim directly to the responsible authority."
           />
 
           <Prose className="mt-6">
             <p>
-              If you want to pursue a claim on your own, the process generally
-              looks like this:
+              If the applicable jurisdiction allows you to pursue the recovery
+              directly, the process generally begins by identifying the
+              authority holding the funds and obtaining that authority&apos;s
+              current claim procedure.
             </p>
 
             <ol>
               <li>
-                Identify which agency holds the funds. This is usually the clerk
-                of court, the county treasurer or tax collector, the sheriff,
-                the trustee, or the state unclaimed property office.
+                Identify the agency, court, trustee, sheriff, tax authority, or
+                other office responsible for the funds.
               </li>
 
               <li>
-                Ask that agency for its surplus or excess proceeds claim
-                procedure and its claim form.
+                Obtain the current surplus or excess proceeds procedure and any
+                required claim forms.
               </li>
 
               <li>
-                Gather the documents on their list, which typically includes
-                identification and proof of former ownership.
+                Gather the identity, ownership, estate, entity, or other
+                supporting documents required for your circumstances.
               </li>
 
               <li>
-                Submit the claim by the method the agency specifies.
+                Submit the recovery package through the method permitted by the
+                jurisdiction.
               </li>
 
               <li>
-                Follow up, and keep a record of every contact.
+                Track the submission and respond to any additional requests from
+                the responsible authority.
               </li>
             </ol>
 
             <p>
               <strong>
-                We will explain the direct claim option even if you do not hire
-                us.
+                DueQuity will explain the available direct-claim route where one
+                exists.
               </strong>{" "}
-              If Duequity identifies a potential claim and contacts you, we will
-              identify the responsible agency and provide its published contact
-              information so you can independently verify the record and decide
-              whether to pursue the claim yourself.
+              If DueQuity identifies a potential recovery and contacts you, we
+              can identify the responsible authority so you can independently
+              verify the underlying public record and evaluate your options.
             </p>
 
             <p>
-              What we offer instead is the work: locating the record in the
-              first place, jurisdiction expertise, obtaining documents that are
-              difficult to get, handling probate and heir situations,
-              coordinating counsel where a court process is required, and
-              following the claim through to payment. Whether that is worth a
-              fee is your judgement to make, and you should make it with the
-              free option clearly in view.
+              DueQuity&apos;s service is the work of identifying potential
+              recoveries, researching jurisdiction requirements, locating and
+              coordinating claimants, organizing documents, preparing recovery
+              packages, handling permitted administrative steps, coordinating
+              probate-related or heir documentation, involving licensed counsel
+              where legal work is required, and tracking the matter through the
+              appropriate payment process.
+            </p>
+
+            <p>
+              DueQuity provides these services as an optional recovery solution,
+              subject to the requirements and payment route established for the
+              applicable jurisdiction.
             </p>
           </Prose>
 
@@ -719,7 +733,7 @@ export default async function FeesPage() {
         </Container>
       </Section>
 
-      {/* ================================================================ WHAT WE DONT DO */}
+      {/* ================================================================ BOUNDARIES */}
       <Section
         tone="paper"
         size="md"
@@ -727,8 +741,8 @@ export default async function FeesPage() {
         <Container>
           <SectionIntro
             eyebrow="Boundaries"
-            title="Things Duequity will not do"
-            lede="Much of the harm in this industry comes from arrangements that look like a service and function as something else. These are commitments, not preferences."
+            title="Things DueQuity will not do"
+            lede="These are standing boundaries of the DueQuity recovery model."
           />
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -738,42 +752,42 @@ export default async function FeesPage() {
                   "Buy your claim",
 
                 body:
-                  "We do not purchase surplus claims or take assignments of your rights at a discount to their value.",
+                  "We do not purchase surplus claims, take assignments of surplus ownership rights, or acquire an ownership interest in your recovery.",
               },
               {
                 title:
-                  "Hold your money",
+                  "Ignore the payment rules",
 
                 body:
-                  "We are never a payee on an agency disbursement. We do not deposit or endorse claimant instruments.",
+                  "We do not impose one payment route everywhere. We follow the direct-payment or authorized-representative route permitted for the applicable jurisdiction.",
               },
               {
                 title:
-                  "Charge a fee you have not seen",
+                  "Charge an undisclosed fee",
 
                 body:
-                  "The fee, its basis and its cap are in your agreement before you sign, and on your closing statement afterwards.",
+                  "The DueQuity fee, its calculation, applicable limits, and permitted handling method are disclosed in writing before you enter into the service agreement.",
               },
               {
                 title:
                   "Share in attorney fees",
 
                 body:
-                  "Where counsel is needed you engage them directly. We take no part of their fee and no referral payment.",
+                  "Any attorney-client relationship is separate from DueQuity. We do not share in fees charged by independent counsel.",
               },
               {
                 title:
                   "Guarantee a recovery",
 
                 body:
-                  "No one can. Agencies decide claims, liens can consume a surplus, and deadlines can already have passed.",
+                  "DueQuity cannot guarantee approval, timing, or a particular recovery amount. The responsible authority determines whether a claim is approved.",
               },
               {
                 title:
                   "Pressure you to sign",
 
                 body:
-                  "No countdown timers, no expiring offers, no implication that a delay costs you the money.",
+                  "DueQuity does not rely on artificial countdowns, fabricated deadlines, or claims that you must hire us in order to recover funds that you may be entitled to pursue independently.",
               },
             ].map(
               (item) => (
@@ -819,10 +833,10 @@ export default async function FeesPage() {
           </h2>
 
           <p className="mt-3 text-lg leading-relaxed text-ink-600">
-            If Duequity contacts you about a potential surplus claim, you will
-            be shown the source, responsible agency, applicable fee and
-            jurisdiction-specific requirements before deciding whether to work
-            with us.
+            If DueQuity contacts you about a potential surplus recovery, we will
+            identify the source, responsible authority, applicable fee, and
+            jurisdiction-specific recovery requirements before you decide
+            whether to work with us.
           </p>
 
           <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
@@ -832,14 +846,14 @@ export default async function FeesPage() {
               accent
               size="lg"
             >
-              How Duequity works
+              How DueQuity works
             </ButtonLink>
 
             <ButtonLink
               href="/contact"
               size="lg"
             >
-              Contact Duequity
+              Contact DueQuity
             </ButtonLink>
           </div>
         </Container>

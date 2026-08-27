@@ -328,9 +328,8 @@ const CALLOUT_STYLES: Record<CalloutTone, { box: string; title: string }> = {
 /**
  * A framed notice.
  *
- * Used for the disclosures that must never be visually buried: the not a
- * government agency statement, the free claim option, deadline exposure, and
- * compliance blocks.
+ * Used for disclosures and operational notices that should not be visually
+ * buried, including government-affiliation, deadline, and compliance messages.
  */
 export function Callout({
   tone = "neutral",
@@ -366,11 +365,10 @@ export function Callout({
 }
 
 /**
- * The standing legal disclosure block.
+ * The standing government-affiliation disclosure block.
  *
- * Section 4: the not a government agency statement and the free claim option are
- * part of the brand and are never hidden. This component exists so that statement
- * is rendered identically everywhere and cannot be quietly reworded per page.
+ * This component keeps the disclosure consistent wherever it appears while
+ * preserving the jurisdiction-specific possibility of a direct claim route.
  */
 export function GovernmentDisclosure({
   agencyName,
@@ -387,14 +385,16 @@ export function GovernmentDisclosure({
       )}
     >
       <p className="font-semibold text-ink-900">
-        Duequity is not a government agency.
+        DueQuity is not a government agency.
       </p>
+
       <p className="mt-1">
-        Duequity is a private company and is not affiliated with any government
+        DueQuity is a private company operated by Westforge Holdings Inc. and is
+        not affiliated with, endorsed by, or acting on behalf of any government
         agency.{" "}
         {agencyName
-          ? `You may be able to claim these funds directly from ${agencyName} without using Duequity and without paying a service fee.`
-          : "You may be able to claim these funds directly from the responsible agency without using Duequity and without paying a service fee."}
+          ? `Depending on the jurisdiction and your eligibility, you may be able to pursue surplus funds directly through ${agencyName}.`
+          : "Depending on the jurisdiction and your eligibility, you may be able to pursue surplus funds directly through the responsible authority."}
       </p>
     </div>
   );
@@ -462,6 +462,7 @@ export function Divider({
   if (!label) {
     return <hr className={cn("border-t border-line", className)} />;
   }
+
   return (
     <div className={cn("flex items-center gap-3", className)}>
       <hr className="flex-1 border-t border-line" />

@@ -8,8 +8,8 @@ import type { RecoveryStage } from "@/domain/types";
  * These are data with an ordinal rather than a hard-coded sequence, because the
  * stages a claimant sees must be configurable without a code change.
  *
- * Claimant labels avoid operational vocabulary. A claimant reads "We are
- * confirming your identity", not "KYC pending".
+ * Claimant labels avoid operational vocabulary. A claimant reads plain recovery
+ * language rather than internal workflow terms.
  *
  * A stage key appearing on a Claim is the claim's position in this list. The list
  * itself asserts nothing about any individual claim.
@@ -22,7 +22,7 @@ export const RECOVERY_STAGES: RecoveryStage[] = [
     claimantLabel: "Opportunity identified",
     internalLabel: "Opportunity identified",
     claimantDescription:
-      "Duequity located a public record suggesting surplus funds may remain from a property sale.",
+      "DueQuity located a public record suggesting surplus funds may remain from a property sale.",
   },
   {
     key: "owner_located",
@@ -30,7 +30,7 @@ export const RECOVERY_STAGES: RecoveryStage[] = [
     claimantLabel: "Former owner located",
     internalLabel: "Owner located",
     claimantDescription:
-      "We identified and reached the former owner of record or an eligible heir.",
+      "We identified and reached the former owner of record, an estate representative, or a potentially eligible heir.",
   },
   {
     key: "identity_confirmed",
@@ -38,15 +38,15 @@ export const RECOVERY_STAGES: RecoveryStage[] = [
     claimantLabel: "Identity confirmed",
     internalLabel: "Identity verified",
     claimantDescription:
-      "Your identity has been confirmed, so we can act on the claim with the agency.",
+      "Your identity has been confirmed so we can continue the recovery process and complete any required authorization steps.",
   },
   {
     key: "entitlement_review",
     ordinal: 4,
-    claimantLabel: "Entitlement review",
+    claimantLabel: "Eligibility review",
     internalLabel: "Entitlement and jurisdiction review",
     claimantDescription:
-      "We are confirming your legal entitlement and the rules that apply in this jurisdiction.",
+      "We are reviewing ownership, claimant eligibility, and the rules that apply to the recovery in this jurisdiction.",
   },
   {
     key: "documents_requested",
@@ -54,7 +54,7 @@ export const RECOVERY_STAGES: RecoveryStage[] = [
     claimantLabel: "Documents requested",
     internalLabel: "Document collection",
     claimantDescription:
-      "The agency requires specific documents before it will consider the claim.",
+      "The authority handling the recovery requires specific documents before the claim can proceed.",
   },
   {
     key: "package_prepared",
@@ -62,7 +62,7 @@ export const RECOVERY_STAGES: RecoveryStage[] = [
     claimantLabel: "Claim package prepared",
     internalLabel: "Package assembled and reviewed",
     claimantDescription:
-      "Your complete claim package has been assembled and checked.",
+      "Your recovery package has been assembled and checked against the requirements established for your claim.",
   },
   {
     key: "submitted",
@@ -70,7 +70,7 @@ export const RECOVERY_STAGES: RecoveryStage[] = [
     claimantLabel: "Claim submitted",
     internalLabel: "Filed with agency",
     claimantDescription:
-      "The claim has been filed with the agency holding the funds.",
+      "The recovery package has been submitted, or its submission has been coordinated, through the process permitted for your jurisdiction.",
   },
   {
     key: "agency_review",
@@ -78,7 +78,7 @@ export const RECOVERY_STAGES: RecoveryStage[] = [
     claimantLabel: "Agency review",
     internalLabel: "Awaiting agency determination",
     claimantDescription:
-      "The agency is reviewing the claim. This stage is controlled by the agency, not by Duequity.",
+      "The authority handling the recovery is reviewing the claim. This stage is controlled by that authority, not by DueQuity.",
   },
   {
     key: "additional_information",
@@ -86,7 +86,7 @@ export const RECOVERY_STAGES: RecoveryStage[] = [
     claimantLabel: "Additional information requested",
     internalLabel: "Agency information request",
     claimantDescription:
-      "The agency has asked for something further before it can decide.",
+      "The authority handling the recovery has requested additional information or documentation before it can continue.",
   },
   {
     key: "approved",
@@ -94,7 +94,7 @@ export const RECOVERY_STAGES: RecoveryStage[] = [
     claimantLabel: "Approved",
     internalLabel: "Approved by agency",
     claimantDescription:
-      "The agency approved the claim and authorised payment.",
+      "The recovery has been approved and the permitted payment process can move forward.",
   },
   {
     key: "payment_issued",
@@ -102,19 +102,24 @@ export const RECOVERY_STAGES: RecoveryStage[] = [
     claimantLabel: "Payment issued",
     internalLabel: "Payment issued by agency",
     claimantDescription:
-      "The agency issued payment. Funds go directly to you, to the estate, or to an attorney trust account.",
+      "Payment has been issued through the route permitted for your claim. Depending on the jurisdiction, funds may be paid directly to you, your estate, authorized counsel, or through an authorized representative payment process.",
   },
   {
     key: "completed",
     ordinal: 12,
     claimantLabel: "Recovery completed",
     internalLabel: "File closed",
-    claimantDescription: "The recovery is complete and your file is closed.",
+    claimantDescription:
+      "The recovery process is complete and the claim file has been closed.",
   },
 ];
 
 export function getStage(key: string): RecoveryStage {
-  const found = RECOVERY_STAGES.find((s) => s.key === key);
-  if (!found) throw new Error(`Unknown recovery stage: ${key}`);
+  const found = RECOVERY_STAGES.find((stage) => stage.key === key);
+
+  if (!found) {
+    throw new Error(`Unknown recovery stage: ${key}`);
+  }
+
   return found;
 }

@@ -4,12 +4,11 @@ import { Logo } from "@/components/brand/logo";
 /**
  * PUBLIC SITE FOOTER
  *
- * The footer carries the standing legal disclosures. Section 4 is explicit that
- * the not a government agency statement and the free claim option are part of the
- * brand and are never buried, so they appear here in full on every public page,
- * at readable size rather than in grey fine print.
+ * The footer carries the standing legal disclosures. The not-a-government-agency
+ * statement and the possibility of a direct claim route remain visible on every
+ * public page at readable size.
  *
- * Property checking, surplus discovery, claimant-location research and related
+ * Property checking, surplus discovery, claimant-location research, and related
  * operational tooling are staff-only capabilities and are not exposed through
  * the public footer.
  */
@@ -25,14 +24,12 @@ const COLUMNS = [
   },
   {
     heading: "Where We Operate",
-    links: [
-      { href: "/states", label: "Nationwide" },
-    ],
+    links: [{ href: "/states", label: "Nationwide" }],
   },
   {
     heading: "Company",
     links: [
-      { href: "/about", label: "About Duequity" },
+      { href: "/about", label: "About DueQuity" },
       { href: "/security", label: "Security" },
       { href: "/resources", label: "Resources" },
       { href: "/contact", label: "Contact" },
@@ -59,9 +56,10 @@ export function SiteFooter() {
             <Logo tone="light" showParent href={null} />
 
             <p className="mt-4 text-sm leading-relaxed text-ink-400">
-              Duequity helps former property owners and heirs identify and
-              recover surplus funds that may still legally belong to them after
-              a foreclosure, tax sale, or similar property sale.
+              DueQuity helps former property owners, estate representatives, and
+              potentially eligible heirs identify and pursue surplus funds that
+              may remain after a foreclosure, tax sale, or similar property
+              sale.
             </p>
 
             <p className="mt-4 text-sm text-ink-300">
@@ -104,49 +102,55 @@ export function SiteFooter() {
         <div className="mt-12 space-y-3 border-t border-ink-800 pt-8 text-sm leading-relaxed text-ink-400">
           <p>
             <span className="font-semibold text-ink-200">
-              Duequity is not a government agency.
+              DueQuity is not a government agency.
             </span>{" "}
-            Duequity is a private company operated by Westforge Holdings Inc.
+            DueQuity is a private company operated by Westforge Holdings Inc.
             and is not affiliated with, endorsed by, or acting on behalf of any
             government agency.
           </p>
 
           <p>
             <span className="font-semibold text-ink-200">
-              You may be able to claim funds yourself at no cost.
+              You may be able to pursue surplus funds directly.
             </span>{" "}
-            In most jurisdictions a former owner or eligible heir may file a
-            surplus claim directly with the responsible agency without paying a
-            service fee. Duequity will tell you which agency holds the funds and
-            how to reach them, whether or not you choose to work with us.
+            Depending on the jurisdiction and your eligibility, you may be able
+            to submit a claim directly to the agency or other authority holding
+            the funds. DueQuity can identify the responsible authority and
+            explain the available recovery route.
           </p>
 
           <p>
             <span className="font-semibold text-ink-200">
-              Duequity is not a law firm.
+              DueQuity is not a law firm.
             </span>{" "}
-            Duequity does not provide legal advice or legal representation.
-            Where a matter requires counsel, Duequity can refer you to an
-            independent attorney whom you engage directly. Duequity does not
-            share in attorney fees and receives no compensation for a referral.
+            DueQuity does not provide legal advice or legal representation.
+            When legal work is required, you may engage an independent attorney
+            of your choice, and DueQuity may continue coordinating the non-legal
+            recovery work where appropriate. Any attorney-client relationship
+            and attorney fees are separate from DueQuity.
           </p>
 
           <p>
-            Duequity does not take custody of claimant funds, does not purchase
-            surplus claims, and does not guarantee that any claim will be
-            approved or that any amount will be recovered. Fees vary by
-            jurisdiction and are disclosed in writing before any agreement is
-            signed.
+            <span className="font-semibold text-ink-200">
+              Payment procedures vary by jurisdiction.
+            </span>{" "}
+            Recovery funds may be paid directly to the claimant, an estate,
+            authorized counsel, or through an authorized representative payment
+            process where permitted. DueQuity does not purchase surplus claims
+            or take assignments of ownership rights and does not guarantee that
+            any claim will be approved or that any amount will be recovered.
+            Fees vary by jurisdiction and are disclosed in writing before any
+            agreement is signed.
           </p>
         </div>
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-ink-800 pt-6 text-xs text-ink-500">
           <p>
             Copyright {year} Westforge Holdings Inc. All rights reserved.
-            Duequity is a product of Westforge Holdings Inc.
+            DueQuity is a product of Westforge Holdings Inc.
           </p>
 
-          <p className="font-mono tracking-tight">Duequity by Westforge</p>
+          <p className="font-mono tracking-tight">DueQuity by Westforge</p>
         </div>
       </div>
     </footer>
