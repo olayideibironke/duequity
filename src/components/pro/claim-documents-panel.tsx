@@ -19,7 +19,7 @@ import { Badge } from "@/components/ui/badge";
  * The server remains authoritative for:
  *
  * - jurisdiction-required agency document kinds
- * - Duequity internal workflow document kinds
+ * - DueQuity internal workflow document kinds
  * - claim and claimant linkage
  * - accepted file types and maximum size
  * - durable metadata
@@ -39,7 +39,7 @@ import { Badge } from "@/components/ui/badge";
  * Passing a safety scan does not satisfy a filing requirement.
  * A human must explicitly accept the uploaded document.
  *
- * Agency filing evidence and Duequity internal evidence are intentionally
+ * Agency filing evidence and DueQuity internal evidence are intentionally
  * rendered as separate lanes. An accepted internal fee agreement never counts
  * as a county, court, tax collector or custodian filing requirement.
  */
@@ -1320,7 +1320,7 @@ export function ClaimDocumentsPanel({
         decision ===
           "accept_document"
           ? internalWorkflowDocument
-            ? `${document.title} accepted as Duequity internal workflow evidence. It does not satisfy an agency filing requirement.`
+            ? `${document.title} accepted as DueQuity internal workflow evidence. It does not satisfy an agency filing requirement.`
             : `${document.title} accepted. This document now satisfies the current agency document request.`
           : internalWorkflowDocument
             ? `${document.title} rejected. Upload corrected internal evidence before that workflow can proceed.`
@@ -1571,7 +1571,7 @@ export function ClaimDocumentsPanel({
 
                 <p className="mt-1 max-w-3xl text-xs leading-relaxed text-accent-800">
                   The current approved jurisdiction does not require any agency
-                  filing document types for this Claim. Duequity internal
+                  filing document types for this Claim. DueQuity internal
                   documents remain separate below.
                 </p>
               </div>
@@ -2213,7 +2213,7 @@ export function ClaimDocumentsPanel({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-semibold text-ink-900">
-                Duequity internal documents
+                DueQuity internal documents
               </h3>
 
               <Badge tone="neutral">
@@ -2222,7 +2222,7 @@ export function ClaimDocumentsPanel({
             </div>
 
             <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-600">
-              Internal documents support Duequity&apos;s own service workflow.
+              Internal documents support DueQuity&apos;s own service workflow.
               They are not jurisdiction-required filing documents and never
               increase agency-document readiness.
             </p>
@@ -2300,7 +2300,7 @@ export function ClaimDocumentsPanel({
                             kind ===
                             "fee_agreement"
                               ? "Accepted service-agreement evidence is required before legacy agreement-signing controls can be recorded, but it does not satisfy an agency filing-document request."
-                              : "Duequity internal workflow evidence."
+                              : "DueQuity internal workflow evidence."
                           }
                         </p>
                       </div>
@@ -2708,7 +2708,7 @@ export function ClaimDocumentsPanel({
                                             "accepted" &&
                                           (
                                             <p className="mt-3 text-xs font-medium text-accent-800">
-                                              Accepted as Duequity internal
+                                              Accepted as DueQuity internal
                                               workflow evidence. This does not
                                               satisfy an agency filing
                                               requirement.

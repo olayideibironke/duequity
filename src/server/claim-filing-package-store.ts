@@ -1,23 +1,41 @@
-import { promises as fs } from "node:fs";
-import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import "server-only";
 
-import type { Cents, DocumentKind, IsoDate, IsoInstant } from "@/domain/types";
+import {
+  createHash,
+  randomUUID,
+} from "node:crypto";
 
-import { resolveLegalPosition } from "@/domain/legal-position";
+import type {
+  Cents,
+  DocumentKind,
+  IsoDate,
+  IsoInstant,
+} from "@/domain/types";
 
-import { getClaimantOnboarding } from "@/server/claimant-onboarding-store";
+import {
+  resolveLegalPosition,
+} from "@/domain/legal-position";
+
+import {
+  getClaimantOnboarding,
+} from "@/server/claimant-onboarding-store";
 
 import {
   listClaimDocuments,
   resolveClaimDocumentReadiness,
 } from "@/server/claim-document-store";
 
-import { resolvePersistedClaimFilingReadiness } from "@/server/claim-filing-readiness";
+import {
+  resolvePersistedClaimFilingReadiness,
+} from "@/server/claim-filing-readiness";
 
-import { resolveClaimRecord } from "@/server/claim-record";
+import {
+  resolveClaimRecord,
+} from "@/server/claim-record";
 
-import { getOpportunityConversionByClaimId } from "@/server/opportunity-conversion-store";
+import {
+  getOpportunityConversionByClaimId,
+} from "@/server/opportunity-conversion-store";
 
 import {
   commercialQuoteHasLegalRuleProvenance,
@@ -30,78 +48,42 @@ import {
   type JurisdictionPaymentRouting,
 } from "@/server/jurisdiction-intelligence";
 
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
 /**
  * CLAIM FILING PACKAGE STORE
  *
- * Local repository for the controlled package Duequity prepares only after
- * every filing-readiness control has passed.
+ * Durable Supabase-backed filing-package repository.
  *
  * Workflow:
  *
- *   1. Claim satisfies filing readiness.
- *   2. Filing package is prepared and frozen as a snapshot.
- *   3. Package is explicitly submitted for independent human review.
- *   4. A different human reviewer approves or returns the package.
- *   5. Pre-filing approval does not mean the claim was externally submitted.
+ *   1. Claim satisfies live filing readiness.
+ *   2. Filing package is prepared and frozen.
+ *   3. Package enters independent human review.
+ *   4. A different authorized reviewer approves or returns it.
+ *   5. Pre-filing approval unlocks Claim Initiation.
  *
- * No function in this file sends anything to a court, agency or custodian.
+ * No function in this file submits anything externally.
  *
  * SNAPSHOT PRINCIPLE
  *
- * The package captures the exact:
+ * The exact claimant, jurisdiction version, legal rule, payment route,
+ * commercial provenance, agreement, accepted documents, deadline, legal lane
+ * and readiness controls are frozen into a SHA-256-protected snapshot.
  *
- *   - claim
- *   - claimant
- *   - jurisdiction
- *   - approved jurisdiction-package version
- *   - jurisdiction legal-rule version
- *   - approved payment route and launch track
- *   - commercial pricing lock and immutable quote hash
- *   - commercial-policy version
- *   - quote legal-rule version snapshot
- *   - fee-agreement legal-rule version snapshot
- *   - signed service agreement
- *   - accepted document IDs
- *   - accepted document kinds
- *   - resolved legal lane and rationale
- *   - filing deadline
- *   - readiness controls
+ * PostgreSQL jsonb does not preserve JavaScript object-property order.
+ * Therefore package hashing must never depend on the order returned by jsonb.
  *
- * used when the package was prepared.
+ * Before hashing, this store reconstructs the snapshot into DueQuity's
+ * deterministic filing-package schema order. That gives the same hash before
+ * and after a Supabase round trip while still detecting any substantive
+ * snapshot mutation.
  *
- * If accepted documents, jurisdiction rules, payment routing, pricing,
- * agreement provenance or other critical evidence later changes, the previous
- * package cannot silently inherit those changes. A new package must be prepared.
- *
- * STORED SNAPSHOT INTEGRITY
- *
- * Every persisted package carries a SHA-256 hash of its frozen snapshot.
- * Submission, return and approval transitions verify the stored snapshot before
- * mutation. Approval also rebuilds the live snapshot and requires the live hash
- * to remain identical to the prepared hash.
- *
- * RETURNED PACKAGE RULE
- *
- * A package returned for changes is never simply moved back under review.
- * Preparing after a return creates a new package version and supersedes the
- * returned package, even when the rebuilt snapshot is otherwise identical.
- *
- * LOCAL PERSISTENCE LIMITATION
- *
- * JSON persistence and the process-local mutation queue are suitable for the
- * current local build. Production deployment will require durable transactional
- * persistence and authenticated user identities.
+ * The Supabase table independently enforces immutable snapshot/provenance
+ * fields and controlled status transitions.
  */
-
-/* ========================================================================== */
-/* Storage                                                                     */
-/* ========================================================================== */
-
-const DATA_DIRECTORY = path.join(process.cwd(), ".duequity-data");
-
-const DATA_FILE = path.join(DATA_DIRECTORY, "claim-filing-packages.json");
-
-const STORE_VERSION = 1;
 
 /* ========================================================================== */
 /* Status                                                                      */
@@ -153,17 +135,23 @@ export interface ClaimFilingPackageSnapshot {
 
   jurisdictionLegalRuleVersion: number;
 
-  paymentRoute: JurisdictionPaymentRouting["paymentRoute"];
+  paymentRoute:
+    JurisdictionPaymentRouting["paymentRoute"];
 
-  launchPaymentTrack: JurisdictionPaymentRouting["launchTrack"];
+  launchPaymentTrack:
+    JurisdictionPaymentRouting["launchTrack"];
 
-  representativeMayFile: JurisdictionPaymentRouting["representativeMayFile"];
+  representativeMayFile:
+    JurisdictionPaymentRouting["representativeMayFile"];
 
-  representativeMayReceivePayment: JurisdictionPaymentRouting["representativeMayReceivePayment"];
+  representativeMayReceivePayment:
+    JurisdictionPaymentRouting["representativeMayReceivePayment"];
 
-  assignmentRequiredForRepresentativePayment: JurisdictionPaymentRouting["assignmentRequiredForRepresentativePayment"];
+  assignmentRequiredForRepresentativePayment:
+    JurisdictionPaymentRouting["assignmentRequiredForRepresentativePayment"];
 
-  feeCollectionMethod: JurisdictionPaymentRouting["feeCollectionMethod"];
+  feeCollectionMethod:
+    JurisdictionPaymentRouting["feeCollectionMethod"];
 
   claimantId: string;
 
@@ -211,9 +199,11 @@ export interface ClaimFilingPackageSnapshot {
 
   serviceAgreementCancellationDeadline?: IsoDate;
 
-  acceptedDocuments: ClaimFilingPackageDocumentSnapshot[];
+  acceptedDocuments:
+    ClaimFilingPackageDocumentSnapshot[];
 
-  readinessControls: ClaimFilingPackageReadinessSnapshot[];
+  readinessControls:
+    ClaimFilingPackageReadinessSnapshot[];
 
   readinessCompletedCount: number;
 
@@ -292,18 +282,6 @@ export interface ClaimFilingPackageAuditEntry {
 }
 
 /* ========================================================================== */
-/* Repository state                                                            */
-/* ========================================================================== */
-
-interface ClaimFilingPackageStoreState {
-  version: number;
-
-  packages: PersistedClaimFilingPackage[];
-
-  audit: ClaimFilingPackageAuditEntry[];
-}
-
-/* ========================================================================== */
 /* Inputs                                                                      */
 /* ========================================================================== */
 
@@ -344,20 +322,103 @@ export interface ReturnClaimFilingPackageInput {
 }
 
 /* ========================================================================== */
-/* Mutation queue                                                              */
+/* Database rows                                                               */
 /* ========================================================================== */
 
-let mutationQueue: Promise<void> = Promise.resolve();
+interface ClaimFilingPackageRow {
+  id: string;
 
-async function mutate<T>(operation: () => Promise<T>): Promise<T> {
-  const pending = mutationQueue.then(operation);
+  claim_id: string;
 
-  mutationQueue = pending.then(
-    () => undefined,
-    () => undefined,
-  );
+  claim_reference: string;
 
-  return pending;
+  version: number;
+
+  status: ClaimFilingPackageStatus;
+
+  snapshot: ClaimFilingPackageSnapshot;
+
+  package_hash: string;
+
+  jurisdiction_package_id: string;
+
+  jurisdiction_package_version: number;
+
+  jurisdiction_legal_rule_version: number;
+
+  commercial_quote_id: string;
+
+  commercial_snapshot_hash: string;
+
+  commercial_policy_id: string;
+
+  commercial_policy_version: number;
+
+  fee_agreement_id: string;
+
+  fee_agreement_legal_rule_version_snapshot: number;
+
+  fee_agreement_document_id: string;
+
+  accepted_documents_snapshot:
+    ClaimFilingPackageDocumentSnapshot[];
+
+  readiness_snapshot:
+    ClaimFilingPackageReadinessSnapshot[];
+
+  readiness_completed_count: number;
+
+  readiness_total_count: number;
+
+  prepared_by_user_id: string;
+
+  prepared_at: string;
+
+  submitted_for_review_by_user_id: string | null;
+
+  submitted_for_review_at: string | null;
+
+  reviewed_by_user_id: string | null;
+
+  reviewed_at: string | null;
+
+  review_note: string | null;
+
+  pre_filing_approved_at: string | null;
+
+  returned_at: string | null;
+
+  return_reason: string | null;
+
+  superseded_at: string | null;
+
+  superseded_by_package_id: string | null;
+
+  row_version: number;
+
+  updated_at: string;
+}
+
+interface ClaimFilingPackageAuditRow {
+  id: string;
+
+  claim_id: string;
+
+  package_id: string;
+
+  action: ClaimFilingPackageAuditAction;
+
+  actor_user_id: string;
+
+  occurred_at: string;
+
+  detail: string | null;
+}
+
+interface BuiltLiveSnapshot {
+  snapshot: ClaimFilingPackageSnapshot;
+
+  jurisdictionPackageId: string;
 }
 
 /* ========================================================================== */
@@ -365,38 +426,67 @@ async function mutate<T>(operation: () => Promise<T>): Promise<T> {
 /* ========================================================================== */
 
 function currentIsoDate(): IsoDate {
-  return new Date().toISOString().slice(0, 10) as IsoDate;
+  return new Date()
+    .toISOString()
+    .slice(
+      0,
+      10,
+    ) as IsoDate;
 }
 
-function requireNonEmpty(value: string, label: string): string {
-  const normalized = value.trim();
+function requireNonEmpty(
+  value: string,
+  label: string,
+): string {
+  const normalized =
+    value.trim();
 
   if (!normalized) {
-    throw new Error(`${label} is required.`);
+    throw new Error(
+      `${label} is required.`,
+    );
   }
 
   return normalized;
 }
 
-function validateIsoInstant(value: string, label: string): IsoInstant {
-  if (Number.isNaN(Date.parse(value))) {
-    throw new Error(`${label} must be a valid ISO timestamp.`);
+function validateIsoInstant(
+  value: string,
+  label: string,
+): IsoInstant {
+  if (
+    Number.isNaN(
+      Date.parse(
+        value,
+      ),
+    )
+  ) {
+    throw new Error(
+      `${label} must be a valid ISO timestamp.`,
+    );
   }
 
   return value;
 }
 
 function assertIndependentReviewer(
-  filingPackage: PersistedClaimFilingPackage,
+  filingPackage:
+    PersistedClaimFilingPackage,
   reviewerUserId: string,
-) {
-  if (filingPackage.preparedByUserId === reviewerUserId) {
+): void {
+  if (
+    filingPackage.preparedByUserId ===
+    reviewerUserId
+  ) {
     throw new Error(
       "The user who prepared the filing package cannot perform its independent pre-filing review.",
     );
   }
 
-  if (filingPackage.submittedForReviewByUserId === reviewerUserId) {
+  if (
+    filingPackage.submittedForReviewByUserId ===
+    reviewerUserId
+  ) {
     throw new Error(
       "The user who submitted the filing package for review cannot perform its independent pre-filing review.",
     );
@@ -404,106 +494,346 @@ function assertIndependentReviewer(
 }
 
 /* ========================================================================== */
-/* Repository                                                                  */
+/* Row mapping                                                                 */
 /* ========================================================================== */
 
-function emptyState(): ClaimFilingPackageStoreState {
+function packageFromRow(
+  row:
+    ClaimFilingPackageRow,
+): PersistedClaimFilingPackage {
   return {
-    version: STORE_VERSION,
+    id:
+      row.id,
 
-    packages: [],
+    claimId:
+      row.claim_id,
 
-    audit: [],
+    claimReference:
+      row.claim_reference,
+
+    version:
+      Number(
+        row.version,
+      ),
+
+    status:
+      row.status,
+
+    snapshot:
+      row.snapshot,
+
+    snapshotHash:
+      row.package_hash,
+
+    preparedByUserId:
+      row.prepared_by_user_id,
+
+    preparedAt:
+      row.prepared_at as IsoInstant,
+
+    submittedForReviewByUserId:
+      row.submitted_for_review_by_user_id ??
+      undefined,
+
+    submittedForReviewAt:
+      row.submitted_for_review_at
+        ? row.submitted_for_review_at as IsoInstant
+        : undefined,
+
+    reviewedByUserId:
+      row.reviewed_by_user_id ??
+      undefined,
+
+    reviewedAt:
+      row.reviewed_at
+        ? row.reviewed_at as IsoInstant
+        : undefined,
+
+    reviewNote:
+      row.review_note ??
+      undefined,
+
+    preFilingApprovedAt:
+      row.pre_filing_approved_at
+        ? row.pre_filing_approved_at as IsoInstant
+        : undefined,
+
+    returnedAt:
+      row.returned_at
+        ? row.returned_at as IsoInstant
+        : undefined,
+
+    returnReason:
+      row.return_reason ??
+      undefined,
+
+    supersededAt:
+      row.superseded_at
+        ? row.superseded_at as IsoInstant
+        : undefined,
+
+    supersededByPackageId:
+      row.superseded_by_package_id ??
+      undefined,
   };
 }
 
-async function ensureDirectory() {
-  await fs.mkdir(DATA_DIRECTORY, {
-    recursive: true,
-  });
-}
+function auditFromRow(
+  row:
+    ClaimFilingPackageAuditRow,
+): ClaimFilingPackageAuditEntry {
+  return {
+    id:
+      row.id,
 
-async function readState(): Promise<ClaimFilingPackageStoreState> {
-  await ensureDirectory();
+    claimId:
+      row.claim_id,
 
-  try {
-    const raw = await fs.readFile(DATA_FILE, "utf8");
+    packageId:
+      row.package_id,
 
-    const parsed = JSON.parse(raw) as Partial<ClaimFilingPackageStoreState>;
+    action:
+      row.action,
 
-    if (
-      parsed.version !== STORE_VERSION ||
-      !Array.isArray(parsed.packages) ||
-      !Array.isArray(parsed.audit)
-    ) {
-      throw new Error(
-        "Claim filing package store has an invalid or unsupported structure.",
-      );
-    }
+    actorUserId:
+      row.actor_user_id,
 
-    return {
-      version: STORE_VERSION,
+    occurredAt:
+      row.occurred_at as IsoInstant,
 
-      packages: parsed.packages,
-
-      audit: parsed.audit,
-    };
-  } catch (error) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
-      return emptyState();
-    }
-
-    throw error;
-  }
-}
-
-async function writeState(state: ClaimFilingPackageStoreState) {
-  await ensureDirectory();
-
-  const temporaryFile = `${DATA_FILE}.tmp`;
-
-  await fs.writeFile(
-    temporaryFile,
-    `${JSON.stringify(state, null, 2)}\n`,
-    "utf8",
-  );
-
-  await fs.rename(temporaryFile, DATA_FILE);
-}
-
-function clonePackage(
-  filingPackage: PersistedClaimFilingPackage,
-): PersistedClaimFilingPackage {
-  return JSON.parse(
-    JSON.stringify(filingPackage),
-  ) as PersistedClaimFilingPackage;
+    detail:
+      row.detail ??
+      undefined,
+  };
 }
 
 /* ========================================================================== */
-/* Hash                                                                        */
+/* Deterministic snapshot hashing                                              */
 /* ========================================================================== */
 
-function hashSnapshot(snapshot: ClaimFilingPackageSnapshot): string {
-  return createHash("sha256")
-    .update(JSON.stringify(snapshot), "utf8")
-    .digest("hex");
+/**
+ * PostgreSQL jsonb is semantically ordered but does not preserve the exact
+ * JavaScript object-property order supplied at insert time.
+ *
+ * Package hashes must therefore be calculated from an explicitly rebuilt
+ * DueQuity filing-package schema.
+ *
+ * This order intentionally matches the original buildLiveSnapshot() object
+ * construction order. That preserves compatibility with filing packages
+ * created before the Supabase-backed repository was introduced.
+ *
+ * Array ordering remains significant:
+ *
+ *   - acceptedDocuments are already deliberately ordered during preparation;
+ *   - readinessControls intentionally preserve the operational control order.
+ *
+ * Optional undefined values are included in this JavaScript object but are
+ * automatically omitted by JSON.stringify(), exactly as they were when the
+ * original package hash was created.
+ */
+function deterministicSnapshot(
+  snapshot:
+    ClaimFilingPackageSnapshot,
+): ClaimFilingPackageSnapshot {
+  return {
+    claimId:
+      snapshot.claimId,
+
+    claimReference:
+      snapshot.claimReference,
+
+    opportunityId:
+      snapshot.opportunityId,
+
+    jurisdictionId:
+      snapshot.jurisdictionId,
+
+    jurisdictionPackageVersion:
+      snapshot.jurisdictionPackageVersion,
+
+    jurisdictionLegalRuleVersion:
+      snapshot.jurisdictionLegalRuleVersion,
+
+    paymentRoute:
+      snapshot.paymentRoute,
+
+    launchPaymentTrack:
+      snapshot.launchPaymentTrack,
+
+    representativeMayFile:
+      snapshot.representativeMayFile,
+
+    representativeMayReceivePayment:
+      snapshot.representativeMayReceivePayment,
+
+    assignmentRequiredForRepresentativePayment:
+      snapshot.assignmentRequiredForRepresentativePayment,
+
+    feeCollectionMethod:
+      snapshot.feeCollectionMethod,
+
+    claimantId:
+      snapshot.claimantId,
+
+    claimantLegalName:
+      snapshot.claimantLegalName,
+
+    filingDeadline:
+      snapshot.filingDeadline,
+
+    legalLane:
+      snapshot.legalLane,
+
+    legalRationale:
+      snapshot.legalRationale,
+
+    legalHumanDetermined:
+      snapshot.legalHumanDetermined,
+
+    legalReviewedBy:
+      snapshot.legalReviewedBy,
+
+    legalLastReviewedAt:
+      snapshot.legalLastReviewedAt,
+
+    commercialQuoteId:
+      snapshot.commercialQuoteId,
+
+    commercialSnapshotHash:
+      snapshot.commercialSnapshotHash,
+
+    commercialPolicyId:
+      snapshot.commercialPolicyId,
+
+    commercialPolicyVersion:
+      snapshot.commercialPolicyVersion,
+
+    commercialTierId:
+      snapshot.commercialTierId,
+
+    commercialRecoveryAmount:
+      snapshot.commercialRecoveryAmount,
+
+    commercialProjectedFee:
+      snapshot.commercialProjectedFee,
+
+    commercialQuoteLegalRuleVersionSnapshot:
+      snapshot.commercialQuoteLegalRuleVersionSnapshot,
+
+    commercialLegalFeeCapPercentSnapshot:
+      snapshot.commercialLegalFeeCapPercentSnapshot,
+
+    commercialLegalFeeCapAmountSnapshot:
+      snapshot.commercialLegalFeeCapAmountSnapshot,
+
+    feeAgreementId:
+      snapshot.feeAgreementId,
+
+    feeAgreementLegalRuleVersionSnapshot:
+      snapshot.feeAgreementLegalRuleVersionSnapshot,
+
+    feeAgreementDocumentId:
+      snapshot.feeAgreementDocumentId,
+
+    serviceAgreementSignedAt:
+      snapshot.serviceAgreementSignedAt,
+
+    serviceAgreementCancellationDeadline:
+      snapshot.serviceAgreementCancellationDeadline,
+
+    acceptedDocuments:
+      snapshot.acceptedDocuments.map(
+        (
+          document,
+        ) => ({
+          kind:
+            document.kind,
+
+          documentId:
+            document.documentId,
+
+          originalFileName:
+            document.originalFileName,
+
+          reviewedByUserId:
+            document.reviewedByUserId,
+
+          reviewedAt:
+            document.reviewedAt,
+        }),
+      ),
+
+    readinessControls:
+      snapshot.readinessControls.map(
+        (
+          control,
+        ) => ({
+          key:
+            control.key,
+
+          label:
+            control.label,
+
+          complete:
+            control.complete,
+
+          detail:
+            control.detail,
+        }),
+      ),
+
+    readinessCompletedCount:
+      snapshot.readinessCompletedCount,
+
+    readinessTotalCount:
+      snapshot.readinessTotalCount,
+  };
+}
+
+function hashSnapshot(
+  snapshot:
+    ClaimFilingPackageSnapshot,
+): string {
+  const normalized =
+    deterministicSnapshot(
+      snapshot,
+    );
+
+  return createHash(
+    "sha256",
+  )
+    .update(
+      JSON.stringify(
+        normalized,
+      ),
+      "utf8",
+    )
+    .digest(
+      "hex",
+    );
 }
 
 export function verifyClaimFilingPackageSnapshot(
-  filingPackage: PersistedClaimFilingPackage,
+  filingPackage:
+    PersistedClaimFilingPackage,
 ): boolean {
-  return hashSnapshot(filingPackage.snapshot) === filingPackage.snapshotHash;
+  return (
+    hashSnapshot(
+      filingPackage.snapshot,
+    ) ===
+    filingPackage.snapshotHash
+  );
 }
 
 function assertStoredPackageSnapshotIntegrity(
-  filingPackage: PersistedClaimFilingPackage,
+  filingPackage:
+    PersistedClaimFilingPackage,
 ): void {
-  if (!verifyClaimFilingPackageSnapshot(filingPackage)) {
+  if (
+    !verifyClaimFilingPackageSnapshot(
+      filingPackage,
+    )
+  ) {
     throw new Error(
       "Filing package snapshot integrity verification failed. The package cannot progress until the persisted record is reviewed.",
     );
@@ -511,17 +841,117 @@ function assertStoredPackageSnapshotIntegrity(
 }
 
 /* ========================================================================== */
+/* Database helpers                                                            */
+/* ========================================================================== */
+
+async function getPackageRow(
+  packageId: string,
+): Promise<
+  ClaimFilingPackageRow | undefined
+> {
+  const supabase =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "claim_filing_packages",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "id",
+        packageId.trim(),
+      )
+      .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Unable to read filing package: ${error.message}`,
+    );
+  }
+
+  return data
+    ? data as unknown as
+        ClaimFilingPackageRow
+    : undefined;
+}
+
+async function updatePackageRow(
+  current:
+    ClaimFilingPackageRow,
+  values:
+    Record<
+      string,
+      unknown
+    >,
+): Promise<
+  ClaimFilingPackageRow
+> {
+  const supabase =
+    getSupabaseAdmin();
+
+  const expectedVersion =
+    Number(
+      current.row_version,
+    );
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "claim_filing_packages",
+      )
+      .update(
+        values,
+      )
+      .eq(
+        "id",
+        current.id,
+      )
+      .eq(
+        "row_version",
+        expectedVersion,
+      )
+      .select(
+        "*",
+      )
+      .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Unable to update filing package: ${error.message}`,
+    );
+  }
+
+  if (!data) {
+    throw new Error(
+      "The filing package changed while this request was being processed. Reload and try again.",
+    );
+  }
+
+  return data as unknown as
+    ClaimFilingPackageRow;
+}
+
+/* ========================================================================== */
 /* Audit                                                                       */
 /* ========================================================================== */
 
-function appendAudit(
-  state: ClaimFilingPackageStoreState,
+async function appendAudit(
   input: {
     claimId: string;
 
     packageId: string;
 
-    action: ClaimFilingPackageAuditAction;
+    action:
+      ClaimFilingPackageAuditAction;
 
     actorUserId: string;
 
@@ -529,22 +959,46 @@ function appendAudit(
 
     detail?: string;
   },
-) {
-  state.audit.push({
-    id: randomUUID(),
+): Promise<void> {
+  const supabase =
+    getSupabaseAdmin();
 
-    claimId: input.claimId,
+  const {
+    error,
+  } =
+    await supabase
+      .from(
+        "claim_filing_package_audit",
+      )
+      .insert({
+        id:
+          randomUUID(),
 
-    packageId: input.packageId,
+        claim_id:
+          input.claimId,
 
-    action: input.action,
+        package_id:
+          input.packageId,
 
-    actorUserId: input.actorUserId,
+        action:
+          input.action,
 
-    occurredAt: input.occurredAt,
+        actor_user_id:
+          input.actorUserId,
 
-    detail: input.detail,
-  });
+        occurred_at:
+          input.occurredAt,
+
+        detail:
+          input.detail ??
+          null,
+      });
+
+  if (error) {
+    throw new Error(
+      `Unable to write filing-package audit: ${error.message}`,
+    );
+  }
 }
 
 /* ========================================================================== */
@@ -553,48 +1007,202 @@ function appendAudit(
 
 export async function listClaimFilingPackages(
   claimId?: string,
-): Promise<PersistedClaimFilingPackage[]> {
-  const state = await readState();
+): Promise<
+  PersistedClaimFilingPackage[]
+> {
+  const supabase =
+    getSupabaseAdmin();
 
-  return state.packages
-    .filter((filingPackage) => !claimId || filingPackage.claimId === claimId)
-    .map(clonePackage)
-    .sort((left, right) => right.preparedAt.localeCompare(left.preparedAt));
+  let query =
+    supabase
+      .from(
+        "claim_filing_packages",
+      )
+      .select(
+        "*",
+      )
+      .order(
+        "version",
+        {
+          ascending:
+            false,
+        },
+      );
+
+  if (claimId) {
+    query =
+      query.eq(
+        "claim_id",
+        claimId.trim(),
+      );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await query;
+
+  if (error) {
+    throw new Error(
+      `Unable to list filing packages: ${error.message}`,
+    );
+  }
+
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      packageFromRow(
+        row as unknown as
+          ClaimFilingPackageRow,
+      ),
+  );
 }
 
 export async function getClaimFilingPackage(
   packageId: string,
-): Promise<PersistedClaimFilingPackage | undefined> {
-  const state = await readState();
+): Promise<
+  PersistedClaimFilingPackage | undefined
+> {
+  const row =
+    await getPackageRow(
+      packageId,
+    );
 
-  const filingPackage = state.packages.find(
-    (candidate) => candidate.id === packageId,
-  );
-
-  return filingPackage ? clonePackage(filingPackage) : undefined;
+  return row
+    ? packageFromRow(
+        row,
+      )
+    : undefined;
 }
 
 export async function getCurrentClaimFilingPackage(
   claimId: string,
-): Promise<PersistedClaimFilingPackage | undefined> {
-  const packages = await listClaimFilingPackages(claimId);
+): Promise<
+  PersistedClaimFilingPackage | undefined
+> {
+  const supabase =
+    getSupabaseAdmin();
 
-  return packages.find(
-    (filingPackage) => filingPackage.status !== "superseded",
-  );
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "claim_filing_packages",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "claim_id",
+        claimId.trim(),
+      )
+      .neq(
+        "status",
+        "superseded",
+      )
+      .order(
+        "version",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        2,
+      );
+
+  if (error) {
+    throw new Error(
+      `Unable to read current filing package: ${error.message}`,
+    );
+  }
+
+  const rows =
+    (
+      data ??
+      []
+    ) as unknown as
+      ClaimFilingPackageRow[];
+
+  if (
+    rows.length >
+    1
+  ) {
+    throw new Error(
+      "Multiple active filing packages exist for this claim. Filing workflow is blocked pending repository review.",
+    );
+  }
+
+  return rows[0]
+    ? packageFromRow(
+        rows[0],
+      )
+    : undefined;
 }
 
 export async function claimFilingPackageAudit(
   claimId?: string,
-): Promise<ClaimFilingPackageAuditEntry[]> {
-  const state = await readState();
+): Promise<
+  ClaimFilingPackageAuditEntry[]
+> {
+  const supabase =
+    getSupabaseAdmin();
 
-  return state.audit
-    .filter((entry) => !claimId || entry.claimId === claimId)
-    .map((entry) => ({
-      ...entry,
-    }))
-    .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt));
+  let query =
+    supabase
+      .from(
+        "claim_filing_package_audit",
+      )
+      .select(
+        "*",
+      )
+      .order(
+        "occurred_at",
+        {
+          ascending:
+            false,
+        },
+      );
+
+  if (claimId) {
+    query =
+      query.eq(
+        "claim_id",
+        claimId.trim(),
+      );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await query;
+
+  if (error) {
+    throw new Error(
+      `Unable to read filing-package audit: ${error.message}`,
+    );
+  }
+
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      auditFromRow(
+        row as unknown as
+          ClaimFilingPackageAuditRow,
+      ),
+  );
 }
 
 /* ========================================================================== */
@@ -603,47 +1211,84 @@ export async function claimFilingPackageAudit(
 
 async function buildLiveSnapshot(
   claimId: string,
-): Promise<ClaimFilingPackageSnapshot> {
-  const resolved = await resolveClaimRecord(claimId);
+): Promise<
+  BuiltLiveSnapshot
+> {
+  const resolved =
+    await resolveClaimRecord(
+      claimId,
+    );
 
   if (!resolved) {
-    throw new Error("Claim not found.");
+    throw new Error(
+      "Claim not found.",
+    );
   }
 
-  const claim = resolved.claim;
+  const claim =
+    resolved.claim;
 
-  const jurisdictionPackages = await listJurisdictionRulePackages();
+  const jurisdictionPackages =
+    await listJurisdictionRulePackages();
 
-  const jurisdictionPackage = jurisdictionPackages
-    .filter(
-      (rulePackage) =>
-        rulePackage.status === "approved" &&
-        rulePackage.rule?.id === claim.jurisdictionId,
-    )
-    .slice()
-    .sort((left, right) => right.version - left.version)[0];
+  const jurisdictionPackage =
+    jurisdictionPackages
+      .filter(
+        (
+          rulePackage,
+        ) =>
+          rulePackage.status ===
+            "approved" &&
+          rulePackage.rule?.id ===
+            claim.jurisdictionId,
+      )
+      .slice()
+      .sort(
+        (
+          left,
+          right,
+        ) =>
+          right.version -
+          left.version,
+      )[0];
 
-  const jurisdiction = jurisdictionPackage?.rule;
+  const jurisdiction =
+    jurisdictionPackage?.rule;
 
-  if (!jurisdictionPackage || !jurisdiction) {
+  if (
+    !jurisdictionPackage ||
+    !jurisdiction
+  ) {
     throw new Error(
       "No current approved jurisdiction rule is published for this claim.",
     );
   }
 
-  const jurisdictionLegalRuleVersion = jurisdiction.legalRuleVersion;
+  const jurisdictionPackageId =
+    requireNonEmpty(
+      jurisdictionPackage.id,
+      "Jurisdiction package ID",
+    );
+
+  const jurisdictionLegalRuleVersion =
+    jurisdiction.legalRuleVersion;
 
   if (
-    jurisdictionLegalRuleVersion === undefined ||
-    !Number.isInteger(jurisdictionLegalRuleVersion) ||
-    jurisdictionLegalRuleVersion < 1
+    jurisdictionLegalRuleVersion ===
+      undefined ||
+    !Number.isInteger(
+      jurisdictionLegalRuleVersion,
+    ) ||
+    jurisdictionLegalRuleVersion <
+      1
   ) {
     throw new Error(
       "The current approved jurisdiction does not have a valid legal-rule version. Filing-package preparation is blocked.",
     );
   }
 
-  const paymentRouting = jurisdictionPackage.paymentRouting;
+  const paymentRouting =
+    jurisdictionPackage.paymentRouting;
 
   if (!paymentRouting) {
     throw new Error(
@@ -651,98 +1296,159 @@ async function buildLiveSnapshot(
     );
   }
 
-  const today = currentIsoDate();
+  const today =
+    currentIsoDate();
 
-  const readiness = await resolvePersistedClaimFilingReadiness(
-    claim,
-    jurisdiction,
-    today,
-  );
+  const readiness =
+    await resolvePersistedClaimFilingReadiness(
+      claim,
+      jurisdiction,
+      today,
+    );
 
-  if (!readiness.readyToPrepare) {
+  if (
+    !readiness.readyToPrepare
+  ) {
     throw new Error(
-      `Claim is not ready to prepare. ${readiness.outstandingControlCount} filing-readiness control${readiness.outstandingControlCount === 1 ? " remains" : "s remain"} outstanding.`,
+      `Claim is not ready to prepare. ${readiness.outstandingControlCount} filing-readiness control${
+        readiness.outstandingControlCount ===
+        1
+          ? " remains"
+          : "s remain"
+      } outstanding.`,
     );
   }
 
-  const onboarding = await getClaimantOnboarding(claim.id);
+  const onboarding =
+    await getClaimantOnboarding(
+      claim.id,
+    );
 
   if (!onboarding) {
-    throw new Error("Persisted claimant onboarding could not be resolved.");
+    throw new Error(
+      "Persisted claimant onboarding could not be resolved.",
+    );
   }
 
-  if (onboarding.claimant.identityVerification !== "verified") {
-    throw new Error("Claimant identity is not verified.");
+  if (
+    onboarding.claimant
+      .identityVerification !==
+    "verified"
+  ) {
+    throw new Error(
+      "Claimant identity is not verified.",
+    );
   }
 
-  if (!onboarding.serviceAgreement) {
+  if (
+    !onboarding.serviceAgreement
+  ) {
     throw new Error(
       "A signed claimant service agreement is required before preparing the filing package.",
     );
   }
 
-  const conversion = await getOpportunityConversionByClaimId(claim.id);
+  const conversion =
+    await getOpportunityConversionByClaimId(
+      claim.id,
+    );
 
   if (!conversion) {
-    throw new Error("Opportunity conversion could not be resolved.");
+    throw new Error(
+      "Opportunity conversion could not be resolved.",
+    );
   }
 
-  const commercialApproval = await getCommercialApprovalByQuoteId(
-    conversion.commercialQuoteId,
-  );
+  const commercialApproval =
+    await getCommercialApprovalByQuoteId(
+      conversion.commercialQuoteId,
+    );
 
-  if (!commercialApproval || commercialApproval.approvalStatus !== "locked") {
-    throw new Error("The commercial pricing snapshot is not locked.");
+  if (
+    !commercialApproval ||
+    commercialApproval.approvalStatus !==
+      "locked"
+  ) {
+    throw new Error(
+      "The commercial pricing snapshot is not locked.",
+    );
   }
 
-  if (!verifyCommercialQuoteSnapshot(commercialApproval)) {
+  if (
+    !verifyCommercialQuoteSnapshot(
+      commercialApproval,
+    )
+  ) {
     throw new Error(
       "Commercial pricing snapshot integrity verification failed.",
     );
   }
 
-  if (commercialApproval.snapshotHash !== conversion.commercialSnapshotHash) {
+  if (
+    commercialApproval.snapshotHash !==
+    conversion.commercialSnapshotHash
+  ) {
     throw new Error(
       "Commercial pricing snapshot does not match the conversion record.",
     );
   }
 
-  if (commercialApproval.lockedFeeAgreementId !== conversion.feeAgreementId) {
+  if (
+    commercialApproval.lockedFeeAgreementId !==
+    conversion.feeAgreementId
+  ) {
     throw new Error(
       "Commercial pricing lock is not bound to the expected fee agreement record.",
     );
   }
 
-  const commercialQuote = commercialApproval.quoteSnapshot;
+  const commercialQuote =
+    commercialApproval.quoteSnapshot;
 
-  if (!commercialQuoteHasLegalRuleProvenance(commercialQuote)) {
+  if (
+    !commercialQuoteHasLegalRuleProvenance(
+      commercialQuote,
+    )
+  ) {
     throw new Error(
       "The locked commercial quote does not contain a valid legal-rule version snapshot.",
     );
   }
 
   const commercialQuoteLegalRuleVersionSnapshot =
-    commercialQuote.legalRuleVersionSnapshot;
+    commercialQuote
+      .legalRuleVersionSnapshot;
 
-  if (commercialQuoteLegalRuleVersionSnapshot === undefined) {
+  if (
+    commercialQuoteLegalRuleVersionSnapshot ===
+    undefined
+  ) {
     throw new Error(
       "The locked commercial quote legal-rule version could not be resolved.",
     );
   }
 
-  const feeAgreement = claim.feeAgreement;
+  const feeAgreement =
+    claim.feeAgreement;
 
   if (!feeAgreement) {
-    throw new Error("The Claim fee agreement could not be resolved.");
+    throw new Error(
+      "The Claim fee agreement could not be resolved.",
+    );
   }
 
   const feeAgreementLegalRuleVersionSnapshot =
-    feeAgreement.legalRuleVersionSnapshot;
+    feeAgreement
+      .legalRuleVersionSnapshot;
 
   if (
-    feeAgreementLegalRuleVersionSnapshot === undefined ||
-    !Number.isInteger(feeAgreementLegalRuleVersionSnapshot) ||
-    feeAgreementLegalRuleVersionSnapshot < 1
+    feeAgreementLegalRuleVersionSnapshot ===
+      undefined ||
+    !Number.isInteger(
+      feeAgreementLegalRuleVersionSnapshot,
+    ) ||
+    feeAgreementLegalRuleVersionSnapshot <
+      1
   ) {
     throw new Error(
       "The Claim fee agreement does not contain a valid legal-rule version snapshot.",
@@ -759,7 +1465,8 @@ async function buildLiveSnapshot(
   }
 
   if (
-    commercialQuoteLegalRuleVersionSnapshot !== jurisdictionLegalRuleVersion
+    commercialQuoteLegalRuleVersionSnapshot !==
+    jurisdictionLegalRuleVersion
   ) {
     throw new Error(
       "The jurisdiction legal rule changed after commercial pricing or agreement creation. Prepare a new compliant pricing and agreement workflow before filing.",
@@ -767,8 +1474,10 @@ async function buildLiveSnapshot(
   }
 
   if (
-    feeAgreement.commercialFeeQuoteId !== conversion.commercialQuoteId ||
-    feeAgreement.id !== conversion.feeAgreementId
+    feeAgreement.commercialFeeQuoteId !==
+      conversion.commercialQuoteId ||
+    feeAgreement.id !==
+      conversion.feeAgreementId
   ) {
     throw new Error(
       "The Claim fee agreement does not match the persisted opportunity conversion.",
@@ -776,7 +1485,8 @@ async function buildLiveSnapshot(
   }
 
   if (
-    feeAgreement.commercialPolicyId !== commercialQuote.commercialPolicyId ||
+    feeAgreement.commercialPolicyId !==
+      commercialQuote.commercialPolicyId ||
     feeAgreement.commercialPolicyVersion !==
       commercialQuote.commercialPolicyVersion
   ) {
@@ -785,41 +1495,93 @@ async function buildLiveSnapshot(
     );
   }
 
-  const feeAgreementDocumentId = onboarding.serviceAgreement.documentId?.trim();
+  const feeAgreementDocumentId =
+    onboarding.serviceAgreement.documentId?.trim();
 
-  if (!feeAgreementDocumentId) {
+  if (
+    !feeAgreementDocumentId
+  ) {
     throw new Error(
       "The executed service-agreement document could not be resolved.",
     );
   }
 
-  const documentReadiness = await resolveClaimDocumentReadiness(claim.id);
-
-  const documents = await listClaimDocuments(claim.id);
-
-  const acceptedDocumentSnapshots: ClaimFilingPackageDocumentSnapshot[] = [];
-
-  for (const kind of jurisdiction.requiredDocuments) {
-    const request = documentReadiness.requiredRequests.find(
-      (candidate) => candidate.kind === kind,
+  const documentReadiness =
+    await resolveClaimDocumentReadiness(
+      claim.id,
     );
+
+  const documents =
+    await listClaimDocuments(
+      claim.id,
+    );
+
+  const estateHandlingRequired =
+    jurisdiction
+      .probateRequiredWhenDeceased &&
+    claim.flags.some(
+      (
+        flag,
+      ) =>
+        flag.kind ===
+          "deceased_owner" ||
+        flag.kind ===
+          "probate_required",
+    );
+
+  const requiredDocumentKinds =
+    jurisdiction.requiredDocuments.filter(
+      (
+        kind,
+      ) =>
+        kind !==
+          "letters_of_administration" ||
+        estateHandlingRequired,
+    );
+
+  const acceptedDocumentSnapshots:
+    ClaimFilingPackageDocumentSnapshot[] =
+      [];
+
+  for (
+    const kind of
+    requiredDocumentKinds
+  ) {
+    const request =
+      documentReadiness.requiredRequests.find(
+        (
+          candidate,
+        ) =>
+          candidate.kind ===
+          kind,
+      );
 
     if (
       !request ||
-      request.status !== "accepted" ||
+      request.status !==
+        "accepted" ||
       !request.fulfilledByDocumentId
     ) {
       throw new Error(
-        `Accepted evidence is missing for ${kind.replaceAll("_", " ")}.`,
+        `Accepted evidence is missing for ${kind.replaceAll(
+          "_",
+          " ",
+        )}.`,
       );
     }
 
-    const document = documents.find(
-      (candidate) =>
-        candidate.id === request.fulfilledByDocumentId &&
-        candidate.kind === kind &&
-        candidate.status === "accepted",
-    );
+    const document =
+      documents.find(
+        (
+          candidate,
+        ) =>
+          candidate.id ===
+            request.fulfilledByDocumentId &&
+          candidate.kind ===
+            kind &&
+          candidate.status ===
+            "accepted",
+      );
 
     if (!document) {
       throw new Error(
@@ -833,113 +1595,178 @@ async function buildLiveSnapshot(
     acceptedDocumentSnapshots.push({
       kind,
 
-      documentId: document.id,
+      documentId:
+        document.id,
 
-      originalFileName: document.originalFileName,
+      originalFileName:
+        document.originalFileName,
 
-      reviewedByUserId: document.reviewedByUserId,
+      reviewedByUserId:
+        document.reviewedByUserId,
 
-      reviewedAt: document.reviewedAt,
+      reviewedAt:
+        document.reviewedAt,
     });
   }
 
-  acceptedDocumentSnapshots.sort((left, right) =>
-    left.kind.localeCompare(right.kind),
+  acceptedDocumentSnapshots.sort(
+    (
+      left,
+      right,
+    ) =>
+      left.kind.localeCompare(
+        right.kind,
+      ),
   );
 
-  const legalPosition = resolveLegalPosition(claim, jurisdiction, today);
+  const legalPosition =
+    resolveLegalPosition(
+      claim,
+      jurisdiction,
+      today,
+    );
+
+  const snapshot:
+    ClaimFilingPackageSnapshot =
+      {
+        claimId:
+          claim.id,
+
+        claimReference:
+          claim.reference,
+
+        opportunityId:
+          claim.opportunityId,
+
+        jurisdictionId:
+          claim.jurisdictionId,
+
+        jurisdictionPackageVersion:
+          jurisdictionPackage.version,
+
+        jurisdictionLegalRuleVersion,
+
+        paymentRoute:
+          paymentRouting.paymentRoute,
+
+        launchPaymentTrack:
+          paymentRouting.launchTrack,
+
+        representativeMayFile:
+          paymentRouting.representativeMayFile,
+
+        representativeMayReceivePayment:
+          paymentRouting.representativeMayReceivePayment,
+
+        assignmentRequiredForRepresentativePayment:
+          paymentRouting.assignmentRequiredForRepresentativePayment,
+
+        feeCollectionMethod:
+          paymentRouting.feeCollectionMethod,
+
+        claimantId:
+          onboarding.claimant.id,
+
+        claimantLegalName:
+          onboarding.claimant.legalName,
+
+        filingDeadline:
+          claim.filingDeadline,
+
+        legalLane:
+          legalPosition.lane,
+
+        legalRationale:
+          legalPosition.rationale,
+
+        legalHumanDetermined:
+          legalPosition.humanDetermined,
+
+        legalReviewedBy:
+          legalPosition.reviewedBy,
+
+        legalLastReviewedAt:
+          legalPosition.lastReviewedAt,
+
+        commercialQuoteId:
+          conversion.commercialQuoteId,
+
+        commercialSnapshotHash:
+          conversion.commercialSnapshotHash,
+
+        commercialPolicyId:
+          commercialQuote.commercialPolicyId,
+
+        commercialPolicyVersion:
+          commercialQuote.commercialPolicyVersion,
+
+        commercialTierId:
+          commercialQuote.commercialTierId,
+
+        commercialRecoveryAmount:
+          commercialQuote.recoveryAmount,
+
+        commercialProjectedFee:
+          commercialQuote.projectedFee,
+
+        commercialQuoteLegalRuleVersionSnapshot,
+
+        commercialLegalFeeCapPercentSnapshot:
+          commercialQuote
+            .legalFeeCapPercentSnapshot,
+
+        commercialLegalFeeCapAmountSnapshot:
+          commercialQuote
+            .legalFeeCapAmountSnapshot,
+
+        feeAgreementId:
+          conversion.feeAgreementId,
+
+        feeAgreementLegalRuleVersionSnapshot,
+
+        feeAgreementDocumentId,
+
+        serviceAgreementSignedAt:
+          onboarding.serviceAgreement
+            .signedAt,
+
+        serviceAgreementCancellationDeadline:
+          onboarding.serviceAgreement
+            .cancellationDeadline,
+
+        acceptedDocuments:
+          acceptedDocumentSnapshots,
+
+        readinessControls:
+          readiness.controls.map(
+            (
+              control,
+            ) => ({
+              key:
+                control.key,
+
+              label:
+                control.label,
+
+              complete:
+                control.complete,
+
+              detail:
+                control.detail,
+            }),
+          ),
+
+        readinessCompletedCount:
+          readiness.completedControlCount,
+
+        readinessTotalCount:
+          readiness.controls.length,
+      };
 
   return {
-    claimId: claim.id,
+    snapshot,
 
-    claimReference: claim.reference,
-
-    opportunityId: claim.opportunityId,
-
-    jurisdictionId: claim.jurisdictionId,
-
-    jurisdictionPackageVersion: jurisdictionPackage.version,
-
-    jurisdictionLegalRuleVersion,
-
-    paymentRoute: paymentRouting.paymentRoute,
-
-    launchPaymentTrack: paymentRouting.launchTrack,
-
-    representativeMayFile: paymentRouting.representativeMayFile,
-
-    representativeMayReceivePayment:
-      paymentRouting.representativeMayReceivePayment,
-
-    assignmentRequiredForRepresentativePayment:
-      paymentRouting.assignmentRequiredForRepresentativePayment,
-
-    feeCollectionMethod: paymentRouting.feeCollectionMethod,
-
-    claimantId: onboarding.claimant.id,
-
-    claimantLegalName: onboarding.claimant.legalName,
-
-    filingDeadline: claim.filingDeadline,
-
-    legalLane: legalPosition.lane,
-
-    legalRationale: legalPosition.rationale,
-
-    legalHumanDetermined: legalPosition.humanDetermined,
-
-    legalReviewedBy: legalPosition.reviewedBy,
-
-    legalLastReviewedAt: legalPosition.lastReviewedAt,
-
-    commercialQuoteId: conversion.commercialQuoteId,
-
-    commercialSnapshotHash: conversion.commercialSnapshotHash,
-
-    commercialPolicyId: commercialQuote.commercialPolicyId,
-
-    commercialPolicyVersion: commercialQuote.commercialPolicyVersion,
-
-    commercialTierId: commercialQuote.commercialTierId,
-
-    commercialRecoveryAmount: commercialQuote.recoveryAmount,
-
-    commercialProjectedFee: commercialQuote.projectedFee,
-
-    commercialQuoteLegalRuleVersionSnapshot,
-
-    commercialLegalFeeCapPercentSnapshot:
-      commercialQuote.legalFeeCapPercentSnapshot,
-
-    commercialLegalFeeCapAmountSnapshot:
-      commercialQuote.legalFeeCapAmountSnapshot,
-
-    feeAgreementId: conversion.feeAgreementId,
-
-    feeAgreementLegalRuleVersionSnapshot,
-
-    feeAgreementDocumentId,
-
-    serviceAgreementSignedAt: onboarding.serviceAgreement.signedAt,
-
-    serviceAgreementCancellationDeadline:
-      onboarding.serviceAgreement.cancellationDeadline,
-
-    acceptedDocuments: acceptedDocumentSnapshots,
-
-    readinessControls: readiness.controls.map((control) => ({
-      key: control.key,
-
-      label: control.label,
-
-      complete: control.complete,
-
-      detail: control.detail,
-    })),
-
-    readinessCompletedCount: readiness.completedControlCount,
-
-    readinessTotalCount: readiness.controls.length,
+    jurisdictionPackageId,
   };
 }
 
@@ -948,15 +1775,27 @@ async function buildLiveSnapshot(
 /* ========================================================================== */
 
 async function assertPackageStillCurrent(
-  filingPackage: PersistedClaimFilingPackage,
-) {
-  assertStoredPackageSnapshotIntegrity(filingPackage);
+  filingPackage:
+    PersistedClaimFilingPackage,
+): Promise<void> {
+  assertStoredPackageSnapshotIntegrity(
+    filingPackage,
+  );
 
-  const liveSnapshot = await buildLiveSnapshot(filingPackage.claimId);
+  const live =
+    await buildLiveSnapshot(
+      filingPackage.claimId,
+    );
 
-  const liveHash = hashSnapshot(liveSnapshot);
+  const liveHash =
+    hashSnapshot(
+      live.snapshot,
+    );
 
-  if (liveHash !== filingPackage.snapshotHash) {
+  if (
+    liveHash !==
+    filingPackage.snapshotHash
+  ) {
     throw new Error(
       "The claim evidence changed after this filing package was prepared. Prepare a new filing package before approval.",
     );
@@ -968,212 +1807,399 @@ async function assertPackageStillCurrent(
 /* ========================================================================== */
 
 export async function prepareClaimFilingPackage(
-  input: PrepareClaimFilingPackageInput,
-): Promise<PersistedClaimFilingPackage> {
-  return mutate(async () => {
-    const state = await readState();
+  input:
+    PrepareClaimFilingPackageInput,
+): Promise<
+  PersistedClaimFilingPackage
+> {
+  const actorUserId =
+    requireNonEmpty(
+      input.actorUserId,
+      "Actor user ID",
+    );
 
-    const actorUserId = requireNonEmpty(input.actorUserId, "Actor user ID");
+  const occurredAt =
+    validateIsoInstant(
+      input.occurredAt,
+      "Occurred at",
+    );
 
-    const occurredAt = validateIsoInstant(input.occurredAt, "Occurred at");
+  const live =
+    await buildLiveSnapshot(
+      input.claimId,
+    );
 
-    const snapshot = await buildLiveSnapshot(input.claimId);
+  const snapshot =
+    live.snapshot;
 
-    const snapshotHash = hashSnapshot(snapshot);
+  const snapshotHash =
+    hashSnapshot(
+      snapshot,
+    );
 
-    const activePackages = state.packages
-      .filter(
-        (filingPackage) =>
-          filingPackage.claimId === snapshot.claimId &&
-          filingPackage.status !== "superseded",
-      )
-      .slice()
-      .sort((left, right) => right.version - left.version);
+  const existing =
+    await listClaimFilingPackages(
+      snapshot.claimId,
+    );
 
-    if (activePackages.length > 1) {
+  const activePackages =
+    existing.filter(
+      (
+        filingPackage,
+      ) =>
+        filingPackage.status !==
+        "superseded",
+    );
+
+  if (
+    activePackages.length >
+    1
+  ) {
+    throw new Error(
+      "Multiple active filing packages exist for this claim. Filing-package preparation is blocked pending repository cleanup.",
+    );
+  }
+
+  const activePackage =
+    activePackages[0];
+
+  if (activePackage) {
+    assertStoredPackageSnapshotIntegrity(
+      activePackage,
+    );
+
+    if (
+      activePackage.status ===
+        "prepared" &&
+      activePackage.snapshotHash ===
+        snapshotHash
+    ) {
+      return activePackage;
+    }
+
+    if (
+      activePackage.status !==
+      "returned_for_changes"
+    ) {
       throw new Error(
-        "Multiple active filing packages exist for this claim. Filing-package preparation is blocked pending repository cleanup.",
+        "A current filing package already exists. Only a package returned for changes may be prepared again.",
+      );
+    }
+  }
+
+  const existingVersions =
+    existing.map(
+      (
+        filingPackage,
+      ) =>
+        filingPackage.version,
+    );
+
+  const nextVersion =
+    (
+      existingVersions.length >
+      0
+        ? Math.max(
+            ...existingVersions,
+          )
+        : 0
+    ) + 1;
+
+  const packageId =
+    `filing-package-${snapshot.claimId}-v${nextVersion}`;
+
+  const supabase =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await supabase
+      .from(
+        "claim_filing_packages",
+      )
+      .insert({
+        id:
+          packageId,
+
+        claim_id:
+          snapshot.claimId,
+
+        claim_reference:
+          snapshot.claimReference,
+
+        version:
+          nextVersion,
+
+        status:
+          "prepared",
+
+        snapshot,
+
+        package_hash:
+          snapshotHash,
+
+        jurisdiction_package_id:
+          live.jurisdictionPackageId,
+
+        jurisdiction_package_version:
+          snapshot.jurisdictionPackageVersion,
+
+        jurisdiction_legal_rule_version:
+          snapshot.jurisdictionLegalRuleVersion,
+
+        commercial_quote_id:
+          snapshot.commercialQuoteId,
+
+        commercial_snapshot_hash:
+          snapshot.commercialSnapshotHash,
+
+        commercial_policy_id:
+          snapshot.commercialPolicyId,
+
+        commercial_policy_version:
+          snapshot.commercialPolicyVersion,
+
+        fee_agreement_id:
+          snapshot.feeAgreementId,
+
+        fee_agreement_legal_rule_version_snapshot:
+          snapshot.feeAgreementLegalRuleVersionSnapshot,
+
+        fee_agreement_document_id:
+          snapshot.feeAgreementDocumentId,
+
+        accepted_documents_snapshot:
+          snapshot.acceptedDocuments,
+
+        readiness_snapshot:
+          snapshot.readinessControls,
+
+        readiness_completed_count:
+          snapshot.readinessCompletedCount,
+
+        readiness_total_count:
+          snapshot.readinessTotalCount,
+
+        prepared_by_user_id:
+          actorUserId,
+
+        prepared_at:
+          occurredAt,
+      })
+      .select(
+        "*",
+      )
+      .single();
+
+  if (error) {
+    throw new Error(
+      `Unable to persist filing package: ${error.message}`,
+    );
+  }
+
+  const insertedRow =
+    data as unknown as
+      ClaimFilingPackageRow;
+
+  if (activePackage) {
+    const oldRow =
+      await getPackageRow(
+        activePackage.id,
+      );
+
+    if (!oldRow) {
+      throw new Error(
+        "The returned filing package could not be resolved for supersession.",
       );
     }
 
-    const activePackage = activePackages[0];
+    await updatePackageRow(
+      oldRow,
+      {
+        status:
+          "superseded",
 
-    if (activePackage) {
-      assertStoredPackageSnapshotIntegrity(activePackage);
+        superseded_at:
+          occurredAt,
 
-      if (
-        activePackage.status === "prepared" &&
-        activePackage.snapshotHash === snapshotHash
-      ) {
-        return clonePackage(activePackage);
-      }
+        superseded_by_package_id:
+          packageId,
+      },
+    );
 
-      if (activePackage.status !== "returned_for_changes") {
-        throw new Error(
-          "A current filing package already exists. Only a package returned for changes may be prepared again.",
-        );
-      }
-    }
+    await appendAudit({
+      claimId:
+        activePackage.claimId,
 
-    const existingVersions = state.packages
-      .filter((filingPackage) => filingPackage.claimId === snapshot.claimId)
-      .map((filingPackage) => filingPackage.version);
+      packageId:
+        activePackage.id,
 
-    const nextVersion =
-      (existingVersions.length > 0 ? Math.max(...existingVersions) : 0) + 1;
-
-    const packageId = `filing-package-${snapshot.claimId}-v${nextVersion}`;
-
-    if (activePackage) {
-      activePackage.status = "superseded";
-
-      activePackage.supersededAt = occurredAt;
-
-      activePackage.supersededByPackageId = packageId;
-
-      appendAudit(state, {
-        claimId: activePackage.claimId,
-
-        packageId: activePackage.id,
-
-        action: "filing_package_superseded",
-
-        actorUserId,
-
-        occurredAt,
-
-        detail: `Superseded by ${packageId} after the prior package was returned for changes and a new frozen package version was prepared.`,
-      });
-    }
-
-    const filingPackage: PersistedClaimFilingPackage = {
-      id: packageId,
-
-      claimId: snapshot.claimId,
-
-      claimReference: snapshot.claimReference,
-
-      version: nextVersion,
-
-      status: "prepared",
-
-      snapshot,
-
-      snapshotHash,
-
-      preparedByUserId: actorUserId,
-
-      preparedAt: occurredAt,
-    };
-
-    state.packages.push(filingPackage);
-
-    appendAudit(state, {
-      claimId: filingPackage.claimId,
-
-      packageId: filingPackage.id,
-
-      action: "filing_package_prepared",
+      action:
+        "filing_package_superseded",
 
       actorUserId,
 
       occurredAt,
 
-      detail: `${snapshot.readinessCompletedCount} of ${snapshot.readinessTotalCount} filing-readiness controls were captured as complete. ${snapshot.acceptedDocuments.length} accepted document${snapshot.acceptedDocuments.length === 1 ? "" : "s"} frozen into package version ${filingPackage.version}.`,
+      detail:
+        `Superseded by ${packageId} after the prior package was returned for changes and a new frozen package version was prepared.`,
     });
+  }
 
-    await writeState(state);
+  await appendAudit({
+    claimId:
+      snapshot.claimId,
 
-    return clonePackage(filingPackage);
+    packageId,
+
+    action:
+      "filing_package_prepared",
+
+    actorUserId,
+
+    occurredAt,
+
+    detail:
+      `${snapshot.readinessCompletedCount} of ${snapshot.readinessTotalCount} filing-readiness controls were captured as complete. ${snapshot.acceptedDocuments.length} accepted document${snapshot.acceptedDocuments.length === 1 ? "" : "s"} frozen into package version ${nextVersion}.`,
   });
+
+  return packageFromRow(
+    insertedRow,
+  );
 }
 
 /* ========================================================================== */
-/* Submit for human review                                                     */
+/* Submit for review                                                           */
 /* ========================================================================== */
 
 export async function submitClaimFilingPackageForReview(
-  input: SubmitClaimFilingPackageForReviewInput,
-): Promise<PersistedClaimFilingPackage> {
-  return mutate(async () => {
-    const state = await readState();
-
-    const actorUserId = requireNonEmpty(input.actorUserId, "Actor user ID");
-
-    const occurredAt = validateIsoInstant(input.occurredAt, "Occurred at");
-
-    const filingPackage = state.packages.find(
-      (candidate) => candidate.id === input.packageId,
+  input:
+    SubmitClaimFilingPackageForReviewInput,
+): Promise<
+  PersistedClaimFilingPackage
+> {
+  const actorUserId =
+    requireNonEmpty(
+      input.actorUserId,
+      "Actor user ID",
     );
 
-    if (!filingPackage) {
-      throw new Error("Filing package not found.");
-    }
+  const occurredAt =
+    validateIsoInstant(
+      input.occurredAt,
+      "Occurred at",
+    );
 
-    if (filingPackage.status === "superseded") {
-      throw new Error(
-        "A superseded filing package cannot be submitted for review.",
-      );
-    }
+  const row =
+    await getPackageRow(
+      input.packageId,
+    );
 
-    if (filingPackage.status === "under_review") {
-      assertStoredPackageSnapshotIntegrity(filingPackage);
+  if (!row) {
+    throw new Error(
+      "Filing package not found.",
+    );
+  }
 
-      return clonePackage(filingPackage);
-    }
+  const filingPackage =
+    packageFromRow(
+      row,
+    );
 
-    if (filingPackage.status === "pre_filing_approved") {
-      assertStoredPackageSnapshotIntegrity(filingPackage);
+  if (
+    filingPackage.status ===
+    "superseded"
+  ) {
+    throw new Error(
+      "A superseded filing package cannot be submitted for review.",
+    );
+  }
 
-      return clonePackage(filingPackage);
-    }
+  if (
+    filingPackage.status ===
+      "under_review" ||
+    filingPackage.status ===
+      "pre_filing_approved"
+  ) {
+    assertStoredPackageSnapshotIntegrity(
+      filingPackage,
+    );
 
-    if (filingPackage.status !== "prepared") {
-      throw new Error(
-        filingPackage.status === "returned_for_changes"
-          ? "A package returned for changes must be prepared as a new package version before it can be submitted for review again."
-          : "Only a prepared filing package may be submitted for review.",
-      );
-    }
+    return filingPackage;
+  }
 
-    await assertPackageStillCurrent(filingPackage);
+  if (
+    filingPackage.status !==
+    "prepared"
+  ) {
+    throw new Error(
+      filingPackage.status ===
+        "returned_for_changes"
+        ? "A package returned for changes must be prepared as a new package version before it can be submitted for review again."
+        : "Only a prepared filing package may be submitted for review.",
+    );
+  }
 
-    filingPackage.status = "under_review";
+  await assertPackageStillCurrent(
+    filingPackage,
+  );
 
-    filingPackage.submittedForReviewByUserId = actorUserId;
+  const updatedRow =
+    await updatePackageRow(
+      row,
+      {
+        status:
+          "under_review",
 
-    filingPackage.submittedForReviewAt = occurredAt;
+        submitted_for_review_by_user_id:
+          actorUserId,
 
-    filingPackage.reviewedByUserId = undefined;
+        submitted_for_review_at:
+          occurredAt,
 
-    filingPackage.reviewedAt = undefined;
+        reviewed_by_user_id:
+          null,
 
-    filingPackage.reviewNote = undefined;
+        reviewed_at:
+          null,
 
-    filingPackage.preFilingApprovedAt = undefined;
+        review_note:
+          null,
 
-    filingPackage.returnedAt = undefined;
+        pre_filing_approved_at:
+          null,
 
-    filingPackage.returnReason = undefined;
+        returned_at:
+          null,
 
-    appendAudit(state, {
-      claimId: filingPackage.claimId,
+        return_reason:
+          null,
+      },
+    );
 
-      packageId: filingPackage.id,
+  await appendAudit({
+    claimId:
+      filingPackage.claimId,
 
-      action: "filing_package_submitted_for_review",
+    packageId:
+      filingPackage.id,
 
-      actorUserId,
+    action:
+      "filing_package_submitted_for_review",
 
-      occurredAt,
+    actorUserId,
 
-      detail: "Package submitted for independent human pre-filing review.",
-    });
+    occurredAt,
 
-    await writeState(state);
-
-    return clonePackage(filingPackage);
+    detail:
+      "Package submitted for independent human pre-filing review.",
   });
+
+  return packageFromRow(
+    updatedRow,
+  );
 }
 
 /* ========================================================================== */
@@ -1181,78 +2207,132 @@ export async function submitClaimFilingPackageForReview(
 /* ========================================================================== */
 
 export async function approveClaimFilingPackage(
-  input: ApproveClaimFilingPackageInput,
-): Promise<PersistedClaimFilingPackage> {
-  return mutate(async () => {
-    const state = await readState();
-
-    const reviewerUserId = requireNonEmpty(
+  input:
+    ApproveClaimFilingPackageInput,
+): Promise<
+  PersistedClaimFilingPackage
+> {
+  const reviewerUserId =
+    requireNonEmpty(
       input.reviewerUserId,
       "Reviewer user ID",
     );
 
-    const occurredAt = validateIsoInstant(input.occurredAt, "Occurred at");
-
-    const filingPackage = state.packages.find(
-      (candidate) => candidate.id === input.packageId,
+  const occurredAt =
+    validateIsoInstant(
+      input.occurredAt,
+      "Occurred at",
     );
 
-    if (!filingPackage) {
-      throw new Error("Filing package not found.");
-    }
+  const row =
+    await getPackageRow(
+      input.packageId,
+    );
 
-    if (filingPackage.status === "superseded") {
-      throw new Error("A superseded filing package cannot be approved.");
-    }
+  if (!row) {
+    throw new Error(
+      "Filing package not found.",
+    );
+  }
 
-    if (filingPackage.status === "pre_filing_approved") {
-      return clonePackage(filingPackage);
-    }
+  const filingPackage =
+    packageFromRow(
+      row,
+    );
 
-    if (filingPackage.status !== "under_review") {
-      throw new Error(
-        "The filing package must be under human review before it can receive pre-filing approval.",
-      );
-    }
+  if (
+    filingPackage.status ===
+    "superseded"
+  ) {
+    throw new Error(
+      "A superseded filing package cannot be approved.",
+    );
+  }
 
-    assertIndependentReviewer(filingPackage, reviewerUserId);
+  if (
+    filingPackage.status ===
+    "pre_filing_approved"
+  ) {
+    assertStoredPackageSnapshotIntegrity(
+      filingPackage,
+    );
 
-    await assertPackageStillCurrent(filingPackage);
+    return filingPackage;
+  }
 
-    filingPackage.status = "pre_filing_approved";
+  if (
+    filingPackage.status !==
+    "under_review"
+  ) {
+    throw new Error(
+      "The filing package must be under human review before it can receive pre-filing approval.",
+    );
+  }
 
-    filingPackage.reviewedByUserId = reviewerUserId;
+  assertIndependentReviewer(
+    filingPackage,
+    reviewerUserId,
+  );
 
-    filingPackage.reviewedAt = occurredAt;
+  await assertPackageStillCurrent(
+    filingPackage,
+  );
 
-    filingPackage.reviewNote = input.reviewNote?.trim() || undefined;
+  const reviewNote =
+    input.reviewNote?.trim() ||
+    undefined;
 
-    filingPackage.preFilingApprovedAt = occurredAt;
+  const updatedRow =
+    await updatePackageRow(
+      row,
+      {
+        status:
+          "pre_filing_approved",
 
-    filingPackage.returnedAt = undefined;
+        reviewed_by_user_id:
+          reviewerUserId,
 
-    filingPackage.returnReason = undefined;
+        reviewed_at:
+          occurredAt,
 
-    appendAudit(state, {
-      claimId: filingPackage.claimId,
+        review_note:
+          reviewNote ??
+          null,
 
-      packageId: filingPackage.id,
+        pre_filing_approved_at:
+          occurredAt,
 
-      action: "filing_package_pre_filing_approved",
+        returned_at:
+          null,
 
-      actorUserId: reviewerUserId,
+        return_reason:
+          null,
+      },
+    );
 
-      occurredAt,
+  await appendAudit({
+    claimId:
+      filingPackage.claimId,
 
-      detail:
-        input.reviewNote?.trim() ||
-        "Independent human pre-filing review approved the frozen package snapshot.",
-    });
+    packageId:
+      filingPackage.id,
 
-    await writeState(state);
+    action:
+      "filing_package_pre_filing_approved",
 
-    return clonePackage(filingPackage);
+    actorUserId:
+      reviewerUserId,
+
+    occurredAt,
+
+    detail:
+      reviewNote ||
+      "Independent human pre-filing review approved the frozen package snapshot.",
   });
+
+  return packageFromRow(
+    updatedRow,
+  );
 }
 
 /* ========================================================================== */
@@ -1260,72 +2340,119 @@ export async function approveClaimFilingPackage(
 /* ========================================================================== */
 
 export async function returnClaimFilingPackage(
-  input: ReturnClaimFilingPackageInput,
-): Promise<PersistedClaimFilingPackage> {
-  return mutate(async () => {
-    const state = await readState();
-
-    const reviewerUserId = requireNonEmpty(
+  input:
+    ReturnClaimFilingPackageInput,
+): Promise<
+  PersistedClaimFilingPackage
+> {
+  const reviewerUserId =
+    requireNonEmpty(
       input.reviewerUserId,
       "Reviewer user ID",
     );
 
-    const occurredAt = validateIsoInstant(input.occurredAt, "Occurred at");
-
-    const reason = requireNonEmpty(input.reason, "Return reason");
-
-    const filingPackage = state.packages.find(
-      (candidate) => candidate.id === input.packageId,
+  const occurredAt =
+    validateIsoInstant(
+      input.occurredAt,
+      "Occurred at",
     );
 
-    if (!filingPackage) {
-      throw new Error("Filing package not found.");
-    }
+  const reason =
+    requireNonEmpty(
+      input.reason,
+      "Return reason",
+    );
 
-    if (filingPackage.status === "superseded") {
-      throw new Error("A superseded filing package cannot be returned.");
-    }
+  const row =
+    await getPackageRow(
+      input.packageId,
+    );
 
-    if (filingPackage.status !== "under_review") {
-      throw new Error(
-        "Only a package currently under review can be returned for changes.",
-      );
-    }
+  if (!row) {
+    throw new Error(
+      "Filing package not found.",
+    );
+  }
 
-    assertStoredPackageSnapshotIntegrity(filingPackage);
+  const filingPackage =
+    packageFromRow(
+      row,
+    );
 
-    assertIndependentReviewer(filingPackage, reviewerUserId);
+  if (
+    filingPackage.status ===
+    "superseded"
+  ) {
+    throw new Error(
+      "A superseded filing package cannot be returned.",
+    );
+  }
 
-    filingPackage.status = "returned_for_changes";
+  if (
+    filingPackage.status !==
+    "under_review"
+  ) {
+    throw new Error(
+      "Only a package currently under review can be returned for changes.",
+    );
+  }
 
-    filingPackage.reviewedByUserId = reviewerUserId;
+  assertStoredPackageSnapshotIntegrity(
+    filingPackage,
+  );
 
-    filingPackage.reviewedAt = occurredAt;
+  assertIndependentReviewer(
+    filingPackage,
+    reviewerUserId,
+  );
 
-    filingPackage.returnedAt = occurredAt;
+  const updatedRow =
+    await updatePackageRow(
+      row,
+      {
+        status:
+          "returned_for_changes",
 
-    filingPackage.returnReason = reason;
+        reviewed_by_user_id:
+          reviewerUserId,
 
-    filingPackage.reviewNote = undefined;
+        reviewed_at:
+          occurredAt,
 
-    filingPackage.preFilingApprovedAt = undefined;
+        returned_at:
+          occurredAt,
 
-    appendAudit(state, {
-      claimId: filingPackage.claimId,
+        return_reason:
+          reason,
 
-      packageId: filingPackage.id,
+        review_note:
+          null,
 
-      action: "filing_package_returned",
+        pre_filing_approved_at:
+          null,
+      },
+    );
 
-      actorUserId: reviewerUserId,
+  await appendAudit({
+    claimId:
+      filingPackage.claimId,
 
-      occurredAt,
+    packageId:
+      filingPackage.id,
 
-      detail: `Returned for changes. Reason: ${reason}`,
-    });
+    action:
+      "filing_package_returned",
 
-    await writeState(state);
+    actorUserId:
+      reviewerUserId,
 
-    return clonePackage(filingPackage);
+    occurredAt,
+
+    detail:
+      `Returned for changes. Reason: ${reason}`,
   });
+
+  return packageFromRow(
+    updatedRow,
+  );
 }

@@ -574,7 +574,7 @@ export async function resolvePersistedClaimFilingReadiness(
       complete: legalClear,
 
       detail: legalClear
-        ? "A recorded human legal review clears this claim as a straightforward administrative recovery."
+        ? "The current claim and approved jurisdiction rule clear this matter for straightforward administrative handling. No separate attorney workflow is required."
         : complianceCheckDetail(
             complianceChecks,
             "administrative_legal_lane",

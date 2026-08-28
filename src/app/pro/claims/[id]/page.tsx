@@ -18,6 +18,9 @@ import {
 } from "@/domain/status";
 import type { IsoDate, Jurisdiction } from "@/domain/types";
 
+import { ClaimAuthorityReviewPanel } from "@/components/pro/claim-authority-review-panel";
+import { ClaimClosurePanel } from "@/components/pro/claim-closure-panel";
+import { ClaimRecoverySettlementPanel } from "@/components/pro/claim-recovery-settlement-panel";
 import { ClaimantOnboardingPanel } from "@/components/pro/claimant-onboarding-panel";
 import { ClaimDocumentsPanel } from "@/components/pro/claim-documents-panel";
 import { ClaimFilingPackagePanel } from "@/components/pro/claim-filing-package-panel";
@@ -38,9 +41,23 @@ import { Breadcrumbs } from "@/components/ui/tabs";
 
 import { formatCents, formatDate, formatTimestamp } from "@/lib/format";
 
+import {
+  getClaimAuthorityReviewByClaimId,
+} from "@/server/claim-authority-review-store";
+import { getClaimClosureByClaimId } from "@/server/claim-closure-store";
 import { getCommercialApprovalByQuoteId } from "@/server/commercial-approval-store";
 import { resolvePersistedClaimFilingReadiness } from "@/server/claim-filing-readiness";
+import { getCurrentClaimFilingPackage } from "@/server/claim-filing-package-store";
+import {
+  getClaimRecoverySettlementByClaimId,
+} from "@/server/claim-recovery-settlement-store";
 import { resolveClaimRecord } from "@/server/claim-record";
+import { getClaimSubmissionByClaimId } from "@/server/claim-submission-store";
+import {
+  getCurrentJurisdictionFilingDestination,
+  normalizeJurisdictionFilingMethod,
+  resolveJurisdictionFilingDestinationReadiness,
+} from "@/server/jurisdiction-filing-destination-store";
 import { listJurisdictionRulePackages } from "@/server/jurisdiction-intelligence";
 import { getOpportunityConversionByClaimId } from "@/server/opportunity-conversion-store";
 import {
@@ -79,6 +96,209 @@ function stageLabel(stageKey: string): string {
     .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
+function countyLabel(value: string): string {
+  const normalized = value.trim();
+
+  return /\bcounty$/i.test(normalized)
+    ? normalized
+    : `${normalized} County`;
+}
+
+function operationalStageLabel({
+  persistedStageKey,
+  filingPackageStatus,
+  submissionStatus,
+  authorityReviewStatus,
+  recoverySettlementStatus,
+  finalClosureOutcome,
+  claimInitiationReady,
+}: {
+  persistedStageKey: string;
+  filingPackageStatus?: string;
+  submissionStatus?: string;
+  authorityReviewStatus?: string;
+  recoverySettlementStatus?: string;
+  finalClosureOutcome?: string;
+  claimInitiationReady: boolean;
+}): string {
+  switch (finalClosureOutcome) {
+    case "recovered_reconciled":
+      return "Final Claim Closed";
+
+    case "denied_final":
+      return "Final Claim Closed";
+
+    case "closed_without_recovery":
+      return "Final Claim Closed";
+  }
+
+  switch (recoverySettlementStatus) {
+    case "reconciled":
+      return "Recovery Reconciled";
+
+    case "fee_settled":
+      return "DueQuity Fee Settled";
+
+    case "partially_paid":
+      return "DueQuity Fee Partially Paid";
+
+    case "invoice_open":
+      return "DueQuity Fee Invoice Open";
+
+    case "awaiting_invoice":
+      return "Recovery Recorded";
+
+    case "no_fee_due":
+      return "Recovery Recorded";
+  }
+
+  switch (authorityReviewStatus) {
+    case "closed":
+      return "Authority Review Closed";
+
+    case "recovered":
+      return "Recovery Recorded";
+
+    case "payment_issued":
+      return "Payment Issued";
+
+    case "approved":
+      return "Authority Approved";
+
+    case "denied":
+      return "Authority Denied";
+
+    case "additional_information_required":
+      return "Additional Information Required";
+
+    case "under_review":
+      return "Under Authority Review";
+
+    case "acknowledged":
+      return "Authority Acknowledged";
+
+    case "awaiting_acknowledgment":
+      return "Awaiting Authority Acknowledgment";
+  }
+
+  if (submissionStatus === "acknowledged") {
+    return "Authority Acknowledged";
+  }
+
+  if (submissionStatus === "submitted") {
+    return "Claim Submitted";
+  }
+
+  if (claimInitiationReady) {
+    return "Claim Initiation Ready";
+  }
+
+  switch (filingPackageStatus) {
+    case "pre_filing_approved":
+      return "Pre-Filing Approved";
+
+    case "under_review":
+      return "Pre-Filing Review";
+
+    case "prepared":
+      return "Package Prepared";
+
+    case "returned_for_changes":
+      return "Package Changes Required";
+
+    default:
+      return stageLabel(persistedStageKey);
+  }
+}
+
+function operationalNextAction({
+  currentOperationalStage,
+  readinessNextAction,
+  finalClosureOutcome,
+}: {
+  currentOperationalStage: string;
+  readinessNextAction: string;
+  finalClosureOutcome?: string;
+}): string {
+  if (currentOperationalStage === "Final Claim Closed") {
+    switch (finalClosureOutcome) {
+      case "recovered_reconciled":
+        return "The DueQuity operational claim is finally closed after completed recovery and reconciliation. Apply the approved records-retention policy and preserve the record until its authorized disposition lifecycle is complete.";
+
+      case "denied_final":
+        return "The DueQuity operational claim is finally closed after a final denial. Apply the approved records-retention policy and preserve the closed matter according to the governing schedule.";
+
+      case "closed_without_recovery":
+        return "The DueQuity operational claim is finally closed without a recorded recovery. Apply the approved records-retention policy and preserve the record according to the governing schedule.";
+
+      default:
+        return "The DueQuity operational claim is finally closed. Continue only the applicable records-retention and preservation lifecycle.";
+    }
+  }
+
+  switch (currentOperationalStage) {
+    case "Recovery Reconciled":
+      return "Recovery accounting is reconciled. Close the authority-review lifecycle if it remains open, then perform final DueQuity claim closure when all final-closure prerequisites are satisfied.";
+
+    case "DueQuity Fee Settled":
+      return "The DueQuity service-fee obligation is settled. Complete final recovery reconciliation after confirming the recovery accounting record is complete.";
+
+    case "DueQuity Fee Partially Paid":
+      return "A partial DueQuity service-fee payment is recorded. Continue tracking actual fee receipts until the balance is paid, or use an authorized waiver only when a legitimate write-off decision has been approved.";
+
+    case "DueQuity Fee Invoice Open":
+      return "The contractual DueQuity service-fee invoice is open. Record only payments DueQuity actually receives. Do not infer payment from the claimant's recovery.";
+
+    case "Authority Review Closed":
+      return "The authority-review lifecycle is closed. If actual recovery exists, recovery accounting must be reconciled before final claim closure. If no recovery exists, final closure may proceed when the durable closure controls permit it.";
+
+    case "Recovery Recorded":
+      return "Actual recovery is recorded. If a DueQuity service fee is due, issue the contractual fee invoice and track only actual fee receipts. If no fee is due, proceed to final recovery reconciliation.";
+
+    case "Payment Issued":
+      return "The authority has issued payment. Monitor for actual receipt and record recovery only after the claimant or lawful recipient actually receives the funds.";
+
+    case "Authority Approved":
+      return "Authority approval is recorded. Track payment issuance and record it only after the authority actually issues payment.";
+
+    case "Authority Denied":
+      return "Authority denial is recorded. Review the denial, determine whether any permitted follow-up, reconsideration, appeal, or counsel workflow remains, and close the authority review only when the matter is operationally complete.";
+
+    case "Additional Information Required":
+      return "The authority requested additional information. Respond through the permitted route, track each request separately, and record only responses that were actually sent.";
+
+    case "Under Authority Review":
+      return "The authority is reviewing the claim. Monitor for an official information request, approval, denial, payment event, or other documented authority response.";
+
+    case "Authority Acknowledged":
+      return "The authority acknowledgment is recorded. Record review commencement or another authority event only when there is actual evidence that it occurred.";
+
+    case "Awaiting Authority Acknowledgment":
+      return "The external submission is recorded. Monitor for the authority's acknowledgment or other official response before recording the next event.";
+
+    case "Claim Submitted":
+      return "The external submission is recorded. Monitor for authority acknowledgment or another official response before recording the next external event.";
+
+    case "Claim Initiation Ready":
+      return "Pre-filing approval and the verified filing destination are complete. Record an external submission only after the claimant or lawful estate representative actually submits the approved package through the permitted jurisdiction route.";
+
+    case "Pre-Filing Approved":
+      return "Pre-filing approval is complete. Resolve any remaining Claim Initiation controls before external submission.";
+
+    case "Pre-Filing Review":
+      return "Complete independent pre-filing review before Claim Initiation may proceed.";
+
+    case "Package Prepared":
+      return "Submit the prepared filing package for independent human review.";
+
+    case "Package Changes Required":
+      return "Correct the returned filing-package issues and prepare a new version for independent review.";
+
+    default:
+      return readinessNextAction;
+  }
+}
+
 /* ========================================================================== */
 /* Metadata                                                                    */
 /* ========================================================================== */
@@ -110,13 +330,6 @@ export async function generateMetadata({
 export default async function ProClaimDetailPage({
   params,
 }: PageProps<"/pro/claims/[id]">) {
-  /*
-   * Server-side session gate.
-   *
-   * Resolved before any store read. The layout also withholds the operations
-   * shell, but layout and page render in parallel, so the page must refuse to
-   * read operational data on its own account.
-   */
   if (!(await resolveStaffSession())) {
     return <StaffAuthenticationRequired />;
   }
@@ -137,16 +350,35 @@ export default async function ProClaimDetailPage({
     notFound();
   }
 
-  const [approval, opportunity, property, jurisdictionPackages] =
-    await Promise.all([
-      getCommercialApprovalByQuoteId(conversion.commercialQuoteId),
+  const [
+    approval,
+    opportunity,
+    property,
+    jurisdictionPackages,
+    currentFilingPackage,
+    currentSubmission,
+    currentAuthorityReview,
+    currentRecoverySettlement,
+    currentFinalClosure,
+  ] = await Promise.all([
+    getCommercialApprovalByQuoteId(conversion.commercialQuoteId),
 
-      getOpportunityById(claim.opportunityId),
+    getOpportunityById(claim.opportunityId),
 
-      getPropertyById(claim.propertyId),
+    getPropertyById(claim.propertyId),
 
-      listJurisdictionRulePackages(),
-    ]);
+    listJurisdictionRulePackages(),
+
+    getCurrentClaimFilingPackage(claim.id),
+
+    getClaimSubmissionByClaimId(claim.id),
+
+    getClaimAuthorityReviewByClaimId(claim.id),
+
+    getClaimRecoverySettlementByClaimId(claim.id),
+
+    getClaimClosureByClaimId(claim.id),
+  ]);
 
   if (
     !approval ||
@@ -165,7 +397,7 @@ export default async function ProClaimDetailPage({
 
   const jurisdiction: Jurisdiction | undefined = jurisdictionPackage?.rule;
 
-  if (!jurisdiction) {
+  if (!jurisdictionPackage || !jurisdiction) {
     notFound();
   }
 
@@ -201,9 +433,62 @@ export default async function ProClaimDetailPage({
     today,
   );
 
+  const normalizedFilingMethod =
+    normalizeJurisdictionFilingMethod(jurisdiction.claimMethod);
+
+  const currentFilingDestination = normalizedFilingMethod
+    ? await getCurrentJurisdictionFilingDestination({
+        jurisdictionPackageId: jurisdictionPackage.id,
+
+        jurisdictionPackageVersion: jurisdictionPackage.version,
+
+        submissionMethod: normalizedFilingMethod,
+      })
+    : undefined;
+
+  const filingDestinationReady = currentFilingDestination
+    ? resolveJurisdictionFilingDestinationReadiness(
+        currentFilingDestination,
+      ).complete
+    : false;
+
+  const paymentRouting = jurisdictionPackage.paymentRouting;
+
+  const claimInitiationReady =
+    currentFilingPackage?.status === "pre_filing_approved" &&
+    !jurisdiction.attorneyRequired &&
+    filingReadiness.readyToPrepare &&
+    filingDestinationReady &&
+    Boolean(paymentRouting) &&
+    (paymentRouting?.representativeMayFile === "yes" ||
+      paymentRouting?.representativeMayFile === "no");
+
+  const currentOperationalStage = operationalStageLabel({
+    persistedStageKey: claim.stageKey,
+
+    filingPackageStatus: currentFilingPackage?.status,
+
+    submissionStatus: currentSubmission?.status,
+
+    authorityReviewStatus: currentAuthorityReview?.status,
+
+    recoverySettlementStatus: currentRecoverySettlement?.status,
+
+    finalClosureOutcome: currentFinalClosure?.finalOutcome,
+
+    claimInitiationReady,
+  });
+
+  const currentOperationalNextAction = operationalNextAction({
+    currentOperationalStage,
+
+    readinessNextAction: filingReadiness.nextInternalAction,
+
+    finalClosureOutcome: currentFinalClosure?.finalOutcome,
+  });
+
   return (
     <div className="space-y-5">
-      {/* ================================================================ header */}
       <div>
         <Breadcrumbs
           trail={[
@@ -233,19 +518,24 @@ export default async function ProClaimDetailPage({
               <Badge tone="positive" size="md">
                 Pricing locked
               </Badge>
+
+              {currentFinalClosure && (
+                <Badge tone="positive" size="md">
+                  Final closed
+                </Badge>
+              )}
             </div>
 
             <h1 className="mt-2 text-2xl">{property.address.line1}</h1>
 
             <p className="mt-1 text-sm text-ink-600">
-              {property.address.city}, {property.address.county} County,{" "}
+              {property.address.city}, {countyLabel(property.address.county)},{" "}
               {property.address.state} / {jurisdiction.agencyName}
             </p>
           </div>
         </div>
       </div>
 
-      {/* ===================================================== headline figures */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardBody>
@@ -286,7 +576,7 @@ export default async function ProClaimDetailPage({
             <p className="eyebrow text-ink-500">Stage</p>
 
             <p className="mt-1.5 text-base font-semibold text-ink-900">
-              {stageLabel(claim.stageKey)}
+              {currentOperationalStage}
             </p>
 
             <p className="mt-1 text-xs text-ink-500">
@@ -297,7 +587,7 @@ export default async function ProClaimDetailPage({
 
         <Card>
           <CardBody>
-            <p className="eyebrow text-ink-500">Locked Duequity fee</p>
+            <p className="eyebrow text-ink-500">Locked DueQuity fee</p>
 
             <p className="mt-1.5 tnum text-xl font-semibold text-ink-900">
               {formatCents(quote.projectedFee)}
@@ -312,7 +602,6 @@ export default async function ProClaimDetailPage({
         </Card>
       </div>
 
-      {/* ========================================================== provenance */}
       <Callout tone="positive" title="Persistent claim created">
         <p>
           This claim was created from{" "}
@@ -336,10 +625,8 @@ export default async function ProClaimDetailPage({
         </p>
       </Callout>
 
-      {/* ================================================================= body */}
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-5">
-          {/* ------------------------------------------------ overview */}
           <Card>
             <CardHeader
               title="Claim overview"
@@ -390,7 +677,6 @@ export default async function ProClaimDetailPage({
             </CardBody>
           </Card>
 
-          {/* -------------------------------------------- commercial pricing */}
           <Card>
             <CardHeader
               title="Locked commercial pricing"
@@ -467,7 +753,7 @@ export default async function ProClaimDetailPage({
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-md border border-line bg-inset px-4 py-4">
-                  <p className="eyebrow text-ink-500">Duequity fee</p>
+                  <p className="eyebrow text-ink-500">DueQuity fee</p>
 
                   <p className="mt-1.5 tnum text-2xl font-semibold text-ink-900">
                     {formatCents(quote.projectedFee)}
@@ -501,7 +787,6 @@ export default async function ProClaimDetailPage({
             </CardBody>
           </Card>
 
-          {/* -------------------------------------------- claimant onboarding */}
           <Card>
             <CardHeader
               title="Claimant onboarding"
@@ -513,7 +798,6 @@ export default async function ProClaimDetailPage({
             </CardBody>
           </Card>
 
-          {/* -------------------------------------------- agency documents */}
           <Card>
             <CardHeader
               title="Agency documents"
@@ -539,7 +823,6 @@ export default async function ProClaimDetailPage({
             </CardBody>
           </Card>
 
-          {/* -------------------------------------------- legal handling */}
           <Card>
             <CardHeader
               title="Legal handling"
@@ -596,7 +879,6 @@ export default async function ProClaimDetailPage({
             </CardBody>
           </Card>
 
-          {/* -------------------------------------------- fee validation */}
           <Card>
             <CardHeader
               title="Fee validation"
@@ -610,7 +892,7 @@ export default async function ProClaimDetailPage({
                     <Amount cents={value.amount} />
                   </FigureRow>
 
-                  <FigureRow label="Locked Duequity fee" sign="subtract">
+                  <FigureRow label="Locked DueQuity fee" sign="subtract">
                     <Amount cents={feeCheck.fee} tone="negative" />
                   </FigureRow>
 
@@ -633,7 +915,6 @@ export default async function ProClaimDetailPage({
             </CardBody>
           </Card>
 
-          {/* -------------------------------------------- filing readiness */}
           <Card>
             <CardHeader
               title="Filing readiness"
@@ -739,13 +1020,12 @@ export default async function ProClaimDetailPage({
                     Next internal action:{" "}
                   </span>
 
-                  {filingReadiness.nextInternalAction}
+                  {currentOperationalNextAction}
                 </p>
               </Callout>
             </CardBody>
           </Card>
 
-          {/* -------------------------------------------- filing package */}
           <Card>
             <CardHeader
               title="Filing package"
@@ -764,9 +1044,14 @@ export default async function ProClaimDetailPage({
               <ClaimFilingPackagePanel claimId={claim.id} />
             </CardBody>
           </Card>
+
+          <ClaimAuthorityReviewPanel claimId={claim.id} />
+
+          <ClaimRecoverySettlementPanel claimId={claim.id} />
+
+          <ClaimClosurePanel claimId={claim.id} />
         </div>
 
-        {/* ============================================================ sidebar */}
         <aside className="min-w-0 space-y-5">
           <Card elevated>
             <CardHeader title="Claim controls" />
@@ -817,7 +1102,7 @@ export default async function ProClaimDetailPage({
                 </DataItem>
 
                 <DataItem label="Current stage">
-                  {stageLabel(claim.stageKey)}
+                  {currentOperationalStage}
                 </DataItem>
               </DataList>
             </CardBody>
@@ -837,7 +1122,7 @@ export default async function ProClaimDetailPage({
                     : FEE_MODEL_LABEL[quote.model]}
                 </DataItem>
 
-                <DataItem label="Duequity fee">
+                <DataItem label="DueQuity fee">
                   <span className="font-semibold text-ink-900">
                     {formatCents(quote.projectedFee)}
                   </span>
@@ -887,6 +1172,14 @@ export default async function ProClaimDetailPage({
 
                 <DataItem label="Lock status">
                   <Tag>{approval.approvalStatus}</Tag>
+                </DataItem>
+
+                <DataItem label="Final closure">
+                  {currentFinalClosure ? (
+                    <Badge tone="positive">Recorded</Badge>
+                  ) : (
+                    "Not recorded"
+                  )}
                 </DataItem>
               </DataList>
             </CardBody>

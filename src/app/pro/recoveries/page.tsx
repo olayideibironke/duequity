@@ -2,7 +2,19 @@ import type { Metadata } from "next";
 
 import Link from "next/link";
 
-import { CLAIM_STATUS } from "@/domain/status";
+import {
+  can,
+} from "@/lib/session";
+
+import {
+  Badge,
+  Identifier,
+} from "@/components/ui/badge";
+
+import {
+  Amount,
+  FigureRow,
+} from "@/components/ui/money";
 
 import {
   Callout,
@@ -15,54 +27,152 @@ import {
   Stat,
 } from "@/components/ui/surface";
 
-import { Identifier, StatusBadge } from "@/components/ui/badge";
-
-import { Amount, FigureRow } from "@/components/ui/money";
-
-import { formatCents, formatCount, formatDate, plural } from "@/lib/format";
-
-import { listOpportunityConversions } from "@/server/opportunity-conversion-store";
-
-import { resolveClaimRecord } from "@/server/claim-record";
-
-import { getPropertyById } from "@/server/opportunity-store";
-
-import { getClaimantOnboarding } from "@/server/claimant-onboarding-store";
+import {
+  StaffAuthenticationRequired,
+} from "@/components/ui/authentication-required";
 
 import {
-  getCommercialApprovalByQuoteId,
-  verifyCommercialQuoteSnapshot,
-} from "@/server/commercial-approval-store";
+  formatCents,
+  formatCount,
+  formatTimestamp,
+  plural,
+} from "@/lib/format";
 
-import { resolveStaffSession } from "@/server/staff-session";
-import { StaffAuthenticationRequired } from "@/components/ui/authentication-required";
+import {
+  getClaimAuthorityReviewByClaimId,
+} from "@/server/claim-authority-review-store";
+
+import {
+  getClaimantOnboarding,
+} from "@/server/claimant-onboarding-store";
+
+import {
+  getClaimRecoverySettlementByClaimId,
+  getRecoveryFeeInvoiceBySettlementId,
+  listRecoveryFeePayments,
+} from "@/server/claim-recovery-settlement-store";
+
+import {
+  resolveClaimRecord,
+} from "@/server/claim-record";
+
+import {
+  listOpportunityConversions,
+} from "@/server/opportunity-conversion-store";
+
+import {
+  getPropertyById,
+} from "@/server/opportunity-store";
+
+import {
+  resolveStaffSession,
+} from "@/server/staff-session";
 
 export const metadata: Metadata = {
-  title: "Recoveries",
+  title:
+    "Recoveries",
 };
 
-export const dynamic = "force-dynamic";
+export const dynamic =
+  "force-dynamic";
 
 /* ========================================================================== */
 /* Helpers                                                                     */
 /* ========================================================================== */
 
-function formatPercent(value: number | undefined): string {
-  if (value === undefined) {
-    return "Not applicable";
-  }
-
-  const percentage = value * 100;
-
-  return Number.isInteger(percentage)
-    ? `${percentage.toFixed(0)}%`
-    : `${percentage.toFixed(2)}%`;
+function humanize(
+  value:
+    string,
+): string {
+  return value
+    .replaceAll(
+      "_",
+      " ",
+    )
+    .replace(
+      /\b\w/g,
+      (
+        character,
+      ) =>
+        character.toUpperCase(),
+    );
 }
 
-function custodianLabel(value: string): string {
-  return value
-    .replaceAll("_", " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
+function settlementStatusLabel(
+  value:
+    string,
+): string {
+  switch (
+    value
+  ) {
+    case "no_fee_due":
+      return "No fee due";
+
+    case "awaiting_invoice":
+      return "Awaiting invoice";
+
+    case "invoice_open":
+      return "Invoice open";
+
+    case "partially_paid":
+      return "Fee partially paid";
+
+    case "fee_settled":
+      return "Fee settled";
+
+    case "reconciled":
+      return "Reconciled";
+
+    default:
+      return humanize(
+        value,
+      );
+  }
+}
+
+function settlementStatusTone(
+  value:
+    string,
+):
+  | "positive"
+  | "caution"
+  | "neutral" {
+  switch (
+    value
+  ) {
+    case "no_fee_due":
+    case "fee_settled":
+    case "reconciled":
+      return "positive";
+
+    case "awaiting_invoice":
+    case "invoice_open":
+    case "partially_paid":
+      return "caution";
+
+    default:
+      return "neutral";
+  }
+}
+
+function authorityStatusLabel(
+  value:
+    string,
+): string {
+  switch (
+    value
+  ) {
+    case "approved":
+      return "Approved, awaiting payment";
+
+    case "payment_issued":
+      return "Payment issued, awaiting recovery";
+
+    default:
+      return humanize(
+        value,
+      );
+  }
 }
 
 /* ========================================================================== */
@@ -70,506 +180,958 @@ function custodianLabel(value: string): string {
 /* ========================================================================== */
 
 export default async function ProRecoveriesPage() {
-  /*
-   * Server-side session gate.
-   *
-   * Resolved before any store read. The layout also withholds the operations
-   * shell, but layout and page render in parallel, so the page must refuse to
-   * read operational data on its own account.
-   */
-  if (!(await resolveStaffSession())) {
-    return <StaffAuthenticationRequired />;
+  const session =
+    await resolveStaffSession();
+
+  if (!session) {
+    return (
+      <StaffAuthenticationRequired />
+    );
   }
 
-  const conversions = await listOpportunityConversions();
+  if (
+    !can(
+      session,
+      "recovery.read",
+    )
+  ) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <p className="eyebrow text-ink-500">
+            Pipeline
+          </p>
 
-  const rows = (
-    await Promise.all(
-      conversions.map(async (conversion) => {
-        const resolved = await resolveClaimRecord(conversion.claimId);
+          <h1 className="mt-1.5 text-2xl">
+            Recoveries
+          </h1>
+        </div>
 
-        if (!resolved) {
-          return undefined;
+        <Callout
+          tone="critical"
+          title="Recovery access required"
+        >
+          <p>
+            Your current staff role does not permit access to recovery
+            accounting.
+          </p>
+        </Callout>
+      </div>
+    );
+  }
+
+  const conversions =
+    await listOpportunityConversions();
+
+  const rows =
+    (
+      await Promise.all(
+        conversions.map(
+          async (
+            conversion,
+          ) => {
+            const resolved =
+              await resolveClaimRecord(
+                conversion.claimId,
+              );
+
+            if (!resolved) {
+              return undefined;
+            }
+
+            const claim =
+              resolved.claim;
+
+            const [
+              property,
+              onboarding,
+              authorityReview,
+              settlement,
+            ] =
+              await Promise.all([
+                getPropertyById(
+                  claim.propertyId,
+                ),
+
+                getClaimantOnboarding(
+                  claim.id,
+                ),
+
+                getClaimAuthorityReviewByClaimId(
+                  claim.id,
+                ),
+
+                getClaimRecoverySettlementByClaimId(
+                  claim.id,
+                ),
+              ]);
+
+            const invoice =
+              settlement
+                ? await getRecoveryFeeInvoiceBySettlementId(
+                    settlement.id,
+                  )
+                : undefined;
+
+            const payments =
+              invoice
+                ? await listRecoveryFeePayments(
+                    invoice.id,
+                  )
+                : [];
+
+            return {
+              conversion,
+
+              claim,
+
+              property,
+
+              onboarding,
+
+              authorityReview,
+
+              settlement,
+
+              invoice,
+
+              payments,
+            };
+          },
+        ),
+      )
+    ).flatMap(
+      (
+        row,
+      ) =>
+        row
+          ? [
+              row,
+            ]
+          : [],
+    );
+
+  /* ======================================================================== */
+  /* Durable classifications                                                  */
+  /* ======================================================================== */
+
+  const awaitingRecovery =
+    rows.filter(
+      (
+        {
+          authorityReview,
+          settlement,
+        },
+      ) =>
+        !settlement &&
+        (
+          authorityReview?.status ===
+            "approved" ||
+          authorityReview?.status ===
+            "payment_issued"
+        ),
+    );
+
+  const recoveries =
+    rows.filter(
+      (
+        row,
+      ) =>
+        Boolean(
+          row.settlement,
+        ),
+    );
+
+  const grossRecovered =
+    recoveries.reduce(
+      (
+        total,
+        {
+          settlement,
+        },
+      ) =>
+        total +
+        (
+          settlement?.grossRecoveryCents ??
+          0
+        ),
+      0,
+    );
+
+  const earnedServiceFees =
+    recoveries.reduce(
+      (
+        total,
+        {
+          settlement,
+        },
+      ) =>
+        total +
+        (
+          settlement?.calculatedServiceFeeCents ??
+          0
+        ),
+      0,
+    );
+
+  const collectedServiceFees =
+    recoveries.reduce(
+      (
+        total,
+        {
+          invoice,
+        },
+      ) =>
+        total +
+        (
+          invoice?.amountPaidCents ??
+          0
+        ),
+      0,
+    );
+
+  const outstandingServiceFees =
+    recoveries.reduce(
+      (
+        total,
+        {
+          settlement,
+          invoice,
+        },
+      ) => {
+        if (!settlement) {
+          return total;
         }
 
-        const claim = resolved.claim;
+        if (
+          settlement.calculatedServiceFeeCents ===
+          0
+        ) {
+          return total;
+        }
 
-        const [property, onboarding, approval] = await Promise.all([
-          getPropertyById(claim.propertyId),
+        if (!invoice) {
+          return (
+            total +
+            settlement.calculatedServiceFeeCents
+          );
+        }
 
-          getClaimantOnboarding(claim.id),
+        return (
+          total +
+          invoice.balanceDueCents
+        );
+      },
+      0,
+    );
 
-          getCommercialApprovalByQuoteId(conversion.commercialQuoteId),
-        ]);
+  const claimantEconomicNet =
+    recoveries.reduce(
+      (
+        total,
+        {
+          settlement,
+        },
+      ) =>
+        total +
+        (
+          settlement?.claimantEconomicNetCents ??
+          0
+        ),
+      0,
+    );
 
-        const lockedQuote =
-          approval &&
-          approval.approvalStatus === "locked" &&
-          verifyCommercialQuoteSnapshot(approval)
-            ? approval.quoteSnapshot
-            : undefined;
-
-        return {
-          conversion,
-          claim,
-          property,
-          onboarding,
-          approval,
-          lockedQuote,
-        };
-      }),
-    )
-  ).flatMap((row) => (row ? [row] : []));
-
-  /* ======================================================================== */
-  /* Recovery classifications                                                 */
-  /* ======================================================================== */
-
-  /*
-   * Paid and closed claims with a confirmed recovery are the only records
-   * counted as completed recoveries.
-   *
-   * We deliberately do not infer payment from a quote, an opportunity amount,
-   * or a filing state.
-   */
-  const completedRecoveries = rows.filter(
-    ({ claim }) =>
-      (claim.status === "paid" || claim.status === "closed") &&
-      Boolean(claim.confirmedRecovery),
-  );
-
-  /*
-   * Agency-approved claims are real confirmed value, but they are still
-   * awaiting the payment stage.
-   */
-  const approvedInFlight = rows.filter(
-    ({ claim }) =>
-      claim.status === "approved" && Boolean(claim.confirmedRecovery),
-  );
-
-  const grossRecovered = completedRecoveries.reduce(
-    (total, { claim }) => total + (claim.confirmedRecovery?.amount ?? 0),
-    0,
-  );
-
-  /*
-   * This is intentionally labelled quoted fees, not earned fees.
-   *
-   * Duequity does not yet persist fee invoices or fee-settlement events.
-   */
-  const lockedQuotedFees = completedRecoveries.reduce(
-    (total, { lockedQuote }) => total + (lockedQuote?.projectedFee ?? 0),
-    0,
-  );
-
-  const quotedClaimantNet = completedRecoveries.reduce(
-    (total, { lockedQuote }) =>
-      total + (lockedQuote?.projectedClaimantNet ?? 0),
-    0,
-  );
-
-  const approvedInFlightAmount = approvedInFlight.reduce(
-    (total, { claim }) => total + (claim.confirmedRecovery?.amount ?? 0),
-    0,
-  );
+  const reconciledRecoveries =
+    recoveries.filter(
+      (
+        {
+          settlement,
+        },
+      ) =>
+        settlement?.status ===
+        "reconciled",
+    );
 
   return (
     <div className="space-y-5">
-      {/* ================================================================ header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="eyebrow text-ink-500">Pipeline</p>
+          <p className="eyebrow text-ink-500">
+            Pipeline
+          </p>
 
-          <h1 className="mt-1.5 text-2xl">Recoveries</h1>
+          <h1 className="mt-1.5 text-2xl">
+            Recoveries
+          </h1>
 
           <p className="mt-1 max-w-3xl text-sm text-ink-600">
-            Agency-approved, paid and completed recovery outcomes derived from
-            persisted claim records. Duequity does not record a recovery as paid
-            until the claim itself reaches the paid or closed stage.
+            Durable authority outcomes, actual recoveries, DueQuity
+            service-fee settlement, and final reconciliation.
           </p>
         </div>
       </div>
 
-      {/* ================================================================= stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
-          label="Confirmed recovered"
-          value={formatCents(grossRecovered)}
-          tone={grossRecovered > 0 ? "positive" : "default"}
+          label="Actual recovered"
+          value={
+            formatCents(
+              grossRecovered,
+            )
+          }
+          tone={
+            grossRecovered >
+            0
+              ? "positive"
+              : "default"
+          }
           context={`${formatCount(
-            completedRecoveries.length,
-          )} completed ${plural(
-            completedRecoveries.length,
+            recoveries.length,
+          )} actual ${plural(
+            recoveries.length,
             "recovery",
             "recoveries",
           )}`}
         />
 
         <Stat
-          label="Quoted claimant net"
-          value={formatCents(quotedClaimantNet)}
-          context="From verified locked commercial pricing snapshots"
+          label="DueQuity fees earned"
+          value={
+            formatCents(
+              earnedServiceFees,
+            )
+          }
+          context="Calculated from actual recovered amounts and frozen fee terms"
         />
 
         <Stat
-          label="Locked quoted fees"
-          value={formatCents(lockedQuotedFees)}
-          context="Commercial obligation only, not fee-payment confirmation"
+          label="DueQuity fees collected"
+          value={
+            formatCents(
+              collectedServiceFees,
+            )
+          }
+          tone={
+            collectedServiceFees >
+            0
+              ? "positive"
+              : "default"
+          }
+          context={`${formatCents(
+            outstandingServiceFees,
+          )} currently outstanding`}
         />
 
         <Stat
-          label="Approved, awaiting payment"
-          value={formatCents(approvedInFlightAmount)}
-          tone={approvedInFlight.length > 0 ? "caution" : "positive"}
-          context={`${formatCount(approvedInFlight.length)} ${plural(
-            approvedInFlight.length,
-            "claim",
+          label="Claimant economic net"
+          value={
+            formatCents(
+              claimantEconomicNet,
+            )
+          }
+          context={`${formatCount(
+            reconciledRecoveries.length,
+          )} reconciled ${plural(
+            reconciledRecoveries.length,
+            "recovery",
+            "recoveries",
           )}`}
         />
       </div>
 
-      {/* ========================================================= money policy */}
-      <Callout tone="neutral" title="How claimant funds are treated">
+      <Callout
+        tone="neutral"
+        title="Claimant recovery and DueQuity fees remain separate"
+      >
         <p>
-          Duequity is not the payee on an agency recovery and does not take
-          custody of claimant funds. The government agency, court, trustee, or
-          other responsible custodian pays the claimant, estate, or appropriate
-          attorney trust account directly. Duequity&apos;s service fee is a
-          separate contractual obligation.
+          A recovery is counted here only after actual recovery is durably
+          recorded. DueQuity does not treat authority approval, payment
+          issuance, a quoted recovery amount, or a service agreement as proof
+          that money was received.
+        </p>
+
+        <p className="mt-2">
+          Where the approved jurisdiction route pays the claimant or lawful
+          estate representative directly, those recovery funds do not become
+          DueQuity funds. DueQuity&apos;s contractual service fee is separately
+          invoiced and separately tracked only after recovery.
         </p>
       </Callout>
 
-      {/* ================================================= approved in flight */}
-      {approvedInFlight.length > 0 && (
-        <Card>
-          <CardHeader
-            title="Approved, awaiting payment"
-            description="The agency outcome is recorded, but the claim has not yet reached the paid stage."
-          />
+      {
+        awaitingRecovery.length >
+          0 &&
+        (
+          <Card>
+            <CardHeader
+              title="Approved or payment issued"
+              description="Durable authority outcomes that have not yet reached actual recovery."
+            />
 
-          <CardBody flush>
-            <ul className="divide-y divide-line-subtle">
-              {approvedInFlight.map(({ claim, property, onboarding }) => {
-                const recovery = claim.confirmedRecovery;
+            <CardBody flush>
+              <ul className="divide-y divide-line-subtle">
+                {
+                  awaitingRecovery.map(
+                    (
+                      {
+                        claim,
+                        property,
+                        onboarding,
+                        authorityReview,
+                      },
+                    ) => {
+                      if (
+                        !authorityReview
+                      ) {
+                        return null;
+                      }
 
-                if (!recovery) {
-                  return null;
-                }
-
-                return (
-                  <li key={claim.id}>
-                    <Link
-                      href={`/pro/claims/${claim.id}`}
-                      className="block px-4 py-3.5 transition-colors hover:bg-inset focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-500 sm:px-5"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-xs text-accent-700">
-                              {claim.reference}
-                            </span>
-
-                            <StatusBadge status={CLAIM_STATUS[claim.status]} />
-                          </div>
-
-                          <p className="mt-1 text-sm font-medium text-ink-900">
-                            {property?.address.line1 ?? "Property not recorded"}
-                          </p>
-
-                          <p className="mt-0.5 text-xs text-ink-500">
-                            {onboarding?.claimant.legalName ??
-                              "Claimant not recorded"}
-
-                            {claim.agencyContactName && (
-                              <>
-                                {" / "}
-                                {claim.agencyContactName}
-                              </>
-                            )}
-                          </p>
-                        </div>
-
-                        <Amount
-                          cents={recovery.amount}
-                          size="md"
-                          tone="positive"
-                        />
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </CardBody>
-        </Card>
-      )}
-
-      {/* ================================================= completed recovery */}
-      {completedRecoveries.length === 0 ? (
-        <EmptyState
-          title="No completed recoveries yet"
-          description="Paid and closed claims with a confirmed recovery amount will appear here. Duequity does not fabricate settlement records from opportunity or pricing data."
-        />
-      ) : (
-        <div className="space-y-5">
-          {completedRecoveries.map(
-            ({
-              conversion,
-              claim,
-              property,
-              onboarding,
-              approval,
-              lockedQuote,
-            }) => {
-              const recovery = claim.confirmedRecovery;
-
-              if (!recovery) {
-                return null;
-              }
-
-              return (
-                <Card key={claim.id}>
-                  <CardHeader
-                    eyebrow={
-                      <span className="flex flex-wrap items-center gap-2">
-                        <Link
-                          href={`/pro/claims/${claim.id}`}
-                          className="font-mono text-accent-700 underline decoration-accent-300 underline-offset-2 hover:text-accent-800"
+                      return (
+                        <li
+                          key={
+                            claim.id
+                          }
                         >
-                          {claim.reference}
-                        </Link>
-
-                        {property?.address.state && (
-                          <span className="text-ink-400">
-                            {property.address.state}
-                          </span>
-                        )}
-                      </span>
-                    }
-                    title={property?.address.line1 ?? claim.reference}
-                    description={
-                      onboarding?.claimant.legalName
-                        ? `${onboarding.claimant.legalName} / ${
-                            claim.agencyContactName ??
-                            custodianLabel(claim.custodian)
-                          }`
-                        : (claim.agencyContactName ??
-                          custodianLabel(claim.custodian))
-                    }
-                    actions={
-                      <StatusBadge status={CLAIM_STATUS[claim.status]} />
-                    }
-                  />
-
-                  <CardBody>
-                    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10">
-                      {/* ============================================== accounting */}
-                      <div>
-                        <p className="eyebrow text-ink-500">
-                          Recovery accounting
-                        </p>
-
-                        <div className="mt-2">
-                          <FigureRow
-                            label="Confirmed recovery"
-                            note={
-                              recovery.asOf
-                                ? `Confirmed as of ${formatDate(recovery.asOf)}`
-                                : "Confirmation date not recorded"
-                            }
+                          <Link
+                            href={`/pro/claims/${claim.id}`}
+                            className="block px-4 py-3.5 transition-colors hover:bg-inset focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-500 sm:px-5"
                           >
-                            <Amount
-                              cents={recovery.amount}
-                              size="lg"
-                              tone="positive"
-                            />
-                          </FigureRow>
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-mono text-xs text-accent-700">
+                                    {
+                                      claim.reference
+                                    }
+                                  </span>
 
-                          {lockedQuote && (
-                            <>
-                              <FigureRow
-                                label="Locked quoted service fee"
-                                sign="subtract"
-                                note="Separate contractual fee obligation"
-                              >
-                                <Amount
-                                  cents={lockedQuote.projectedFee}
-                                  tone="negative"
-                                />
-                              </FigureRow>
+                                  <Badge
+                                    tone={
+                                      authorityReview.status ===
+                                        "payment_issued"
+                                        ? "positive"
+                                        : "caution"
+                                    }
+                                  >
+                                    {
+                                      authorityStatusLabel(
+                                        authorityReview.status,
+                                      )
+                                    }
+                                  </Badge>
+                                </div>
 
-                              <FigureRow
-                                label="Quoted claimant economic net"
-                                emphasis
-                              >
-                                <Amount
-                                  cents={lockedQuote.projectedClaimantNet}
-                                  size="lg"
-                                  tone="positive"
-                                />
-                              </FigureRow>
-                            </>
-                          )}
-                        </div>
-
-                        {lockedQuote ? (
-                          <DataList columns={2} className="mt-4">
-                            <DataItem label="Pricing model">
-                              {lockedQuote.model.replaceAll("_", " ")}
-                            </DataItem>
-
-                            <DataItem label="Approved rate">
-                              {formatPercent(lockedQuote.selectedPercentage)}
-                            </DataItem>
-
-                            <DataItem label="Commercial quote">
-                              <Identifier>
-                                {conversion.commercialQuoteId}
-                              </Identifier>
-                            </DataItem>
-
-                            <DataItem label="Fee agreement">
-                              <Identifier>
-                                {conversion.feeAgreementId}
-                              </Identifier>
-                            </DataItem>
-
-                            <DataItem label="Pricing snapshot" span>
-                              <span className="break-all font-mono text-xs text-ink-600">
-                                {conversion.commercialSnapshotHash}
-                              </span>
-                            </DataItem>
-                          </DataList>
-                        ) : (
-                          <Callout
-                            tone="caution"
-                            className="mt-4"
-                            title="Locked pricing unavailable"
-                          >
-                            <p>
-                              This claim does not currently have a verified
-                              locked commercial pricing snapshot available for
-                              recovery accounting. No service fee is inferred.
-                            </p>
-                          </Callout>
-                        )}
-
-                        {claim.attorneyAssignment && (
-                          <div className="mt-4 rounded-md border border-counsel-200 bg-counsel-50 px-3.5 py-3">
-                            <p className="eyebrow text-counsel-700">
-                              Independent legal fee
-                            </p>
-
-                            {claim.attorneyAssignment.independentLegalFee
-                              ?.amount ? (
-                              <div className="mt-1.5">
-                                <Amount
-                                  cents={
-                                    claim.attorneyAssignment.independentLegalFee
-                                      .amount
+                                <p className="mt-1 text-sm font-medium text-ink-900">
+                                  {
+                                    property
+                                      ?.address
+                                      .line1 ??
+                                    "Property not recorded"
                                   }
-                                  size="md"
-                                />
+                                </p>
+
+                                <p className="mt-0.5 text-xs text-ink-500">
+                                  {
+                                    onboarding
+                                      ?.claimant
+                                      .legalName ??
+                                    "Claimant not recorded"
+                                  }
+                                </p>
                               </div>
-                            ) : (
-                              <p className="mt-1.5 text-sm text-ink-600">
-                                No independent legal fee amount is recorded.
-                              </p>
-                            )}
 
-                            <p className="mt-1.5 text-xs leading-relaxed text-ink-600">
-                              Any independent counsel fee belongs to the
-                              claimant&apos;s separate relationship with counsel
-                              and is not Duequity revenue.
-                            </p>
-                          </div>
-                        )}
-                      </div>
+                              <div className="text-right">
+                                <p className="text-sm font-semibold text-ink-900">
+                                  {
+                                    authorityReview.paymentAmountCents !==
+                                    undefined
+                                      ? formatCents(
+                                          authorityReview.paymentAmountCents,
+                                        )
+                                      : authorityReview.approvedAmountCents !==
+                                          undefined
+                                        ? formatCents(
+                                            authorityReview.approvedAmountCents,
+                                          )
+                                        : "Amount not recorded"
+                                  }
+                                </p>
 
-                      {/* ============================================== settlement */}
-                      <div>
-                        <p className="eyebrow text-ink-500">Recovery record</p>
+                                <p className="mt-1 text-xs text-ink-500">
+                                  {
+                                    authorityReview.status ===
+                                      "payment_issued"
+                                      ? "Authority payment issuance"
+                                      : "Authority-approved amount"
+                                  }
+                                </p>
+                              </div>
+                            </div>
+                          </Link>
+                        </li>
+                      );
+                    },
+                  )
+                }
+              </ul>
+            </CardBody>
+          </Card>
+        )
+      }
 
-                        <DataList className="mt-2">
-                          <DataItem label="Claim status">
-                            <StatusBadge status={CLAIM_STATUS[claim.status]} />
-                          </DataItem>
+      {
+        recoveries.length ===
+          0
+          ? (
+              <EmptyState
+                title="No actual recoveries yet"
+                description="A recovery will appear here only after the durable authority-review lifecycle records actual receipt. Claim readiness, approval, and payment issuance do not create a recovery settlement."
+              />
+            )
+          : (
+              <div className="space-y-5">
+                {
+                  recoveries.map(
+                    (
+                      {
+                        conversion,
+                        claim,
+                        property,
+                        onboarding,
+                        settlement,
+                        invoice,
+                        payments,
+                      },
+                    ) => {
+                      if (
+                        !settlement
+                      ) {
+                        return null;
+                      }
 
-                          <DataItem label="Confirmed amount">
-                            <span className="font-semibold text-ink-900">
-                              {formatCents(recovery.amount)}
-                            </span>
-                          </DataItem>
+                      const postedPayments =
+                        payments.filter(
+                          (
+                            payment,
+                          ) =>
+                            payment.status ===
+                            "posted",
+                        );
 
-                          <DataItem label="Confirmation date">
-                            {recovery.asOf
-                              ? formatDate(recovery.asOf)
-                              : "Not recorded"}
-                          </DataItem>
+                      const voidedPayments =
+                        payments.filter(
+                          (
+                            payment,
+                          ) =>
+                            payment.status ===
+                            "voided",
+                        );
 
-                          <DataItem label="Agency reference">
-                            {claim.agencyReference ? (
-                              <Identifier>{claim.agencyReference}</Identifier>
-                            ) : (
-                              "Not recorded"
-                            )}
-                          </DataItem>
-
-                          <DataItem label="Responsible custodian">
-                            {claim.agencyContactName ??
-                              custodianLabel(claim.custodian)}
-                          </DataItem>
-
-                          <DataItem label="Last activity">
-                            {formatDate(claim.lastActivityAt)}
-                          </DataItem>
-
-                          <DataItem label="File closed">
-                            {claim.closedAt
-                              ? formatDate(claim.closedAt)
-                              : "Not yet closed"}
-                          </DataItem>
-
-                          <DataItem label="Commercial lock">
-                            {approval?.lockedAt
-                              ? formatDate(approval.lockedAt.slice(0, 10))
-                              : "Not recorded"}
-                          </DataItem>
-                        </DataList>
-
-                        <Callout
-                          tone="neutral"
-                          className="mt-4"
-                          title="Payment details are not inferred"
+                      return (
+                        <Card
+                          key={
+                            settlement.id
+                          }
                         >
-                          <p>
-                            Duequity does not currently have a persisted
-                            settlement ledger for payment instruments, clearing
-                            dates, agency deductions, fee invoices, or fee
-                            receipts. Therefore this page does not invent check
-                            numbers, ACH transfers, payment destinations, or
-                            settlement dates.
-                          </p>
-                        </Callout>
-                      </div>
-                    </div>
-                  </CardBody>
-                </Card>
-              );
-            },
-          )}
-        </div>
-      )}
+                          <CardHeader
+                            eyebrow={
+                              <span className="flex flex-wrap items-center gap-2">
+                                <Link
+                                  href={`/pro/claims/${claim.id}`}
+                                  className="font-mono text-accent-700 underline decoration-accent-300 underline-offset-2 hover:text-accent-800"
+                                >
+                                  {
+                                    claim.reference
+                                  }
+                                </Link>
 
-      {/* ============================================================ boundary */}
-      <Callout tone="neutral" title="Current recovery boundary">
+                                {
+                                  property
+                                    ?.address
+                                    .state &&
+                                  (
+                                    <span className="text-ink-400">
+                                      {
+                                        property.address.state
+                                      }
+                                    </span>
+                                  )
+                                }
+                              </span>
+                            }
+                            title={
+                              property
+                                ?.address
+                                .line1 ??
+                              claim.reference
+                            }
+                            description={
+                              onboarding
+                                ?.claimant
+                                .legalName ??
+                              "Claimant not recorded"
+                            }
+                            actions={
+                              <Badge
+                                tone={
+                                  settlementStatusTone(
+                                    settlement.status,
+                                  )
+                                }
+                                size="md"
+                              >
+                                {
+                                  settlementStatusLabel(
+                                    settlement.status,
+                                  )
+                                }
+                              </Badge>
+                            }
+                          />
+
+                          <CardBody>
+                            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10">
+                              <div>
+                                <p className="eyebrow text-ink-500">
+                                  Recovery economics
+                                </p>
+
+                                <div className="mt-2">
+                                  <FigureRow
+                                    label="Actual recovery"
+                                    note={`Recovered ${formatTimestamp(
+                                      settlement.recoveredAt,
+                                    )}`}
+                                  >
+                                    <Amount
+                                      cents={
+                                        settlement.grossRecoveryCents
+                                      }
+                                      size="lg"
+                                      tone="positive"
+                                    />
+                                  </FigureRow>
+
+                                  <FigureRow
+                                    label="DueQuity service fee"
+                                    sign="subtract"
+                                    note="Calculated from actual recovery and frozen fee terms"
+                                  >
+                                    <Amount
+                                      cents={
+                                        settlement.calculatedServiceFeeCents
+                                      }
+                                      tone="negative"
+                                    />
+                                  </FigureRow>
+
+                                  <FigureRow
+                                    label="Claimant economic net"
+                                    emphasis
+                                  >
+                                    <Amount
+                                      cents={
+                                        settlement.claimantEconomicNetCents
+                                      }
+                                      size="lg"
+                                      tone="positive"
+                                    />
+                                  </FigureRow>
+                                </div>
+
+                                <DataList
+                                  columns={2}
+                                  className="mt-4"
+                                >
+                                  <DataItem label="Payment route">
+                                    {
+                                      humanize(
+                                        settlement.paymentRoute,
+                                      )
+                                    }
+                                  </DataItem>
+
+                                  <DataItem label="Recovery track">
+                                    {
+                                      humanize(
+                                        settlement.launchPaymentTrack,
+                                      )
+                                    }
+                                  </DataItem>
+
+                                  <DataItem label="Fee collection">
+                                    {
+                                      humanize(
+                                        settlement.feeCollectionMethod,
+                                      )
+                                    }
+                                  </DataItem>
+
+                                  <DataItem label="Representative may receive">
+                                    {
+                                      settlement.representativeMayReceivePayment ===
+                                      "yes"
+                                        ? "Yes"
+                                        : "No"
+                                    }
+                                  </DataItem>
+
+                                  <DataItem label="Commercial quote">
+                                    <Identifier>
+                                      {
+                                        settlement.commercialQuoteId
+                                      }
+                                    </Identifier>
+                                  </DataItem>
+
+                                  <DataItem label="Fee agreement">
+                                    <Identifier>
+                                      {
+                                        settlement.feeAgreementId
+                                      }
+                                    </Identifier>
+                                  </DataItem>
+
+                                  <DataItem
+                                    label="Settlement"
+                                    span
+                                  >
+                                    <Identifier>
+                                      {
+                                        settlement.id
+                                      }
+                                    </Identifier>
+                                  </DataItem>
+                                </DataList>
+                              </div>
+
+                              <div>
+                                <p className="eyebrow text-ink-500">
+                                  DueQuity fee ledger
+                                </p>
+
+                                {
+                                  settlement.calculatedServiceFeeCents ===
+                                  0
+                                    ? (
+                                        <Callout
+                                          tone="positive"
+                                          className="mt-2"
+                                          title="No service fee due"
+                                        >
+                                          <p>
+                                            The actual recovery resulted in a
+                                            $0 DueQuity service fee. No fee
+                                            invoice is required.
+                                          </p>
+                                        </Callout>
+                                      )
+                                    : invoice
+                                      ? (
+                                          <>
+                                            <DataList className="mt-2">
+                                              <DataItem label="Invoice">
+                                                <Identifier>
+                                                  {
+                                                    invoice.invoiceNumber
+                                                  }
+                                                </Identifier>
+                                              </DataItem>
+
+                                              <DataItem label="Invoice status">
+                                                <Badge
+                                                  tone={
+                                                    invoice.balanceDueCents ===
+                                                    0
+                                                      ? "positive"
+                                                      : "caution"
+                                                  }
+                                                >
+                                                  {
+                                                    humanize(
+                                                      invoice.status,
+                                                    )
+                                                  }
+                                                </Badge>
+                                              </DataItem>
+
+                                              <DataItem label="Invoice amount">
+                                                <span className="font-semibold text-ink-900">
+                                                  {
+                                                    formatCents(
+                                                      invoice.invoiceAmountCents,
+                                                    )
+                                                  }
+                                                </span>
+                                              </DataItem>
+
+                                              <DataItem label="Collected">
+                                                {
+                                                  formatCents(
+                                                    invoice.amountPaidCents,
+                                                  )
+                                                }
+                                              </DataItem>
+
+                                              <DataItem label="Waived">
+                                                {
+                                                  formatCents(
+                                                    invoice.amountWaivedCents,
+                                                  )
+                                                }
+                                              </DataItem>
+
+                                              <DataItem label="Balance due">
+                                                <span
+                                                  className={
+                                                    invoice.balanceDueCents >
+                                                    0
+                                                      ? "font-semibold text-caution-800"
+                                                      : "font-semibold text-accent-800"
+                                                  }
+                                                >
+                                                  {
+                                                    formatCents(
+                                                      invoice.balanceDueCents,
+                                                    )
+                                                  }
+                                                </span>
+                                              </DataItem>
+
+                                              <DataItem label="Issued">
+                                                {
+                                                  formatTimestamp(
+                                                    invoice.issuedAt,
+                                                  )
+                                                }
+                                              </DataItem>
+
+                                              <DataItem label="Settled">
+                                                {
+                                                  invoice.settledAt
+                                                    ? formatTimestamp(
+                                                        invoice.settledAt,
+                                                      )
+                                                    : "Not yet settled"
+                                                }
+                                              </DataItem>
+                                            </DataList>
+
+                                            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                              <div className="rounded-md border border-line bg-inset px-3.5 py-3">
+                                                <p className="eyebrow text-ink-500">
+                                                  Posted payments
+                                                </p>
+
+                                                <p className="mt-1 text-lg font-semibold text-ink-900">
+                                                  {
+                                                    formatCount(
+                                                      postedPayments.length,
+                                                    )
+                                                  }
+                                                </p>
+                                              </div>
+
+                                              <div className="rounded-md border border-line bg-inset px-3.5 py-3">
+                                                <p className="eyebrow text-ink-500">
+                                                  Voided payments
+                                                </p>
+
+                                                <p className="mt-1 text-lg font-semibold text-ink-900">
+                                                  {
+                                                    formatCount(
+                                                      voidedPayments.length,
+                                                    )
+                                                  }
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </>
+                                        )
+                                      : (
+                                          <Callout
+                                            tone="caution"
+                                            className="mt-2"
+                                            title="Fee invoice not yet issued"
+                                          >
+                                            <p>
+                                              Actual recovery is recorded and a
+                                              DueQuity service fee is due, but
+                                              the contractual fee invoice has
+                                              not yet been issued.
+                                            </p>
+                                          </Callout>
+                                        )
+                                }
+
+                                {
+                                  settlement.status ===
+                                    "reconciled" &&
+                                  (
+                                    <Callout
+                                      tone="positive"
+                                      className="mt-4"
+                                      title="Recovery reconciled"
+                                    >
+                                      <p>
+                                        {
+                                          settlement.reconciliationSummary ??
+                                          "Final recovery reconciliation is complete."
+                                        }
+                                      </p>
+
+                                      {
+                                        settlement.reconciledAt &&
+                                        (
+                                          <p className="mt-2 text-xs">
+                                            Reconciled{" "}
+                                            {
+                                              formatTimestamp(
+                                                settlement.reconciledAt,
+                                              )
+                                            }
+                                          </p>
+                                        )
+                                      }
+                                    </Callout>
+                                  )
+                                }
+                              </div>
+                            </div>
+
+                            <div className="mt-5 border-t border-line pt-4">
+                              <p className="text-xs leading-relaxed text-ink-500">
+                                Durable claim ledger source:{" "}
+                                <span className="font-mono">
+                                  {
+                                    conversion.claimId
+                                  }
+                                </span>
+                                . Actual recovery and fee accounting shown here
+                                come from the durable recovery settlement ledger,
+                                not from legacy claim-status inference.
+                              </p>
+                            </div>
+                          </CardBody>
+                        </Card>
+                      );
+                    },
+                  )
+                }
+              </div>
+            )
+      }
+
+      <Callout
+        tone="neutral"
+        title="Recovery accounting boundary"
+      >
         <p>
-          For the current MVP, the persisted claim is the authoritative recovery
-          lifecycle record. A dedicated settlement ledger should only be
-          introduced when Duequity needs to record actual agency disbursement
-          confirmation, invoicing, fee settlement, closing statements, or
-          related accounting events. Until then, those facts are intentionally
-          left unrecorded rather than simulated.
+          Authority approval and payment issuance are operational milestones,
+          not proof of actual recovery. The Stage 22 settlement ledger begins
+          only when recovery is durably recorded. DueQuity service fees are then
+          calculated from the actual recovered amount and are not treated as
+          collected until an actual fee payment is recorded.
         </p>
       </Callout>
     </div>

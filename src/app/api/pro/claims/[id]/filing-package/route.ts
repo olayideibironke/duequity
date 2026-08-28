@@ -25,6 +25,13 @@ import {
   submitClaimFilingPackageForReview,
 } from "@/server/claim-filing-package-store";
 
+import {
+  getCurrentJurisdictionFilingDestination,
+  jurisdictionFilingAddressLines,
+  normalizeJurisdictionFilingMethod,
+  resolveJurisdictionFilingDestinationReadiness,
+} from "@/server/jurisdiction-filing-destination-store";
+
 import { listJurisdictionRulePackages } from "@/server/jurisdiction-intelligence";
 
 export const runtime = "nodejs";
@@ -53,6 +60,62 @@ export const dynamic = "force-dynamic";
  * reviewer approved the frozen internal package snapshot for the next
  * controlled stage.
  *
+ * CLAIM-INITIATION ROUTE
+ *
+ * This API also resolves the read-only submission route that becomes relevant
+ * after pre-filing approval.
+ *
+ * The route identifies:
+ *
+ *   - the responsible authority
+ *   - the recorded custodian
+ *   - the approved submission method
+ *   - the verified operational filing destination
+ *   - whether an official claim form exists
+ *   - whether an attorney is required
+ *   - whether DueQuity may file as representative
+ *   - whether the claimant must personally control submission
+ *   - the government payment route
+ *   - the DueQuity launch recovery track
+ *   - the claim-specific active submission-document requirements
+ *
+ * Resolving this route does NOT create an external submission.
+ *
+ * FILING DESTINATION PRINCIPLE
+ *
+ * DueQuity staff should not have to independently search for where a claim
+ * must be sent.
+ *
+ * The jurisdiction filing-destination foundation resolves the verified:
+ *
+ *   - filing email;
+ *   - mailing destination;
+ *   - physical delivery location;
+ *   - online portal;
+ *   - court e-filing portal;
+ *   - department / attention line;
+ *   - filing instructions;
+ *   - official source supporting the destination.
+ *
+ * Stage 20D displays this destination.
+ *
+ * Stage 20E will make an operationally complete verified destination a
+ * mandatory external-submission gate.
+ *
+ * DOCUMENT-ACTIVATION PRINCIPLE
+ *
+ * Claim Initiation must use the same claim-specific document requirements as
+ * filing readiness.
+ *
+ * A document appearing in the jurisdiction's full requirements catalog does
+ * not automatically mean it is required for every claim. Conditional estate
+ * documents such as Letters of Administration remain dormant unless the claim
+ * itself activates the deceased-owner or probate requirement.
+ *
+ * If representative filing is prohibited, the workflow remains claimant
+ * controlled. DueQuity may prepare and coordinate the claimant-ready package,
+ * but the software must not represent that DueQuity filed the claim.
+ *
  * SERVER-SIDE AUTHORIZATION
  *
  * Every request is evaluated against the authenticated staff session.
@@ -72,40 +135,30 @@ export const dynamic = "force-dynamic";
  *   claim.submit
  *
  * State clearance is separately enforced from permissions.
- *
- * FILING READINESS
- *
- * The browser does not supply:
- *
- *   - claimant identity
- *   - claimant linkage
- *   - accepted documents
- *   - jurisdiction requirements
- *   - payment routing
- *   - Startup Green Lane status
- *   - commercial pricing
- *   - legal-rule provenance
- *   - filing deadline
- *   - legal lane
- *   - filing-readiness controls
- *
- * Those facts are resolved again by the server from persisted records and the
- * current approved jurisdiction package.
- *
- * INDEPENDENT REVIEW
- *
- * The same user who prepared or submitted a filing package may not approve or
- * return that package during independent pre-filing review.
- *
- * RETURNED PACKAGE RULE
- *
- * A package returned for changes must be prepared again before it can be
- * resubmitted. The old returned snapshot may not simply be placed back under
- * review.
  */
 
 type FilingPackageAction =
-  "prepare" | "submit_for_review" | "approve_pre_filing" | "return_for_changes";
+  | "prepare"
+  | "submit_for_review"
+  | "approve_pre_filing"
+  | "return_for_changes";
+
+type ClaimInitiationRouteMode =
+  | "claimant_controlled"
+  | "representative_controlled"
+  | "blocked";
+
+type ClaimInitiationStatus =
+  | "awaiting_pre_filing_package"
+  | "awaiting_pre_filing_approval"
+  | "ready_for_claim_initiation"
+  | "counsel_required"
+  | "blocked";
+
+type FilingDestinationResolutionStatus =
+  | "verified"
+  | "missing"
+  | "unsupported_method";
 
 interface FilingPackageActionBody {
   action?: FilingPackageAction;
@@ -221,12 +274,6 @@ function requireActionPermission(
   session: StaffSession,
   action: FilingPackageAction,
 ): void {
-  /*
-   * Mutation access never implies read access.
-   *
-   * Require both so an unusual custom role cannot mutate a Claim it is not
-   * authorized to inspect.
-   */
   requireClaimReadPermission(session);
 
   const permission = actionPermission(action);
@@ -256,12 +303,6 @@ async function resolvePersistentClaim(claimId: string, session: StaffSession) {
 
   const jurisdictionPackages = await listJurisdictionRulePackages();
 
-  /*
-   * Select the newest approved package for the Claim's jurisdiction.
-   *
-   * Filing authorization always relies on the current approved rule rather
-   * than whichever matching package happened to appear first in storage.
-   */
   const jurisdictionPackage = jurisdictionPackages
     .filter(
       (rulePackage) =>
@@ -280,12 +321,6 @@ async function resolvePersistentClaim(claimId: string, session: StaffSession) {
     );
   }
 
-  /*
-   * Operational permission and geographic clearance are separate gates.
-   *
-   * A user with claim.write or claim.submit cannot act outside their cleared
-   * states.
-   */
   if (!clearedForState(session, jurisdictionPackage.stateCode)) {
     throw new FilingPackageRouteError(
       `You are not cleared to work on claims in ${jurisdictionPackage.stateCode}.`,
@@ -313,6 +348,257 @@ async function resolvePersistentClaim(claimId: string, session: StaffSession) {
 }
 
 /* ========================================================================== */
+/* Claim-initiation route                                                      */
+/* ========================================================================== */
+
+function resolveClaimInitiationRoute({
+  jurisdiction,
+  jurisdictionPackage,
+  currentPackageStatus,
+  requiredDocumentKinds,
+}: {
+  jurisdiction: NonNullable<
+    Awaited<ReturnType<typeof resolvePersistentClaim>>["jurisdiction"]
+  >;
+
+  jurisdictionPackage: Awaited<
+    ReturnType<typeof resolvePersistentClaim>
+  >["jurisdictionPackage"];
+
+  currentPackageStatus?: string;
+
+  requiredDocumentKinds: string[];
+}) {
+  const paymentRouting = jurisdictionPackage.paymentRouting;
+
+  let mode: ClaimInitiationRouteMode = "blocked";
+
+  if (paymentRouting?.representativeMayFile === "no") {
+    mode = "claimant_controlled";
+  }
+
+  if (paymentRouting?.representativeMayFile === "yes") {
+    mode = "representative_controlled";
+  }
+
+  let status: ClaimInitiationStatus;
+
+  if (!currentPackageStatus) {
+    status = "awaiting_pre_filing_package";
+  } else if (currentPackageStatus !== "pre_filing_approved") {
+    status = "awaiting_pre_filing_approval";
+  } else if (jurisdiction.attorneyRequired) {
+    status = "counsel_required";
+  } else if (!paymentRouting || mode === "blocked") {
+    status = "blocked";
+  } else {
+    status = "ready_for_claim_initiation";
+  }
+
+  let message: string;
+
+  switch (status) {
+    case "awaiting_pre_filing_package":
+      message =
+        "Prepare and complete the controlled filing-package review before Claim Initiation can begin.";
+      break;
+
+    case "awaiting_pre_filing_approval":
+      message =
+        "Independent pre-filing approval is required before Claim Initiation can begin.";
+      break;
+
+    case "counsel_required":
+      message =
+        "The current jurisdiction requires an attorney workflow. Do not proceed through the ordinary administrative submission route.";
+      break;
+
+    case "blocked":
+      message =
+        "The current jurisdiction does not contain a complete operational claim-submission route. External submission remains blocked.";
+      break;
+
+    case "ready_for_claim_initiation":
+      message =
+        mode === "claimant_controlled"
+          ? "Pre-filing approval is complete. DueQuity may prepare and coordinate the claimant-ready submission, but the claimant or lawful estate representative must control the actual filing."
+          : "Pre-filing approval is complete. The approved jurisdiction rule permits an authorized representative filing route. Claim Initiation may proceed subject to the recorded authorization and submission controls.";
+      break;
+  }
+
+  return {
+    mode,
+
+    status,
+
+    ready: status === "ready_for_claim_initiation",
+
+    filingParty:
+      mode === "claimant_controlled"
+        ? "claimant"
+        : mode === "representative_controlled"
+          ? "authorized_representative"
+          : "unresolved",
+
+    agencyName: jurisdiction.agencyName,
+
+    custodian: jurisdiction.custodian,
+
+    claimMethod: jurisdiction.claimMethod,
+
+    claimFormUrl: jurisdiction.claimFormUrl,
+
+    attorneyRequired: jurisdiction.attorneyRequired,
+
+    requiredDocuments: requiredDocumentKinds,
+
+    representativeMayFile:
+      paymentRouting?.representativeMayFile ?? "unknown",
+
+    representativeMayReceivePayment:
+      paymentRouting?.representativeMayReceivePayment ?? "unknown",
+
+    paymentRoute: paymentRouting?.paymentRoute ?? "unknown",
+
+    launchPaymentTrack: paymentRouting?.launchTrack ?? "blocked",
+
+    feeCollectionMethod:
+      paymentRouting?.feeCollectionMethod ?? "unknown",
+
+    message,
+  };
+}
+
+/* ========================================================================== */
+/* Filing destination                                                          */
+/* ========================================================================== */
+
+async function resolveFilingDestination({
+  jurisdictionPackage,
+  claimMethod,
+}: {
+  jurisdictionPackage: Awaited<
+    ReturnType<typeof resolvePersistentClaim>
+  >["jurisdictionPackage"];
+
+  claimMethod: string;
+}) {
+  const normalizedMethod =
+    normalizeJurisdictionFilingMethod(claimMethod);
+
+  if (!normalizedMethod) {
+    return {
+      status:
+        "unsupported_method" as FilingDestinationResolutionStatus,
+
+      complete: false,
+
+      submissionMethod: claimMethod,
+
+      message:
+        "The jurisdiction claim method is not mapped to a supported DueQuity filing-destination method. Staff must not independently guess the filing destination.",
+    };
+  }
+
+  const destination =
+    await getCurrentJurisdictionFilingDestination({
+      jurisdictionPackageId:
+        jurisdictionPackage.id,
+
+      jurisdictionPackageVersion:
+        jurisdictionPackage.version,
+
+      submissionMethod:
+        normalizedMethod,
+    });
+
+  if (!destination) {
+    return {
+      status:
+        "missing" as FilingDestinationResolutionStatus,
+
+      complete: false,
+
+      submissionMethod:
+        normalizedMethod,
+
+      message:
+        `No current verified ${normalizedMethod.replaceAll(
+          "_",
+          " ",
+        )} filing destination is recorded for this approved jurisdiction package.`,
+    };
+  }
+
+  const readiness =
+    resolveJurisdictionFilingDestinationReadiness(destination);
+
+  return {
+    status:
+      "verified" as FilingDestinationResolutionStatus,
+
+    complete:
+      readiness.complete,
+
+    submissionMethod:
+      destination.submissionMethod,
+
+    message:
+      readiness.detail,
+
+    id:
+      destination.id,
+
+    destinationVersion:
+      destination.destinationVersion,
+
+    agencyName:
+      destination.agencyName,
+
+    departmentName:
+      destination.departmentName,
+
+    attentionLine:
+      destination.attentionLine,
+
+    filingEmail:
+      destination.filingEmail,
+
+    mailingAddressLines:
+      destination.mailingAddress
+        ? jurisdictionFilingAddressLines(
+            destination.mailingAddress,
+          )
+        : [],
+
+    physicalAddressLines:
+      destination.physicalAddress
+        ? jurisdictionFilingAddressLines(
+            destination.physicalAddress,
+          )
+        : [],
+
+    portalUrl:
+      destination.portalUrl,
+
+    phone:
+      destination.phone,
+
+    filingInstructions:
+      destination.filingInstructions,
+
+    officialSourceUrl:
+      destination.officialSourceUrl,
+
+    officialSourceTitle:
+      destination.officialSourceTitle,
+
+    verifiedAt:
+      destination.verifiedAt,
+  };
+}
+
+/* ========================================================================== */
 /* Current-state response                                                      */
 /* ========================================================================== */
 
@@ -334,10 +620,6 @@ async function filingPackageResponse(claimId: string, session: StaffSession) {
 
   const mayReview = can(session, "claim.submit");
 
-  /*
-   * A returned package must be prepared again so changed Claim data produces a
-   * fresh package snapshot.
-   */
   const canPrepare =
     mayWrite &&
     readiness.readyToPrepare &&
@@ -359,16 +641,28 @@ async function filingPackageResponse(claimId: string, session: StaffSession) {
     mayReview &&
     reviewerIndependent;
 
-  /*
-   * A reviewer may always return an under-review package for changes.
-   *
-   * Approval is stricter: the Claim must STILL satisfy current filing
-   * readiness at approval time.
-   */
   const canApprovePreFiling =
     reviewWorkflowAvailable && readiness.readyToPrepare;
 
   const canReturnForChanges = reviewWorkflowAvailable;
+
+  const claimInitiationRoute = resolveClaimInitiationRoute({
+    jurisdiction,
+
+    jurisdictionPackage,
+
+    currentPackageStatus: currentPackage?.status,
+
+    requiredDocumentKinds: readiness.requiredDocumentKinds,
+  });
+
+  const filingDestination =
+    await resolveFilingDestination({
+      jurisdictionPackage,
+
+      claimMethod:
+        jurisdiction.claimMethod,
+    });
 
   return {
     ok: true,
@@ -391,6 +685,16 @@ async function filingPackageResponse(claimId: string, session: StaffSession) {
       stateCode: jurisdictionPackage.stateCode,
 
       ruleVersion: jurisdictionPackage.version,
+
+      custodian: jurisdiction.custodian,
+
+      claimMethod: jurisdiction.claimMethod,
+
+      claimFormUrl: jurisdiction.claimFormUrl,
+
+      attorneyRequired: jurisdiction.attorneyRequired,
+
+      requiredDocuments: readiness.requiredDocumentKinds,
     },
 
     readiness,
@@ -416,12 +720,6 @@ async function filingPackageResponse(claimId: string, session: StaffSession) {
 
       canSubmitForReview,
 
-      /*
-       * Retained for existing UI compatibility.
-       *
-       * New UI should prefer the two specific values below because approval and
-       * return no longer have identical readiness requirements.
-       */
       canApproveOrReturn: canReturnForChanges,
 
       canApprovePreFiling,
@@ -429,11 +727,15 @@ async function filingPackageResponse(claimId: string, session: StaffSession) {
       canReturnForChanges,
     },
 
+    claimInitiationRoute,
+
+    filingDestination,
+
     submission: {
       submitted: false,
 
       message:
-        "No court or agency submission occurs through this filing-package API.",
+        "No court or agency submission has occurred through this filing-package workflow.",
     },
   };
 }
@@ -572,12 +874,6 @@ export async function POST(
         );
       }
 
-      /*
-       * A returned package cannot simply be resubmitted.
-       *
-       * It must first be prepared again so the package store freezes a fresh
-       * snapshot of the corrected Claim and documents.
-       */
       if (currentPackage.status !== "prepared") {
         return errorResponse(
           currentPackage.status === "returned_for_changes"
@@ -629,21 +925,6 @@ export async function POST(
         );
       }
 
-      /*
-       * Re-check current readiness immediately before approval.
-       *
-       * Examples of facts that can invalidate an under-review package:
-       *
-       *   - jurisdiction approval withdrawn
-       *   - payment route changed
-       *   - legal rule version changed
-       *   - new blocking flag
-       *   - deadline expired
-       *   - agreement cancelled
-       *   - required document no longer accepted
-       *
-       * The reviewer may return such a package, but may not approve it.
-       */
       if (!readiness.readyToPrepare) {
         return errorResponse(
           `Pre-filing approval is blocked because the claim no longer satisfies current filing readiness. ${readiness.nextInternalAction}`,

@@ -6,7 +6,7 @@
  *
  * This module is the single place that answers three questions:
  *
- *   1. May Duequity accept a claimant in this jurisdiction at all?
+ *   1. May DueQuity accept a claimant in this jurisdiction at all?
  *   2. Which fee structures are lawful here, and what is the ceiling?
  *   3. Which disclosures must this claimant receive before signing?
  *
@@ -125,17 +125,17 @@ export type LaunchYesNoUnknown = "yes" | "no" | "unknown";
 
 /**
  * The minimum payment-route facts required to decide whether a jurisdiction can
- * be used in Duequity's launch model.
+ * be used in DueQuity's launch model.
  *
  * Launch model:
  *
  * - Direct Claimant Recovery: the agency pays the claimant or lawful estate
- *   representative directly. Duequity's fee is collected under the signed
+ *   representative directly. DueQuity's fee is collected under the signed
  *   service agreement after recovery.
  *
  * - Managed Representative Recovery: only where the approved jurisdiction rule
  *   expressly permits representative payment, joint payee, or split
- *   disbursement without requiring Duequity to acquire the claim.
+ *   disbursement without requiring DueQuity to acquire the claim.
  *
  * - Acquisition Recovery is not enabled for launch.
  */
@@ -152,7 +152,7 @@ export interface StartupGreenLaneContext {
    * True only when the workflow is attempting to purchase, take an assignment
    * of, or otherwise acquire the claimant's surplus rights.
    *
-   * Duequity launch must always pass false or omit this field.
+   * DueQuity launch must always pass false or omit this field.
    */
   acquisitionRequested?: boolean;
 }
@@ -162,7 +162,7 @@ export interface StartupGreenLaneContext {
 /* ========================================================================== */
 
 /**
- * May Duequity open a claim in this jurisdiction?
+ * May DueQuity open a claim in this jurisdiction?
  *
  * This is the gate that must never be bypassed by a hidden button. A specialist
  * who tries to convert an opportunity in an uncleared jurisdiction receives a
@@ -182,7 +182,7 @@ export function evaluateIntakeGate(jurisdiction: Jurisdiction): GateDecision {
     case "attorney_only":
       return conditional(
         "Attorney required",
-        `${where} permits surplus claims only through independent licensed counsel. Duequity may coordinate documentation and research, and the claimant engages an attorney directly.`,
+        `${where} permits surplus claims only through independent licensed counsel. DueQuity may coordinate documentation and research, and the claimant engages an attorney directly.`,
         "Refer to an attorney licensed in this state before opening a claim.",
         jurisdiction.statuteReference,
       );
@@ -197,14 +197,14 @@ export function evaluateIntakeGate(jurisdiction: Jurisdiction): GateDecision {
     case "research_required":
       return blocked(
         "Research required",
-        `No legal review has been performed for ${where}. Duequity does not accept claimants in a jurisdiction whose rules are unrecorded.`,
+        `No legal review has been performed for ${where}. DueQuity does not accept claimants in a jurisdiction whose rules are unrecorded.`,
         "Request a jurisdiction review from the compliance team.",
       );
 
     case "restricted":
       return blocked(
         "Restricted",
-        `${where} carries a licensing, bonding or fee restriction that Duequity does not currently satisfy.`,
+        `${where} carries a licensing, bonding or fee restriction that DueQuity does not currently satisfy.`,
         restrictionAction(jurisdiction),
         jurisdiction.statuteReference,
       );
@@ -228,10 +228,10 @@ function restrictionAction(j: Jurisdiction): string {
 }
 
 /**
- * Does an otherwise approved jurisdiction fit Duequity's startup Green Lane?
+ * Does an otherwise approved jurisdiction fit DueQuity's startup Green Lane?
  *
  * This is deliberately stricter than evaluateIntakeGate(). A jurisdiction can
- * be legally reviewed yet still be unsuitable for Duequity's launch business
+ * be legally reviewed yet still be unsuitable for DueQuity's launch business
  * model because payment routing is unresolved, an assignment is required, or
  * the matter belongs in an attorney-required lane.
  *
@@ -247,7 +247,7 @@ export function evaluateStartupGreenLane(
   if (intake.outcome !== "permitted") {
     return blocked(
       "Outside startup Green Lane",
-      `${where} is not cleared for Duequity's administrative launch workflow. ${intake.reason}`,
+      `${where} is not cleared for DueQuity's administrative launch workflow. ${intake.reason}`,
       intake.requiredAction ??
         "Complete jurisdiction compliance review before launch processing.",
       intake.authority,
@@ -257,7 +257,7 @@ export function evaluateStartupGreenLane(
   if (jurisdiction.attorneyRequired) {
     return blocked(
       "Attorney-required jurisdiction",
-      `${where} requires attorney involvement for this claim type. Duequity's startup Green Lane is limited to straightforward administrative recoveries.`,
+      `${where} requires attorney involvement for this claim type. DueQuity's startup Green Lane is limited to straightforward administrative recoveries.`,
       "Do not open this matter in the startup Green Lane. Escalate or skip the record.",
       jurisdiction.statuteReference,
     );
@@ -271,7 +271,7 @@ export function evaluateStartupGreenLane(
   ) {
     return blocked(
       "Acquisition disabled for launch",
-      "Duequity does not purchase, take assignment of, or acquire surplus-fund rights in the launch model.",
+      "DueQuity does not purchase, take assignment of, or acquire surplus-fund rights in the launch model.",
       "Use a non-acquisition recovery route or leave the record outside the launch pipeline.",
       jurisdiction.statuteReference,
     );
@@ -288,7 +288,7 @@ export function evaluateStartupGreenLane(
   ) {
     return blocked(
       "Payment route unresolved",
-      `${where} does not yet have a complete, approved payment-routing determination for Duequity's launch model.`,
+      `${where} does not yet have a complete, approved payment-routing determination for DueQuity's launch model.`,
       "Complete the jurisdiction payment-route review before claimant intake.",
       jurisdiction.statuteReference,
     );
@@ -297,7 +297,7 @@ export function evaluateStartupGreenLane(
   if (context.assignmentRequiredForRepresentativePayment === "yes") {
     return blocked(
       "Assignment required",
-      `${where} requires assignment for the representative-payment route. Duequity's acquisition pipeline is disabled for launch.`,
+      `${where} requires assignment for the representative-payment route. DueQuity's acquisition pipeline is disabled for launch.`,
       "Use a claimant-payee route if legally available, or skip this jurisdiction for launch.",
       jurisdiction.statuteReference,
     );
@@ -319,7 +319,7 @@ export function evaluateStartupGreenLane(
 
     return permitted(
       "Startup Green Lane permitted",
-      `${where} supports Direct Claimant Recovery. The agency pays the claimant or lawful estate representative directly, and Duequity's fee is collected under the signed service agreement after recovery.`,
+      `${where} supports Direct Claimant Recovery. The agency pays the claimant or lawful estate representative directly, and DueQuity's fee is collected under the signed service agreement after recovery.`,
       jurisdiction.statuteReference,
     );
   }
@@ -367,7 +367,7 @@ export function evaluateStartupGreenLane(
 
   return blocked(
     "Unsupported launch route",
-    `${where} does not have a payment route that Duequity's launch workflow supports.`,
+    `${where} does not have a payment route that DueQuity's launch workflow supports.`,
     "Use Direct Claimant Recovery or an approved non-assignment representative-payee route.",
     jurisdiction.statuteReference,
   );
@@ -428,7 +428,6 @@ export function validateFee(
     };
   }
 
-  /* ---- percentage and capped success ---- */
   if (proposal.model === "percentage" || proposal.model === "capped_success") {
     const pct = proposal.percentage;
     if (pct === undefined) {
@@ -484,7 +483,6 @@ export function validateFee(
     };
   }
 
-  /* ---- flat ---- */
   const flat = proposal.flatAmount;
   if (flat === undefined) {
     return blocked(
@@ -504,11 +502,10 @@ export function validateFee(
     );
   }
 
-  // A fee may never exceed the recovery it is charged against.
   if (proposal.recoveryAmount !== undefined && flat > proposal.recoveryAmount) {
     return blocked(
       "Fee exceeds recovery",
-      `A flat fee of ${dollars(flat)} exceeds the recovery of ${dollars(proposal.recoveryAmount)}. Duequity does not charge a fee greater than the amount recovered.`,
+      `A flat fee of ${dollars(flat)} exceeds the recovery of ${dollars(proposal.recoveryAmount)}. DueQuity does not charge a fee greater than the amount recovered.`,
       "Reduce the fee below the recovery amount.",
     );
   }
@@ -554,8 +551,6 @@ export function computeFee(
   const result = validateFee(jurisdiction, { ...proposal, recoveryAmount });
 
   if (result.outcome === "blocked") {
-    // A blocked fee is charged as zero. The operations surface surfaces the
-    // blocking reason; the claimant is never billed against an invalid rule.
     return {
       fee: 0,
       netToClaimant: recoveryAmount,
@@ -588,44 +583,44 @@ export interface Disclosure {
 /**
  * The disclosures a claimant must receive before signing in this jurisdiction.
  *
- * The first two are Duequity policy on every claim in every state, not a
+ * The first two are DueQuity policy on every claim in every state, not a
  * jurisdiction requirement. Section 4: the free claim option is never hidden.
  */
 export function requiredDisclosures(jurisdiction: Jurisdiction): Disclosure[] {
   const list: Disclosure[] = [
     {
       key: "not_government",
-      text: "Duequity is not a government agency and is not affiliated with any government agency.",
+      text: "DueQuity is not a government agency and is not affiliated with any government agency.",
       requiresAcknowledgement: true,
       source: "duequity_policy",
     },
     {
       key: "free_claim_option",
-      text: `You may be able to claim these funds directly from ${jurisdiction.agencyName} without using Duequity and without paying a service fee.`,
+      text: `You may be able to claim these funds directly from ${jurisdiction.agencyName} without using DueQuity and without paying a service fee.`,
       requiresAcknowledgement: true,
       source: "duequity_policy",
     },
     {
       key: "no_guarantee",
-      text: "Duequity does not guarantee that a claim will be approved or that any amount will be recovered.",
+      text: "DueQuity does not guarantee that a claim will be approved or that any amount will be recovered.",
       requiresAcknowledgement: true,
       source: "duequity_policy",
     },
     {
       key: "payment_route",
-      text: "Duequity follows the payment route approved for your jurisdiction. Unless that approved rule expressly permits a representative-payee, joint-payee, or split-disbursement route, the responsible agency pays you or your lawful estate representative directly.",
+      text: "DueQuity follows the payment route approved for your jurisdiction. Unless that approved rule expressly permits a representative-payee, joint-payee, or split-disbursement route, the responsible agency pays you or your lawful estate representative directly.",
       requiresAcknowledgement: true,
       source: "duequity_policy",
     },
     {
       key: "no_claim_purchase",
-      text: "Duequity does not purchase, take assignment of, or acquire your surplus-fund rights as part of its launch recovery service.",
+      text: "DueQuity does not purchase, take assignment of, or acquire your surplus-fund rights as part of its launch recovery service.",
       requiresAcknowledgement: true,
       source: "duequity_policy",
     },
     {
       key: "not_legal_advice",
-      text: "Duequity is not a law firm and does not provide legal advice. If your matter requires legal representation, Duequity can refer you to an independent attorney whom you engage directly.",
+      text: "DueQuity is not a law firm and does not provide legal advice. If your matter requires legal representation, DueQuity can refer you to an independent attorney whom you engage directly.",
       requiresAcknowledgement: true,
       source: "duequity_policy",
     },
@@ -643,7 +638,7 @@ export function requiredDisclosures(jurisdiction: Jurisdiction): Disclosure[] {
   if (jurisdiction.attorneyRequired) {
     list.push({
       key: "attorney_required",
-      text: `${jurisdictionLabel(jurisdiction)} requires that this type of claim be filed by a licensed attorney. You will engage an attorney directly, and Duequity does not share in attorney fees.`,
+      text: `${jurisdictionLabel(jurisdiction)} requires that this type of claim be filed by a licensed attorney. You will engage an attorney directly, and DueQuity does not share in attorney fees.`,
       requiresAcknowledgement: true,
       source: "jurisdiction_rule",
     });
@@ -652,7 +647,7 @@ export function requiredDisclosures(jurisdiction: Jurisdiction): Disclosure[] {
   if (jurisdiction.probateRequiredWhenDeceased) {
     list.push({
       key: "probate_notice",
-      text: "If the former owner is deceased, this jurisdiction may require an opened estate before a claim can be paid. Duequity will explain what is needed.",
+      text: "If the former owner is deceased, this jurisdiction may require an opened estate before a claim can be paid. DueQuity will explain what is needed.",
       requiresAcknowledgement: false,
       source: "jurisdiction_rule",
     });
@@ -661,7 +656,7 @@ export function requiredDisclosures(jurisdiction: Jurisdiction): Disclosure[] {
   if (!jurisdiction.assignmentPermitted) {
     list.push({
       key: "no_assignment",
-      text: "This jurisdiction does not permit the sale or assignment of a surplus claim. Duequity does not purchase claims.",
+      text: "This jurisdiction does not permit the sale or assignment of a surplus claim. DueQuity does not purchase claims.",
       requiresAcknowledgement: false,
       source: "jurisdiction_rule",
     });
@@ -861,18 +856,6 @@ export function assessFilingReadiness(
           }`,
   });
 
-  /*
-   * Legal-position semantics are authoritative here.
-   *
-   * A straightforward claim does NOT require a separate human legal-review
-   * record merely because claim.legalReview is absent. The approved
-   * jurisdiction's legal-processing floor plus the claim's unresolved risk
-   * signals determine the provisional lane.
-   *
-   * If either the jurisdiction floor or claim-specific complexity raises the
-   * matter to legal_review or attorney_required, filing fails closed. A recorded
-   * human review remains authoritative whenever one exists.
-   */
   const legalPosition = resolveLegalPosition(claim, jurisdiction, today);
 
   const legalLaneCleared =
@@ -896,7 +879,7 @@ export function assessFilingReadiness(
             .split("_")
             .join(
               " ",
-            )}. Duequity's startup Green Lane files straightforward administrative recoveries only. ${legalPosition.rationale}`
+            )}. DueQuity's startup Green Lane files straightforward administrative recoveries only. ${legalPosition.rationale}`
         : legalPosition.blockingConflicts.length > 0
           ? `${legalPosition.blockingConflicts.length} blocking legal conflict${
               legalPosition.blockingConflicts.length === 1
@@ -910,11 +893,11 @@ export function assessFilingReadiness(
 
   checks.push({
     key: "no_attorney_requirement",
-    label: "No attorney required for Duequity filing",
+    label: "No attorney required for DueQuity filing",
     satisfied: !jurisdiction.attorneyRequired,
     blocking: true,
     detail: jurisdiction.attorneyRequired
-      ? "This jurisdiction requires attorney involvement, which is outside Duequity's startup Green Lane."
+      ? "This jurisdiction requires attorney involvement, which is outside DueQuity's startup Green Lane."
       : undefined,
   });
 
@@ -1088,10 +1071,7 @@ export function assessFilingReadiness(
     label: "Signed fee remains within recorded legal rules",
     satisfied: feeValidation.outcome === "permitted",
     blocking: true,
-    detail:
-      feeValidation.outcome === "permitted"
-        ? feeValidation.reason
-        : feeValidation.reason,
+    detail: feeValidation.reason,
   });
 
   const cancellationWindowRequired =
@@ -1168,7 +1148,17 @@ function summariseFlags(flags: RiskFlag[]): string {
 /* ========================================================================== */
 
 export function jurisdictionLabel(j: Jurisdiction): string {
-  return j.county ? `${j.county} County, ${j.stateName}` : j.stateName;
+  if (!j.county) {
+    return j.stateName;
+  }
+
+  const county = j.county.trim();
+
+  const countyLabel = /\bcounty$/i.test(county)
+    ? county
+    : `${county} County`;
+
+  return `${countyLabel}, ${j.stateName}`;
 }
 
 function asPercent(ratio: number): string {
