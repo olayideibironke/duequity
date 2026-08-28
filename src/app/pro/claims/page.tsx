@@ -32,7 +32,10 @@ import { formatCents, formatCount, formatDate } from "@/lib/format";
 
 import { listOpportunityConversions } from "@/server/opportunity-conversion-store";
 import { resolveClaimRecord } from "@/server/claim-record";
-import { getPropertyById } from "@/server/opportunity-store";
+import {
+  getPropertyById,
+  listOpportunities,
+} from "@/server/opportunity-store";
 import { listJurisdictionRulePackages } from "@/server/jurisdiction-intelligence";
 
 import { resolveStaffSession } from "@/server/staff-session";
@@ -105,10 +108,31 @@ function claimMatchesFilter(claim: Claim, status: string): boolean {
 /* ========================================================================== */
 
 async function loadClaims(): Promise<Claim[]> {
-  const conversions = await listOpportunityConversions();
+  /*
+   * listOpportunities() is the canonical operational-list boundary.
+   *
+   * Conversion history is broader because direct-access QA/training records
+   * retain their durable conversion provenance. Such records may still be
+   * opened through an explicitly permitted direct URL, but they must never
+   * appear in production pipeline lists, counts or totals.
+   */
+  const [opportunities, conversions] = await Promise.all([
+    listOpportunities(),
+    listOpportunityConversions(),
+  ]);
+
+  const operationalOpportunityIds = new Set(
+    opportunities.map((opportunity) => opportunity.id),
+  );
+
+  const operationalConversions = conversions.filter((conversion) =>
+    operationalOpportunityIds.has(conversion.opportunityId),
+  );
 
   const resolved = await Promise.all(
-    conversions.map((conversion) => resolveClaimRecord(conversion.claimId)),
+    operationalConversions.map((conversion) =>
+      resolveClaimRecord(conversion.claimId),
+    ),
   );
 
   return resolved
@@ -246,7 +270,7 @@ export default async function ProClaimsPage({
           <h1 className="mt-1.5 text-2xl">Claims</h1>
 
           <p className="mt-1 text-sm text-ink-600">
-            Active recovery claims created through Duequity&apos;s approved
+            Active recovery claims created through DueQuity&apos;s approved
             opportunity conversion workflow. Filing readiness, legal handling
             and commercial terms remain governed by persisted records and
             approved jurisdiction rules.
@@ -624,9 +648,9 @@ export default async function ProClaimsPage({
       </Card>
 
       <p className="text-xs leading-relaxed text-ink-500">
-        Duequity handles administrative recovery where legally permitted. Claims
+        DueQuity handles administrative recovery where legally permitted. Claims
         requiring legal representation, legal interpretation or court
-        proceedings are escalated to independent licensed counsel. Duequity
+        proceedings are escalated to independent licensed counsel. DueQuity
         remains operationally attached for research, documents and coordination
         and does not share in attorney fees.
       </p>

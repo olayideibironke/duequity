@@ -28,11 +28,11 @@ import { listOpportunities } from "@/server/opportunity-store";
  *
  * The single server-side derivation of "what work is outstanding right now".
  *
- * Duequity has no task store. There is deliberately no table of hand-created
+ * DueQuity has no task store. There is deliberately no table of hand-created
  * to-dos, because a hand-created to-do can survive after the condition that
  * justified it has gone away, and a stale operational queue is worse than none.
  *
- * Every item returned here is derived from a persisted fact:
+ * Every item returned here is derived from a persisted operational fact:
  *
  *   - an opportunity whose jurisdiction has no approved rule package
  *   - an opportunity whose approved jurisdiction rule blocks intake
@@ -40,6 +40,13 @@ import { listOpportunities } from "@/server/opportunity-store";
  *   - a claim whose legal lane awaits a human determination
  *   - a claim carrying an unresolved legal classification conflict
  *   - an outstanding or overdue persisted document requirement
+ *
+ * Records explicitly excluded from operational lists are not allowed to enter
+ * this workload through their conversion records.
+ *
+ * Direct-access training or QA records may still be opened through their
+ * permitted direct routes, but they must never affect production navigation
+ * counts, work queues or pipeline metrics.
  *
  * When the underlying fact is resolved, the item disappears. Nothing is invented
  * and nothing persists past its cause.
@@ -83,10 +90,10 @@ export interface OperationsWorkload {
   blockedTaskCount: number;
   dueThisWeekTaskCount: number;
 
-  /** Persisted opportunities that have not yet been converted to a claim. */
+  /** Operational opportunities that have not yet been converted to a claim. */
   openOpportunityCount: number;
 
-  /** Resolved claims that are neither paid, closed nor withdrawn. */
+  /** Operational claims that are neither paid, closed nor withdrawn. */
   openClaimCount: number;
 
   /** Outstanding or overdue persisted document requirements. */
@@ -131,6 +138,25 @@ export async function resolveOperationsWorkload(): Promise<OperationsWorkload> {
     listJurisdictionRulePackages(),
   ]);
 
+  /*
+   * listOpportunities() is the canonical operational-list boundary.
+   *
+   * It already excludes training, QA and other records whose persisted
+   * operational disposition says exclude_from_operational_lists = true.
+   *
+   * Conversion history is intentionally broader because direct-access records
+   * still need durable provenance. Therefore conversions must be restricted to
+   * the current operational opportunity set before they may influence workload
+   * counts, queues or derived claim work.
+   */
+  const operationalOpportunityIds = new Set(
+    opportunities.map((opportunity) => opportunity.id),
+  );
+
+  const operationalConversions = conversions.filter((conversion) =>
+    operationalOpportunityIds.has(conversion.opportunityId),
+  );
+
   /* ---------------------------------------------------- approved rule index */
 
   const approvedJurisdictionById = new Map<string, Jurisdiction>();
@@ -147,7 +173,7 @@ export async function resolveOperationsWorkload(): Promise<OperationsWorkload> {
 
   const claimRows: OperationsWorkloadClaimRow[] = (
     await Promise.all(
-      conversions.map(async (conversion) => {
+      operationalConversions.map(async (conversion) => {
         const resolved = await resolveClaimRecord(conversion.claimId);
 
         if (!resolved) {
@@ -340,7 +366,7 @@ export async function resolveOperationsWorkload(): Promise<OperationsWorkload> {
   /* ------------------------------------------------------------- pipeline */
 
   const convertedOpportunityIds = new Set(
-    conversions.map((conversion) => conversion.opportunityId),
+    operationalConversions.map((conversion) => conversion.opportunityId),
   );
 
   const openOpportunityCount = opportunities.filter(
