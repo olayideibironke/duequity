@@ -179,8 +179,7 @@ begin
       using errcode = '42501';
   end if;
 
-  v_representative_may_file :=
-    v_package.snapshot ->> 'representativeMayFile';
+  v_representative_may_file := v_package.snapshot ->> 'representativeMayFile';
 
   if v_representative_may_file = 'no' then
     if new.route_mode <> 'claimant_controlled'
@@ -188,14 +187,12 @@ begin
       raise exception 'claimant-controlled filing package cannot record DueQuity or another representative as filer'
         using errcode = '42501';
     end if;
-
   elsif v_representative_may_file = 'yes' then
     if new.route_mode <> 'representative_controlled'
        or new.filing_party <> 'authorized_representative' then
       raise exception 'representative-controlled filing package requires authorized representative filing provenance'
         using errcode = '42501';
     end if;
-
   else
     raise exception 'filing-party determination is unresolved in the approved package'
       using errcode = '42501';
@@ -312,11 +309,6 @@ revoke all on table public.claim_submission_audit from service_role;
 grant select, insert, update on table public.claim_submissions to service_role;
 grant select, insert on table public.claim_submission_audit to service_role;
 
-revoke all on function public.guard_claim_submission_insert()
-from public, anon, authenticated, service_role;
-
-revoke all on function public.guard_claim_submission_update()
-from public, anon, authenticated, service_role;
-
-revoke all on function public.reject_claim_submission_audit_mutation()
-from public, anon, authenticated, service_role;
+revoke all on function public.guard_claim_submission_insert() from public, anon, authenticated, service_role;
+revoke all on function public.guard_claim_submission_update() from public, anon, authenticated, service_role;
+revoke all on function public.reject_claim_submission_audit_mutation() from public, anon, authenticated, service_role;;

@@ -529,4 +529,4 @@ grant execute on function public.record_claim_authority_information_request(text
 grant execute on function public.respond_claim_authority_information_request(text,text,timestamptz,text,text) to service_role;
 grant execute on function public.resolve_claim_authority_information_request(text,text,timestamptz,text,text) to service_role;
 
-commit;
+commit;;

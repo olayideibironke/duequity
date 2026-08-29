@@ -196,7 +196,7 @@ begin
 
   elsif p_action = 'authority_review_closed' then
     if v_review.status not in ('approved','denied','payment_issued','recovered') then
-      raise exception 'authority review cannot close from the current review state' using errcode = '42501';
+      raise exception 'authority review cannot close from the current state' using errcode = '42501';
     end if;
 
     if p_close_summary is null or btrim(p_close_summary) = '' then
@@ -588,4 +588,4 @@ revoke all on function public.resolve_claim_authority_information_request(text,t
 grant execute on function public.record_claim_authority_review_event(text,text,text,timestamptz,text,text,bigint,text,text,bigint,bigint,text) to service_role;
 grant execute on function public.record_claim_authority_information_request(text,text,text,timestamptz,text,text,timestamptz) to service_role;
 grant execute on function public.respond_claim_authority_information_request(text,text,timestamptz,text,text) to service_role;
-grant execute on function public.resolve_claim_authority_information_request(text,text,timestamptz,text,text) to service_role;
+grant execute on function public.resolve_claim_authority_information_request(text,text,timestamptz,text,text) to service_role;;

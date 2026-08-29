@@ -18,9 +18,17 @@ import type {
  * Discovered Records is intentionally different:
  *
  * - it is an owner/admin-only research workspace
- * - staff receive approved Excel worklists separately
- * - role alone is NOT sufficient
+ * - staff do not receive access to the Discovery workspace itself
+ * - assigned recovery leads are surfaced separately through My Leads
+ * - role alone is NOT sufficient for Discovery access
  * - only the exact authorized Supabase staff identity may access it
+ *
+ * My Leads is also intentionally scoped:
+ *
+ * - operational staff may access the My Leads workspace
+ * - route access does not grant county-wide or Discovery-wide visibility
+ * - record visibility must remain limited to leads explicitly assigned
+ *   to the authenticated staff identity
  */
 
 export const DISCOVERED_RECORDS_ADMIN_EMAIL =
@@ -76,6 +84,22 @@ const PRO_ROUTE_RULES: readonly ProRouteRule[] = [
       "claims_manager",
       "compliance_officer",
       "attorney_liaison",
+      "administrator",
+      "super_admin",
+    ],
+  },
+
+  {
+    path:
+      "/pro/my-leads",
+
+    permission:
+      "opportunity.read",
+
+    roles: [
+      "research_analyst",
+      "operations_specialist",
+      "claims_manager",
       "administrator",
       "super_admin",
     ],

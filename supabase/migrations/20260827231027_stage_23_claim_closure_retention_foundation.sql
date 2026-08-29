@@ -351,8 +351,7 @@ begin
         using errcode = '42501';
     end if;
 
-    if v_settlement.status <> 'reconciled'
-       or v_settlement.reconciled_at is null then
+    if v_settlement.status <> 'reconciled' or v_settlement.reconciled_at is null then
       raise exception 'recovered claim cannot close finally before recovery reconciliation'
         using errcode = '42501';
     end if;
@@ -494,7 +493,6 @@ begin
 
   new.row_version := old.row_version + 1;
   new.updated_at := pg_catalog.clock_timestamp();
-
   return new;
 end;
 $$;
@@ -535,4 +533,4 @@ for each row execute function public.reject_claim_closure_audit_mutation();
 
 create trigger claim_closure_audit_delete_guard
 before delete on public.claim_closure_audit
-for each row execute function public.reject_claim_closure_audit_mutation();
+for each row execute function public.reject_claim_closure_audit_mutation();;

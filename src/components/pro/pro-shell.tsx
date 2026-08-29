@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -68,35 +69,47 @@ import {
 /* ========================================================================== */
 
 interface NavChild {
-  href: string;
+  href:
+    string;
 
-  label: string;
+  label:
+    string;
 
   icon: (props: {
-    size?: number;
+    size?:
+      number;
 
-    className?: string;
+    className?:
+      string;
   }) => React.ReactElement;
 
-  exact?: boolean;
+  exact?:
+    boolean;
 }
 
 interface NavItem {
-  href: string;
+  href:
+    string;
 
-  label: string;
+  label:
+    string;
 
   icon: (props: {
-    size?: number;
+    size?:
+      number;
 
-    className?: string;
+    className?:
+      string;
   }) => React.ReactElement;
 
-  exact?: boolean;
+  exact?:
+    boolean;
 
-  badge?: number;
+  badge?:
+    number;
 
   badgeTone?:
+    | "accent"
     | "caution"
     | "critical";
 
@@ -105,7 +118,8 @@ interface NavItem {
 }
 
 interface NavGroup {
-  heading: string;
+  heading:
+    string;
 
   items:
     NavItem[];
@@ -113,8 +127,14 @@ interface NavGroup {
 
 interface MailCountPayload {
   counts?: {
-    unread?: number;
+    unread?:
+      number;
   };
+}
+
+interface LeadNotificationPayload {
+  newCount?:
+    number;
 }
 
 /* ========================================================================== */
@@ -130,11 +150,14 @@ export function ProShell({
     React.ReactNode;
 
   operator: {
-    name: string;
+    name:
+      string;
 
-    email: string;
+    email:
+      string;
 
-    title: string;
+    title:
+      string;
 
     role:
       UserRole;
@@ -177,6 +200,27 @@ export function ProShell({
   ] =
     useState(
       counts.mailUnread,
+    );
+
+  const [
+    leadNewCount,
+    setLeadNewCount,
+  ] =
+    useState(
+      0,
+    );
+
+  const [
+    leadNoticeVisible,
+    setLeadNoticeVisible,
+  ] =
+    useState(
+      false,
+    );
+
+  const leadNewCountRef =
+    useRef(
+      0,
     );
 
   const pathname =
@@ -225,6 +269,29 @@ export function ProShell({
       operator.email,
     );
 
+  /*
+   * My Leads is the staff-facing recovery assignment workspace.
+   *
+   * Administrators distribute leads through Lead Distribution instead.
+   */
+  const canUseMyLeads =
+    operator.role !==
+      "administrator" &&
+    operator.role !==
+      "super_admin" &&
+    canAccessProPath(
+      operator.role,
+      operator.permissions,
+      "/pro/my-leads",
+      operator.email,
+    );
+
+  const canUseLeadDistribution =
+    operator.role ===
+      "administrator" ||
+    operator.role ===
+      "super_admin";
+
   useEffect(
     () => {
       if (
@@ -254,6 +321,10 @@ export function ProShell({
       counts.mailUnread,
     ],
   );
+
+  /* ======================================================================== */
+  /* Mail unread badge                                                        */
+  /* ======================================================================== */
 
   useEffect(
     () => {
@@ -291,7 +362,8 @@ export function ProShell({
           }
 
           const data =
-            await response.json() as MailCountPayload;
+            await response.json() as
+              MailCountPayload;
 
           const unread =
             data.counts?.unread;
@@ -353,6 +425,203 @@ export function ProShell({
     ],
   );
 
+  /* ======================================================================== */
+  /* My Leads notifications                                                   */
+  /* ======================================================================== */
+
+  useEffect(
+    () => {
+      if (
+        !canUseMyLeads
+      ) {
+        leadNewCountRef.current =
+          0;
+
+        setLeadNewCount(
+          0,
+        );
+
+        setLeadNoticeVisible(
+          false,
+        );
+
+        return;
+      }
+
+      let cancelled =
+        false;
+
+      async function refreshLeadNotifications() {
+        if (
+          document.visibilityState !==
+          "visible"
+        ) {
+          return;
+        }
+
+        try {
+          const response =
+            await fetch(
+              "/api/pro/my-leads/notification",
+              {
+                cache:
+                  "no-store",
+              },
+            );
+
+          if (
+            !response.ok
+          ) {
+            return;
+          }
+
+          const data =
+            await response.json() as
+              LeadNotificationPayload;
+
+          if (
+            typeof data.newCount !==
+            "number"
+          ) {
+            return;
+          }
+
+          const nextCount =
+            Math.max(
+              0,
+              Math.trunc(
+                data.newCount,
+              ),
+            );
+
+          if (
+            cancelled
+          ) {
+            return;
+          }
+
+          const previousCount =
+            leadNewCountRef.current;
+
+          leadNewCountRef.current =
+            nextCount;
+
+          setLeadNewCount(
+            nextCount,
+          );
+
+          /*
+           * Show the tiny notice:
+           *
+           * 1. on login when unseen leads already exist;
+           * 2. when a newer assignment raises the unseen count.
+           *
+           * Merely dismissing the notice does not acknowledge the leads.
+           */
+          if (
+            nextCount >
+              0 &&
+            (
+              previousCount ===
+                0 ||
+              nextCount >
+                previousCount
+            )
+          ) {
+            setLeadNoticeVisible(
+              true,
+            );
+          }
+
+          if (
+            nextCount ===
+            0
+          ) {
+            setLeadNoticeVisible(
+              false,
+            );
+          }
+        } catch {
+          /*
+           * Lead notification refresh must never interrupt staff operations.
+           */
+        }
+      }
+
+      function handleVisibilityChange() {
+        if (
+          document.visibilityState ===
+          "visible"
+        ) {
+          void refreshLeadNotifications();
+        }
+      }
+
+      function handleMyLeadsSeen() {
+        leadNewCountRef.current =
+          0;
+
+        setLeadNewCount(
+          0,
+        );
+
+        setLeadNoticeVisible(
+          false,
+        );
+      }
+
+      /*
+       * Fetch immediately so a staff member sees new assignments as soon as
+       * their authenticated workspace loads.
+       */
+      void refreshLeadNotifications();
+
+      const timer =
+        window.setInterval(
+          () => {
+            void refreshLeadNotifications();
+          },
+          30_000,
+        );
+
+      document.addEventListener(
+        "visibilitychange",
+        handleVisibilityChange,
+      );
+
+      window.addEventListener(
+        "duequity:my-leads-seen",
+        handleMyLeadsSeen,
+      );
+
+      return () => {
+        cancelled =
+          true;
+
+        window.clearInterval(
+          timer,
+        );
+
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange,
+        );
+
+        window.removeEventListener(
+          "duequity:my-leads-seen",
+          handleMyLeadsSeen,
+        );
+      };
+    },
+    [
+      canUseMyLeads,
+    ],
+  );
+
+  /* ======================================================================== */
+  /* Navigation                                                               */
+  /* ======================================================================== */
+
   const baseGroups:
     NavGroup[] = [
     {
@@ -397,6 +666,24 @@ export function ProShell({
 
           badge:
             counts.opportunities,
+        },
+
+        {
+          href:
+            "/pro/my-leads",
+
+          label:
+            "My Leads",
+
+          icon:
+            IconOpportunity,
+
+          badge:
+            leadNewCount ||
+            undefined,
+
+          badgeTone:
+            "accent",
         },
 
         {
@@ -601,6 +888,17 @@ export function ProShell({
 
         {
           href:
+            "/pro/lead-distribution",
+
+          label:
+            "Lead Distribution",
+
+          icon:
+            IconOpportunity,
+        },
+
+        {
+          href:
             "/pro/staff",
 
           label:
@@ -667,13 +965,30 @@ export function ProShell({
               .filter(
                 (
                   item,
-                ) =>
-                  canAccessProPath(
+                ) => {
+                  if (
+                    item.href ===
+                      "/pro/my-leads" &&
+                    !canUseMyLeads
+                  ) {
+                    return false;
+                  }
+
+                  if (
+                    item.href ===
+                      "/pro/lead-distribution" &&
+                    !canUseLeadDistribution
+                  ) {
+                    return false;
+                  }
+
+                  return canAccessProPath(
                     operator.role,
                     operator.permissions,
                     item.href,
                     operator.email,
-                  ),
+                  );
+                },
               )
               .map(
                 (
@@ -738,6 +1053,10 @@ export function ProShell({
       item.exact,
     );
   }
+
+  /* ======================================================================== */
+  /* Render                                                                   */
+  /* ======================================================================== */
 
   return (
     <div className="flex min-h-full">
@@ -1006,7 +1325,10 @@ export function ProShell({
                                       : item.badgeTone ===
                                           "caution"
                                         ? "bg-caution-600 text-white"
-                                        : "bg-ink-700 text-ink-200",
+                                        : item.badgeTone ===
+                                            "accent"
+                                          ? "bg-accent-500 text-white"
+                                          : "bg-ink-700 text-ink-200",
                                   )}
                                 >
                                   {
@@ -1147,6 +1469,66 @@ export function ProShell({
           </div>
         </main>
       </div>
+
+      {canUseMyLeads &&
+        leadNoticeVisible &&
+        leadNewCount >
+          0 && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-4 right-4 z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-accent-300 bg-paper p-3 shadow-xl"
+          >
+            <div className="flex items-start gap-3">
+              <span
+                aria-hidden="true"
+                className="mt-1.5 inline-flex size-2.5 shrink-0 rounded-full bg-accent-600"
+              />
+
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-ink-950">
+                  New leads added
+                </p>
+
+                <p className="mt-0.5 text-xs leading-5 text-ink-600">
+                  {leadNewCount} new{" "}
+                  {leadNewCount ===
+                  1
+                    ? "recovery lead is"
+                    : "recovery leads are"}{" "}
+                  waiting in your workspace.
+                </p>
+
+                <Link
+                  href="/pro/my-leads"
+                  onClick={() => {
+                    setRailOpen(
+                      false,
+                    );
+                  }}
+                  className="mt-2 inline-flex rounded-md bg-accent-600 px-2.5 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-accent-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+                >
+                  View My Leads
+                </Link>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setLeadNoticeVisible(
+                    false,
+                  );
+                }}
+                aria-label="Dismiss new lead notification"
+                className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+              >
+                <IconClose
+                  size={15}
+                />
+              </button>
+            </div>
+          </div>
+        )}
     </div>
   );
 }

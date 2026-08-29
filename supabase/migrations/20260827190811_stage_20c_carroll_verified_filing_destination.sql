@@ -105,4 +105,4 @@ begin
 end
 $$;
 
-commit;
+commit;;

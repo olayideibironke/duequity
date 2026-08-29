@@ -73,10 +73,8 @@ begin
     end if;
 
     v_outcome := 'recovered_reconciled';
-
   elsif v_review.denial_reason is not null then
     v_outcome := 'denied_final';
-
   else
     v_outcome := 'closed_without_recovery';
   end if;
@@ -220,15 +218,8 @@ begin
    returning * into v_retention;
 
   insert into public.claim_closure_audit (
-    id,
-    claim_id,
-    closure_id,
-    retention_id,
-    action,
-    actor_user_id,
-    occurred_at,
-    summary,
-    detail
+    id, claim_id, closure_id, retention_id, action,
+    actor_user_id, occurred_at, summary, detail
   ) values (
     'claim-closure-audit-retention-scheduled-' || gen_random_uuid()::text,
     v_retention.claim_id,
@@ -282,11 +273,7 @@ begin
       using errcode = 'P0002';
   end if;
 
-  if v_retention.status not in (
-    'policy_pending',
-    'scheduled',
-    'eligible_for_disposition'
-  ) then
+  if v_retention.status not in ('policy_pending','scheduled','eligible_for_disposition') then
     raise exception 'retention hold is not permitted from the current retention state'
       using errcode = '42501';
   end if;
@@ -311,15 +298,8 @@ begin
    returning * into v_retention;
 
   insert into public.claim_closure_audit (
-    id,
-    claim_id,
-    closure_id,
-    retention_id,
-    action,
-    actor_user_id,
-    occurred_at,
-    summary,
-    detail
+    id, claim_id, closure_id, retention_id, action,
+    actor_user_id, occurred_at, summary, detail
   ) values (
     'claim-closure-audit-hold-' || gen_random_uuid()::text,
     v_retention.claim_id,
@@ -329,10 +309,7 @@ begin
     btrim(p_actor_user_id),
     p_occurred_at,
     btrim(p_reason),
-    jsonb_build_object(
-      'preHoldStatus',
-      v_retention.pre_hold_status
-    )
+    jsonb_build_object('preHoldStatus', v_retention.pre_hold_status)
   );
 
   return next v_retention;
@@ -397,15 +374,8 @@ begin
    returning * into v_retention;
 
   insert into public.claim_closure_audit (
-    id,
-    claim_id,
-    closure_id,
-    retention_id,
-    action,
-    actor_user_id,
-    occurred_at,
-    summary,
-    detail
+    id, claim_id, closure_id, retention_id, action,
+    actor_user_id, occurred_at, summary, detail
   ) values (
     'claim-closure-audit-hold-release-' || gen_random_uuid()::text,
     v_retention.claim_id,
@@ -415,10 +385,7 @@ begin
     btrim(p_actor_user_id),
     p_occurred_at,
     btrim(p_summary),
-    jsonb_build_object(
-      'restoredStatus',
-      v_restore_status
-    )
+    jsonb_build_object('restoredStatus', v_restore_status)
   );
 
   return next v_retention;
@@ -457,8 +424,7 @@ begin
       using errcode = 'P0002';
   end if;
 
-  if v_retention.status <> 'scheduled'
-     or v_retention.retention_until is null then
+  if v_retention.status <> 'scheduled' or v_retention.retention_until is null then
     raise exception 'retention eligibility requires an active retention schedule'
       using errcode = '42501';
   end if;
@@ -476,15 +442,8 @@ begin
    returning * into v_retention;
 
   insert into public.claim_closure_audit (
-    id,
-    claim_id,
-    closure_id,
-    retention_id,
-    action,
-    actor_user_id,
-    occurred_at,
-    summary,
-    detail
+    id, claim_id, closure_id, retention_id, action,
+    actor_user_id, occurred_at, summary, detail
   ) values (
     'claim-closure-audit-retention-eligible-' || gen_random_uuid()::text,
     v_retention.claim_id,
@@ -494,10 +453,7 @@ begin
     btrim(p_actor_user_id),
     p_occurred_at,
     btrim(p_summary),
-    jsonb_build_object(
-      'retentionUntil',
-      v_retention.retention_until
-    )
+    jsonb_build_object('retentionUntil', v_retention.retention_until)
   );
 
   return next v_retention;
@@ -560,15 +516,8 @@ begin
    returning * into v_retention;
 
   insert into public.claim_closure_audit (
-    id,
-    claim_id,
-    closure_id,
-    retention_id,
-    action,
-    actor_user_id,
-    occurred_at,
-    summary,
-    detail
+    id, claim_id, closure_id, retention_id, action,
+    actor_user_id, occurred_at, summary, detail
   ) values (
     'claim-closure-audit-retention-disposed-' || gen_random_uuid()::text,
     v_retention.claim_id,
@@ -579,10 +528,8 @@ begin
     p_occurred_at,
     btrim(p_summary),
     jsonb_build_object(
-      'method',
-      btrim(p_method),
-      'retentionUntil',
-      v_retention.retention_until
+      'method', btrim(p_method),
+      'retentionUntil', v_retention.retention_until
     )
   );
 
@@ -591,50 +538,16 @@ begin
 end;
 $$;
 
-revoke all on function public.close_claim_final(
-  text,text,text,text,timestamptz,text
-) from public, anon, authenticated;
+revoke all on function public.close_claim_final(text,text,text,text,timestamptz,text) from public, anon, authenticated;
+revoke all on function public.schedule_claim_retention(text,text,timestamptz,timestamptz,text,text) from public, anon, authenticated;
+revoke all on function public.place_claim_retention_hold(text,text,timestamptz,text) from public, anon, authenticated;
+revoke all on function public.release_claim_retention_hold(text,text,timestamptz,text) from public, anon, authenticated;
+revoke all on function public.mark_claim_retention_eligible(text,text,timestamptz,text) from public, anon, authenticated;
+revoke all on function public.record_claim_retention_disposition(text,text,timestamptz,text,text) from public, anon, authenticated;
 
-revoke all on function public.schedule_claim_retention(
-  text,text,timestamptz,timestamptz,text,text
-) from public, anon, authenticated;
-
-revoke all on function public.place_claim_retention_hold(
-  text,text,timestamptz,text
-) from public, anon, authenticated;
-
-revoke all on function public.release_claim_retention_hold(
-  text,text,timestamptz,text
-) from public, anon, authenticated;
-
-revoke all on function public.mark_claim_retention_eligible(
-  text,text,timestamptz,text
-) from public, anon, authenticated;
-
-revoke all on function public.record_claim_retention_disposition(
-  text,text,timestamptz,text,text
-) from public, anon, authenticated;
-
-grant execute on function public.close_claim_final(
-  text,text,text,text,timestamptz,text
-) to service_role;
-
-grant execute on function public.schedule_claim_retention(
-  text,text,timestamptz,timestamptz,text,text
-) to service_role;
-
-grant execute on function public.place_claim_retention_hold(
-  text,text,timestamptz,text
-) to service_role;
-
-grant execute on function public.release_claim_retention_hold(
-  text,text,timestamptz,text
-) to service_role;
-
-grant execute on function public.mark_claim_retention_eligible(
-  text,text,timestamptz,text
-) to service_role;
-
-grant execute on function public.record_claim_retention_disposition(
-  text,text,timestamptz,text,text
-) to service_role;
+grant execute on function public.close_claim_final(text,text,text,text,timestamptz,text) to service_role;
+grant execute on function public.schedule_claim_retention(text,text,timestamptz,timestamptz,text,text) to service_role;
+grant execute on function public.place_claim_retention_hold(text,text,timestamptz,text) to service_role;
+grant execute on function public.release_claim_retention_hold(text,text,timestamptz,text) to service_role;
+grant execute on function public.mark_claim_retention_eligible(text,text,timestamptz,text) to service_role;
+grant execute on function public.record_claim_retention_disposition(text,text,timestamptz,text,text) to service_role;;

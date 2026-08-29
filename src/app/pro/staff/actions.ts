@@ -174,7 +174,12 @@ export async function inviteStaffMember(
       redirectTo:
         `${origin}/auth/staff-invite/callback`,
     });
-  } catch {
+  } catch (error) {
+    console.error(
+      "DUEQUITY STAFF INVITATION ERROR:",
+      error,
+    );
+
     redirect(
       `${STAFF_PATH}?status=unavailable`,
     );

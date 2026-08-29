@@ -406,4 +406,4 @@ grant execute on function public.issue_claim_recovery_fee_invoice(text,text,text
 grant execute on function public.record_claim_recovery_fee_payment(text,text,text,timestamptz,bigint,text,text,text) to service_role;
 grant execute on function public.waive_claim_recovery_fee_balance(text,text,timestamptz,text) to service_role;
 grant execute on function public.void_claim_recovery_fee_payment(text,text,timestamptz,text) to service_role;
-grant execute on function public.reconcile_claim_recovery_settlement(text,text,timestamptz,text) to service_role;
+grant execute on function public.reconcile_claim_recovery_settlement(text,text,timestamptz,text) to service_role;;

@@ -79,7 +79,6 @@ begin
 
   if new.recovered_amount_cents = 0 then
     v_fee := 0;
-
   elsif v_quote.fee_model = 'percentage' then
     if v_quote.selected_percentage is null then
       raise exception 'percentage fee quote is missing selected percentage'
@@ -87,12 +86,10 @@ begin
     end if;
 
     v_base_fee := pg_catalog.round(
-      new.recovered_amount_cents::numeric *
-      v_quote.selected_percentage
+      new.recovered_amount_cents::numeric * v_quote.selected_percentage
     );
 
     v_fee := v_base_fee::bigint;
-
   elsif v_quote.fee_model = 'flat' then
     if v_quote.selected_flat_amount_cents is null then
       raise exception 'flat fee quote is missing selected amount'
@@ -100,7 +97,6 @@ begin
     end if;
 
     v_fee := v_quote.selected_flat_amount_cents;
-
   else
     raise exception 'unsupported locked fee model for recovery settlement: %', v_quote.fee_model
       using errcode = '22023';
@@ -108,33 +104,23 @@ begin
 
   if v_quote.legal_fee_cap_percent_snapshot is not null then
     v_legal_percent_cap := pg_catalog.round(
-      new.recovered_amount_cents::numeric *
-      v_quote.legal_fee_cap_percent_snapshot
+      new.recovered_amount_cents::numeric * v_quote.legal_fee_cap_percent_snapshot
     )::bigint;
 
     v_fee := least(v_fee, v_legal_percent_cap);
   end if;
 
   if v_quote.legal_fee_cap_amount_snapshot_cents is not null then
-    v_fee := least(
-      v_fee,
-      v_quote.legal_fee_cap_amount_snapshot_cents
-    );
+    v_fee := least(v_fee, v_quote.legal_fee_cap_amount_snapshot_cents);
   end if;
 
   if v_quote.internal_fee_cap_amount_snapshot_cents is not null then
-    v_fee := least(
-      v_fee,
-      v_quote.internal_fee_cap_amount_snapshot_cents
-    );
+    v_fee := least(v_fee, v_quote.internal_fee_cap_amount_snapshot_cents);
   end if;
 
   v_fee := greatest(
     0::bigint,
-    least(
-      v_fee,
-      new.recovered_amount_cents
-    )
+    least(v_fee, new.recovered_amount_cents)
   );
 
   v_status := case
@@ -228,4 +214,4 @@ begin
 
   return new;
 end;
-$function$;
+$function$;;

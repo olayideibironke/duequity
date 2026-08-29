@@ -36,4 +36,4 @@ comment on column public.claimant_onboarding.property_connection_confirmed_by_us
   'Persisted staff user who recorded claimant confirmation of the source-property connection.';
 
 comment on column public.claimant_onboarding.property_connection_confirmation_source is
-  'Channel through which claimant connection to the source property was confirmed.';
+  'Channel through which claimant connection to the source property was confirmed.';;

@@ -330,12 +330,10 @@ begin
         'Superseded filing destination requires supersession provenance'
         using errcode = '42501';
     end if;
-
   elsif old.status = 'superseded' then
     raise exception
       'A superseded filing destination is terminal'
       using errcode = '42501';
-
   else
     raise exception
       'Invalid filing destination status transition'
@@ -439,4 +437,4 @@ revoke all
 on function public.reject_jurisdiction_filing_destination_delete()
 from authenticated;
 
-commit;
+commit;;

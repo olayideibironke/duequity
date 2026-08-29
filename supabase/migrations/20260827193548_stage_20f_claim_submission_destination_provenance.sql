@@ -276,4 +276,4 @@ begin
 end;
 $function$;
 
-commit;
+commit;;

@@ -788,4 +788,4 @@ revoke execute on function public.reject_claim_authority_review_audit_change() f
 revoke execute on function public.bootstrap_claim_authority_review_from_submission() from public, anon, authenticated;
 revoke execute on function public.sync_claim_authority_review_acknowledgment() from public, anon, authenticated;
 
-commit;
+commit;;

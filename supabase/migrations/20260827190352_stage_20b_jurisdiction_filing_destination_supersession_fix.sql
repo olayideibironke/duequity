@@ -15,4 +15,4 @@ on update restrict
 on delete restrict
 deferrable initially deferred;
 
-commit;
+commit;;

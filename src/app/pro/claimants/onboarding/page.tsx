@@ -5,6 +5,10 @@ import type {
 import Link from "next/link";
 
 import {
+  ClaimantIntakeDiscoveryCard,
+} from "@/components/pro/claimant-intake-discovery-card";
+
+import {
   Badge,
 } from "@/components/ui/badge";
 
@@ -32,6 +36,10 @@ import {
   searchClaimantIntakeCandidates,
   type ClaimantIntakeCandidate,
 } from "@/server/claimant-intake-service";
+
+import {
+  searchClaimantIntakeDiscoveryCandidates,
+} from "@/server/claimant-intake-discovery-service";
 
 import {
   listClaimantActivationCandidates,
@@ -237,10 +245,6 @@ function legalNameParts(
     firstName:
       parts[0],
 
-    /*
-     * Preserve every remaining token so recombining first + last produces
-     * exactly the persisted legal name even when the person has middle names.
-     */
     lastName:
       parts
         .slice(
@@ -344,7 +348,7 @@ function claimantStateForClaim({
 }
 
 /* ========================================================================== */
-/* Lead result                                                                 */
+/* Operational lead result                                                    */
 /* ========================================================================== */
 
 function LeadResultCard({
@@ -389,10 +393,6 @@ function LeadResultCard({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
-      {/* ================================================================== */}
-      {/* Record header                                                       */}
-      {/* ================================================================== */}
-
       <div className="border-b border-line-subtle px-5 py-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
@@ -480,10 +480,6 @@ function LeadResultCard({
           </div>
         </div>
       </div>
-
-      {/* ================================================================== */}
-      {/* Source + route                                                      */}
-      {/* ================================================================== */}
 
       <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="border-b border-line-subtle px-5 py-5 lg:border-b-0 lg:border-r">
@@ -676,10 +672,6 @@ function LeadResultCard({
         </div>
       </div>
 
-      {/* ================================================================== */}
-      {/* Claim linkage                                                       */}
-      {/* ================================================================== */}
-
       <div className="border-t border-line-subtle bg-inset px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
@@ -728,10 +720,6 @@ function LeadResultCard({
         </div>
       </div>
 
-      {/* ================================================================== */}
-      {/* Existing claimant states                                             */}
-      {/* ================================================================== */}
-
       {claimantState ===
         "activated" && (
         <div className="border-t border-line-subtle px-5 py-5">
@@ -751,7 +739,7 @@ function LeadResultCard({
             tone="info"
             title="Activation invitation already sent"
           >
-            The claimant record already exists and an activation invitation is currently open. Wait for the claimant to complete activation or use the controlled invitation workflow if intervention is later required.
+            The claimant record already exists and an activation invitation is currently open.
           </Callout>
         </div>
       )}
@@ -781,10 +769,6 @@ function LeadResultCard({
             </div>
           </div>
         )}
-
-      {/* ================================================================== */}
-      {/* New claimant creation                                                */}
-      {/* ================================================================== */}
 
       {creationAllowed &&
         candidate.claimId && (
@@ -967,10 +951,6 @@ function LeadResultCard({
           </div>
         )}
 
-      {/* ================================================================== */}
-      {/* Cannot create claimant                                               */}
-      {/* ================================================================== */}
-
       {candidate.route.intakeCleared &&
         !candidate.converted && (
           <div className="border-t border-line-subtle px-5 py-5">
@@ -978,7 +958,7 @@ function LeadResultCard({
               tone="caution"
               title="Claim conversion required first"
             >
-              This county route is cleared, but the Opportunity has not yet become a Claim. Complete the existing controlled Opportunity conversion before claimant creation.
+              This county route is cleared, but the Opportunity has not yet become a Claim.
             </Callout>
           </div>
         )}
@@ -1215,7 +1195,7 @@ function ActivationCandidateCard({
           tone="neutral"
           title="What happens next"
         >
-          DueQuity sends a one-time secure activation link to the saved email. The claimant creates their own password. After activation, the existing secure document workflow requests the required government-issued photo ID.
+          DueQuity sends a one-time secure activation link to the saved email. The claimant creates their own password.
         </Callout>
 
         <div className="flex justify-end">
@@ -1304,10 +1284,16 @@ export default async function ClaimantOnboardingPage({
   const mayInvite =
     mayCreateClaimant;
 
+  const shouldSearch =
+    mayLocateLead &&
+    query.length >=
+      2;
+
   const [
     activationCandidates,
     invitations,
     intakeSearch,
+    discoverySearch,
   ] =
     await Promise.all([
       listClaimantActivationCandidates(
@@ -1318,9 +1304,7 @@ export default async function ClaimantOnboardingPage({
         session,
       ),
 
-      mayLocateLead &&
-      query.length >=
-        2
+      shouldSearch
         ? searchClaimantIntakeCandidates({
             session,
 
@@ -1335,7 +1319,27 @@ export default async function ClaimantOnboardingPage({
             totalMatches:
               0,
           }),
+
+      shouldSearch
+        ? searchClaimantIntakeDiscoveryCandidates({
+            session,
+
+            query,
+          })
+        : Promise.resolve({
+            query,
+
+            candidates:
+              [],
+
+            totalMatches:
+              0,
+          }),
     ]);
+
+  const totalSearchMatches =
+    intakeSearch.totalMatches +
+    discoverySearch.totalMatches;
 
   const orderedActivationCandidates =
     activationCandidates
@@ -1371,6 +1375,25 @@ export default async function ClaimantOnboardingPage({
     session.user.role ===
     "super_admin";
 
+  /*
+   * The broader assignment-scoped invitation list above is intentionally
+   * retained for internal claimant-state detection. It prevents a reassigned
+   * claim from appearing as though no invitation exists.
+   *
+   * Staff-visible history is narrower: ordinary staff see only invitations
+   * they personally sent. Super Admin retains the complete history.
+   */
+  const historyInvitations =
+    superAdmin
+      ? invitations
+      : invitations.filter(
+          (
+            invitation,
+          ) =>
+            invitation.sentByStaffUserId ===
+            session.user.id,
+        );
+
   return (
     <div className="space-y-5">
       <div>
@@ -1386,10 +1409,6 @@ export default async function ClaimantOnboardingPage({
           Find the Admin-assigned recovery record, verify the caller against the source property, confirm the DueQuity recovery route, create the claimant record, and send secure activation.
         </p>
       </div>
-
-      {/* ================================================================== */}
-      {/* Creation status                                                     */}
-      {/* ================================================================== */}
 
       {params.status ===
         "claimant-created" && (
@@ -1420,7 +1439,7 @@ export default async function ClaimantOnboardingPage({
           title="Claimant name requires review"
           role="alert"
         >
-          The first and last name confirmed on the call do not sufficiently match the former-owner identity on the recovery source record. Stop ordinary intake and review the identity before creating a claimant.
+          The first and last name confirmed on the call do not sufficiently match the former-owner identity on the recovery source record.
         </Callout>
       )}
 
@@ -1453,7 +1472,7 @@ export default async function ClaimantOnboardingPage({
           title="Claim unavailable"
           role="alert"
         >
-          The Claim or its source Opportunity could not be resolved. Do not create a disconnected claimant record.
+          The Claim or its source Opportunity could not be resolved.
         </Callout>
       )}
 
@@ -1464,7 +1483,7 @@ export default async function ClaimantOnboardingPage({
           title="Recovery linkage mismatch"
           role="alert"
         >
-          The Claim does not match its persisted source Opportunity. Claimant creation is blocked until the recovery linkage is corrected.
+          The Claim does not match its persisted source Opportunity.
         </Callout>
       )}
 
@@ -1486,7 +1505,7 @@ export default async function ClaimantOnboardingPage({
           title="Claimant review required"
           role="alert"
         >
-          This ordinary flow supports a single living individual former owner. Estates, deceased owners, multiple owners, trusts, businesses and authority questions require the appropriate controlled review path.
+          This ordinary flow supports a single living individual former owner.
         </Callout>
       )}
 
@@ -1497,21 +1516,47 @@ export default async function ClaimantOnboardingPage({
           title="Claimant could not be created"
           role="alert"
         >
-          DueQuity could not complete the controlled claimant creation. No claimant should be assumed created. Review the recovery record before trying again.
+          DueQuity could not complete the controlled claimant creation.
         </Callout>
       )}
 
-      {/* ================================================================== */}
-      {/* Start new claimant                                                  */}
-      {/* ================================================================== */}
+      <details
+        id="new-claimant-intake"
+        open
+        className="group overflow-hidden rounded-2xl border border-line bg-white shadow-sm"
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-5 px-4 py-4 transition hover:bg-inset sm:px-5 [&::-webkit-details-marker]:hidden">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="flex size-7 items-center justify-center rounded-lg bg-ink-950 text-lg font-medium text-white">
+                +
+              </span>
 
-      <Card>
-        <CardHeader
-          title="Start new claimant"
-          description="Find the assigned DueQuity recovery record first. Recovery route, filing authority and payment handling are derived automatically from the approved jurisdiction package."
-        />
+              <h2 className="text-sm font-semibold text-ink-950">
+                Start new claimant
+              </h2>
+            </div>
 
-        <CardBody>
+            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-ink-600">
+              Search the full DueQuity recovery pipeline. The record may still be in Discovery, already be an Opportunity, or already have a Claim.
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden text-xs font-semibold text-ink-500 sm:inline">
+              Open / close
+            </span>
+
+            <span
+              aria-hidden="true"
+              className="flex size-8 items-center justify-center rounded-full border border-line bg-white text-lg text-ink-700 transition-transform duration-200 group-open:rotate-180"
+            >
+              ↓
+            </span>
+          </div>
+        </summary>
+
+        <div className="border-t border-line-subtle p-4 sm:p-5">
           {!mayLocateLead ? (
             <Callout
               tone="caution"
@@ -1534,7 +1579,7 @@ export default async function ClaimantOnboardingPage({
                 </label>
 
                 <p className="mt-1 text-xs leading-relaxed text-ink-500">
-                  Search by Opportunity reference, Claim reference, former-owner name, foreclosed property address, parcel number, city or ZIP code.
+                  Search by former-owner name, Opportunity reference, Claim reference, property address, parcel number, case number, city or ZIP code.
                 </p>
 
                 <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -1545,7 +1590,7 @@ export default async function ClaimantOnboardingPage({
                     defaultValue={
                       query
                     }
-                    placeholder="Example: OPP-..., John Smith, 123 Main St..."
+                    placeholder="Example: Charles Cooper, James Shehan Jr, OPP-..., 51 Union St..."
                     className="min-w-0 flex-1 rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
                   />
 
@@ -1564,44 +1609,44 @@ export default async function ClaimantOnboardingPage({
                   tone="caution"
                   title="Enter more information"
                 >
-                  Enter at least two characters to search the operational recovery records.
+                  Enter at least two characters to search DueQuity recovery records.
                 </Callout>
               )}
 
               {query.length >=
                 2 &&
-                intakeSearch.totalMatches ===
+                totalSearchMatches ===
                   0 && (
                   <EmptyState
                     compact
-                    title="No matching operational record"
-                    description="No accessible DueQuity Opportunity or converted Claim matched this search. Verify the reference, former-owner name or foreclosed property address from the Admin-assigned lead."
+                    title="No matching DueQuity recovery record"
+                    description="No accessible Discovery record, Opportunity or converted Claim matched this search. Verify the former-owner name, recovery reference or property information."
                   />
                 )}
 
-              {intakeSearch.totalMatches >
+              {totalSearchMatches >
                 0 && (
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-ink-900">
                         {
-                          intakeSearch.totalMatches
+                          totalSearchMatches
                         }{" "}
                         matching{" "}
-                        {intakeSearch.totalMatches ===
+                        {totalSearchMatches ===
                         1
                           ? "record"
                           : "records"}
                       </p>
 
                       <p className="mt-0.5 text-xs text-ink-500">
-                        Confirm the correct property and former-owner record before continuing.
+                        DueQuity identified the current pipeline stage and recovery route automatically.
                       </p>
                     </div>
 
                     <Badge tone="info">
-                      Route identified automatically
+                      Pipeline stage identified
                     </Badge>
                   </div>
 
@@ -1643,6 +1688,21 @@ export default async function ClaimantOnboardingPage({
                       );
                     },
                   )}
+
+                  {discoverySearch.candidates.map(
+                    (
+                      candidate,
+                    ) => (
+                      <ClaimantIntakeDiscoveryCard
+                        key={
+                          candidate.discoveredRecordId
+                        }
+                        candidate={
+                          candidate
+                        }
+                      />
+                    ),
+                  )}
                 </div>
               )}
 
@@ -1652,17 +1712,13 @@ export default async function ClaimantOnboardingPage({
                   tone="neutral"
                   title="How this workflow starts"
                 >
-                  Leads are assigned by the Admin. After the claimant voluntarily agrees to continue with DueQuity, locate the recovery record here. DueQuity identifies DCR, MRR, attorney or blocked handling automatically. Staff never select the county route manually.
+                  Leads are assigned by the Admin. Search the claimant or property here even if the source record has not yet become an Opportunity. DueQuity identifies the current pipeline stage, DCR/MRR/attorney/blocked route, and the next controlled action automatically.
                 </Callout>
               )}
             </div>
           )}
-        </CardBody>
-      </Card>
-
-      {/* ================================================================== */}
-      {/* Existing invitation statuses                                        */}
-      {/* ================================================================== */}
+        </div>
+      </details>
 
       {params.status ===
         "sent" && (
@@ -1671,7 +1727,7 @@ export default async function ClaimantOnboardingPage({
           title="Activation invitation sent"
           role="status"
         >
-          The claimant was sent a secure DueQuity activation email. Their Claimant ID and saved identity information remain linked to the recovery.
+          The claimant was sent a secure DueQuity activation email.
         </Callout>
       )}
 
@@ -1693,7 +1749,7 @@ export default async function ClaimantOnboardingPage({
           title="Legal name does not match"
           role="alert"
         >
-          The activation name does not match the claimant identity saved to this recovery. Correct the claimant record through the controlled workflow before sending activation.
+          The activation name does not match the claimant identity saved to this recovery.
         </Callout>
       )}
 
@@ -1704,7 +1760,7 @@ export default async function ClaimantOnboardingPage({
           title="Email does not match"
           role="alert"
         >
-          The activation email does not match the claimant email saved to this recovery. Save an approved contact correction first.
+          The activation email does not match the claimant email saved to this recovery.
         </Callout>
       )}
 
@@ -1715,7 +1771,7 @@ export default async function ClaimantOnboardingPage({
           title="Mobile number does not match"
           role="alert"
         >
-          The activation mobile number does not match the claimant mobile saved to this recovery. Save an approved contact correction first.
+          The activation mobile number does not match the claimant mobile saved to this recovery.
         </Callout>
       )}
 
@@ -1737,7 +1793,7 @@ export default async function ClaimantOnboardingPage({
           title="Claimant account already exists"
           role="alert"
         >
-          This claimant already has a My DueQuity authentication identity. Do not issue another activation invitation.
+          This claimant already has a My DueQuity authentication identity.
         </Callout>
       )}
 
@@ -1792,7 +1848,7 @@ export default async function ClaimantOnboardingPage({
           title="Invitation could not be sent"
           role="alert"
         >
-          DueQuity could not complete the controlled claimant invitation. No activation should be assumed complete.
+          DueQuity could not complete the controlled claimant invitation.
         </Callout>
       )}
 
@@ -1804,10 +1860,6 @@ export default async function ClaimantOnboardingPage({
           Your current DueQuity role may review claimant onboarding but cannot create or activate claimants.
         </Callout>
       )}
-
-      {/* ================================================================== */}
-      {/* Activation handoff                                                  */}
-      {/* ================================================================== */}
 
       <div id="send-claimant-activation">
         <Card>
@@ -1857,15 +1909,11 @@ export default async function ClaimantOnboardingPage({
         </Card>
       </div>
 
-      {/* ================================================================== */}
-      {/* Activation history                                                  */}
-      {/* ================================================================== */}
-
       <Card>
         <CardHeader
           title="Activation history"
-          description={`${invitations.length.toLocaleString()} accessible claimant activation invitation${
-            invitations.length ===
+          description={`${historyInvitations.length.toLocaleString()} accessible claimant activation invitation${
+            historyInvitations.length ===
             1
               ? ""
               : "s"
@@ -1873,17 +1921,17 @@ export default async function ClaimantOnboardingPage({
         />
 
         <CardBody flush>
-          {invitations.length ===
+          {historyInvitations.length ===
             0 ? (
             <EmptyState
               compact
               className="m-4 border-0 bg-transparent"
               title="No claimant invitations yet"
-              description="Controlled claimant invitations accessible to your staff account will appear here."
+              description="Controlled claimant invitations sent by your staff account will appear here."
             />
           ) : (
             <ul className="divide-y divide-line-subtle">
-              {invitations.map(
+              {historyInvitations.map(
                 (
                   invitation,
                 ) => (

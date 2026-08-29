@@ -502,72 +502,35 @@ begin
       raise exception 'percentage fee quote is missing selected percentage'
         using errcode = '42501';
     end if;
-
-    v_base_fee :=
-      pg_catalog.round(
-        new.recovered_amount_cents::numeric *
-        v_quote.selected_percentage
-      );
-
+    v_base_fee := pg_catalog.round(new.recovered_amount_cents::numeric * v_quote.selected_percentage);
     v_fee := v_base_fee::bigint;
-
   elsif v_quote.fee_model = 'flat' then
     if v_quote.selected_flat_amount_cents is null then
       raise exception 'flat fee quote is missing selected amount'
         using errcode = '42501';
     end if;
-
     v_fee := v_quote.selected_flat_amount_cents;
-
   else
     raise exception 'unsupported locked fee model for recovery settlement: %', v_quote.fee_model
       using errcode = '22023';
   end if;
 
   if v_quote.legal_fee_cap_percent_snapshot is not null then
-    v_legal_percent_cap :=
-      pg_catalog.round(
-        new.recovered_amount_cents::numeric *
-        v_quote.legal_fee_cap_percent_snapshot
-      )::bigint;
-
+    v_legal_percent_cap := pg_catalog.round(new.recovered_amount_cents::numeric * v_quote.legal_fee_cap_percent_snapshot)::bigint;
     v_fee := pg_catalog.least(v_fee, v_legal_percent_cap);
   end if;
 
   if v_quote.legal_fee_cap_amount_snapshot_cents is not null then
-    v_fee :=
-      pg_catalog.least(
-        v_fee,
-        v_quote.legal_fee_cap_amount_snapshot_cents
-      );
+    v_fee := pg_catalog.least(v_fee, v_quote.legal_fee_cap_amount_snapshot_cents);
   end if;
 
   if v_quote.internal_fee_cap_amount_snapshot_cents is not null then
-    v_fee :=
-      pg_catalog.least(
-        v_fee,
-        v_quote.internal_fee_cap_amount_snapshot_cents
-      );
+    v_fee := pg_catalog.least(v_fee, v_quote.internal_fee_cap_amount_snapshot_cents);
   end if;
 
-  v_fee :=
-    pg_catalog.greatest(
-      0,
-      pg_catalog.least(
-        v_fee,
-        new.recovered_amount_cents
-      )
-    );
-
-  v_status :=
-    case
-      when v_fee = 0 then 'no_fee_due'
-      else 'awaiting_invoice'
-    end;
-
-  v_settlement_id :=
-    'recovery-settlement-' ||
-    new.id;
+  v_fee := pg_catalog.greatest(0, pg_catalog.least(v_fee, new.recovered_amount_cents));
+  v_status := case when v_fee = 0 then 'no_fee_due' else 'awaiting_invoice' end;
+  v_settlement_id := 'recovery-settlement-' || new.id;
 
   insert into public.claim_recovery_settlements (
     id,
@@ -675,4 +638,4 @@ grant select, insert, update on public.claim_recovery_fee_payments to service_ro
 grant select, insert on public.claim_recovery_audit to service_role;
 
 revoke execute on function public.bootstrap_claim_recovery_settlement_from_authority_review() from public, anon, authenticated;
-grant execute on function public.bootstrap_claim_recovery_settlement_from_authority_review() to service_role;
+grant execute on function public.bootstrap_claim_recovery_settlement_from_authority_review() to service_role;;
