@@ -21,31 +21,41 @@ import {
 } from "@/server/supabase-auth";
 
 /* ========================================================================== */
-/* Database row                                                               */
+/* Database row                                                                */
 /* ========================================================================== */
 
 interface StaffUserRow {
-  id: string;
+  id:
+    string;
 
-  name: string;
+  name:
+    string;
 
-  email: string;
+  email:
+    string;
 
-  role: string;
+  role:
+    string;
 
-  title: string | null;
+  title:
+    string | null;
 
-  states_cleared: string[] | null;
+  states_cleared:
+    string[] | null;
 
-  mfa_enrolled: boolean;
+  mfa_enrolled:
+    boolean;
 
-  status: string;
+  status:
+    string;
 }
 
 interface SupabaseStaffResolution {
-  authenticatedIdentity: boolean;
+  authenticatedIdentity:
+    boolean;
 
-  session: StaffSession | null;
+  session:
+    StaffSession | null;
 }
 
 /* ========================================================================== */
@@ -55,32 +65,66 @@ interface SupabaseStaffResolution {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/**
+ * Local identity emulation is intentionally opt-in.
+ *
+ * DUEQUITY_LOCAL_DEV_SESSION by itself is no longer sufficient to create a
+ * staff session.
+ *
+ * This prevents a signed-out browser, a fresh localhost tab or an external
+ * localhost deep link from silently becoming a configured development staff
+ * identity.
+ *
+ * To deliberately use the historical local adapter, both the existing local
+ * session configuration and this explicit safety switch must be enabled:
+ *
+ *   DUEQUITY_ENABLE_LOCAL_DEV_STAFF_FALLBACK=true
+ */
+function localDevelopmentStaffFallbackEnabled():
+  boolean {
+  return (
+    process.env.NODE_ENV ===
+      "development" &&
+    process.env
+      .DUEQUITY_ENABLE_LOCAL_DEV_STAFF_FALLBACK ===
+      "true"
+  );
+}
+
 /* ========================================================================== */
-/* Validation                                                                 */
+/* Validation                                                                  */
 /* ========================================================================== */
 
 function normalizeStatesCleared(
-  values: string[] | null,
+  values:
+    string[] | null,
 ): StateCode[] {
   if (!values) {
     return [];
   }
 
   return values
-    .map((value) =>
-      value
-        .trim()
-        .toUpperCase(),
-    )
-    .filter((value) =>
-      /^[A-Z]{2}$/.test(
+    .map(
+      (
         value,
-      ),
+      ) =>
+        value
+          .trim()
+          .toUpperCase(),
+    )
+    .filter(
+      (
+        value,
+      ) =>
+        /^[A-Z]{2}$/.test(
+          value,
+        ),
     ) as StateCode[];
 }
 
 function staffUserFromRow(
-  row: StaffUserRow,
+  row:
+    StaffUserRow,
 ): StaffUser | null {
   if (
     row.status !==
@@ -146,7 +190,7 @@ function staffUserFromRow(
 }
 
 /* ========================================================================== */
-/* Production staff session                                                   */
+/* Production / real-auth staff session                                        */
 /* ========================================================================== */
 
 async function resolveSupabaseStaffSession(): Promise<
@@ -156,14 +200,16 @@ async function resolveSupabaseStaffSession(): Promise<
     await getSupabaseServerAuth();
 
   /*
-   * getUser() validates the current access token with Supabase Auth.
-   * Browser-supplied identity values are never trusted directly.
+   * getUser() validates the current access token directly with Supabase Auth.
+   * Browser-supplied identity values are never trusted.
    */
   const {
     data: {
-      user: authUser,
+      user:
+        authUser,
     },
-    error: authError,
+    error:
+      authError,
   } =
     await auth.auth.getUser();
 
@@ -181,11 +227,10 @@ async function resolveSupabaseStaffSession(): Promise<
   }
 
   /*
-   * A real Supabase identity now exists.
+   * A real Supabase identity exists.
    *
-   * If that identity is not an active DueQuity staff identity, access must
-   * fail closed. We never fall through to the local development adapter after
-   * successfully authenticating a non-staff Supabase identity.
+   * If that identity is not an active DueQuity staff identity, access fails
+   * closed. We never substitute another staff identity.
    */
   const admin =
     getSupabaseAdmin();
@@ -224,7 +269,8 @@ async function resolveSupabaseStaffSession(): Promise<
   }
 
   const row =
-    data as StaffUserRow;
+    data as
+      StaffUserRow;
 
   const user =
     staffUserFromRow(
@@ -276,31 +322,24 @@ async function resolveSupabaseStaffSession(): Promise<
 }
 
 /* ========================================================================== */
-/* Local development database binding                                          */
+/* Explicit local-development identity adapter                                 */
 /* ========================================================================== */
 
 /**
- * Resolve a development-only session to a REAL persisted DueQuity staff row.
+ * This adapter is retained only for deliberate development scenarios.
  *
- * The historical local adapter created synthetic identifiers such as:
+ * It is NOT a normal localhost fallback.
  *
- *   local-dev-super-admin
+ * A missing browser authentication session must normally mean:
  *
- * That was sufficient while local pages used local-only data. It is no longer
- * valid now that Mail, claimant messaging, audit records and other operational
- * repositories enforce UUID foreign keys to public.staff_users.
+ *   signed out
  *
- * Development therefore keeps the convenience of DUEQUITY_LOCAL_DEV_SESSION,
- * but database-backed operations always receive a real persisted staff UUID.
+ * It must never silently mean:
  *
- * Resolution priority:
+ *   become the developer-configured Administrator
  *
- *   1. DUEQUITY_LOCAL_DEV_STAFF_ID when it is a UUID
- *   2. DUEQUITY_LOCAL_DEV_STAFF_EMAIL when explicitly configured
- *   3. The single active staff user matching DUEQUITY_LOCAL_DEV_STAFF_ROLE
- *
- * If more than one active employee has the selected role, development fails
- * closed until DUEQUITY_LOCAL_DEV_STAFF_EMAIL is specified.
+ * The adapter therefore runs only when
+ * DUEQUITY_ENABLE_LOCAL_DEV_STAFF_FALLBACK=true is explicitly configured.
  */
 async function resolveLocalDevelopmentStaffSession(): Promise<
   StaffSession | null
@@ -327,7 +366,8 @@ async function resolveLocalDevelopmentStaffSession(): Promise<
       .toLowerCase();
 
   let rows:
-    StaffUserRow[] = [];
+    StaffUserRow[] =
+    [];
 
   if (
     configuredId &&
@@ -368,7 +408,8 @@ async function resolveLocalDevelopmentStaffSession(): Promise<
       (
         data ??
         []
-      ) as StaffUserRow[];
+      ) as
+        StaffUserRow[];
   } else if (
     configuredEmail
   ) {
@@ -405,7 +446,8 @@ async function resolveLocalDevelopmentStaffSession(): Promise<
       (
         data ??
         []
-      ) as StaffUserRow[];
+      ) as
+        StaffUserRow[];
   } else {
     const {
       data,
@@ -440,7 +482,8 @@ async function resolveLocalDevelopmentStaffSession(): Promise<
       (
         data ??
         []
-      ) as StaffUserRow[];
+      ) as
+        StaffUserRow[];
   }
 
   if (
@@ -472,10 +515,6 @@ async function resolveLocalDevelopmentStaffSession(): Promise<
     );
   }
 
-  /*
-   * Do not let a configured ID or email silently change the role selected by
-   * the local development adapter.
-   */
   if (
     user.role !==
     localSession.user.role
@@ -499,22 +538,23 @@ async function resolveLocalDevelopmentStaffSession(): Promise<
 }
 
 /* ========================================================================== */
-/* Unified server resolver                                                    */
+/* Unified server resolver                                                     */
 /* ========================================================================== */
 
 /**
- * Resolve the current staff session.
+ * Resolve the current DueQuity staff session.
  *
- * A real authenticated Supabase identity always takes precedence.
+ * Rules:
  *
- * If a Supabase identity exists but is invited, suspended, missing from
- * staff_users, mismatched by email, belongs to a claimant, or is otherwise
- * unauthorized, access fails closed and the local development adapter is not
- * consulted.
+ * 1. A valid Supabase staff identity always wins.
+ * 2. A valid Supabase identity that is not authorized staff fails closed.
+ * 3. No Supabase identity means signed out.
+ * 4. Local identity substitution is disabled by default.
+ * 5. The historical local adapter runs only with the explicit development
+ *    opt-in DUEQUITY_ENABLE_LOCAL_DEV_STAFF_FALLBACK=true.
  *
- * When no Supabase identity exists, next-dev may use the explicitly enabled
- * local development adapter. That adapter is now bound to a real active
- * public.staff_users record before any database-backed operation receives it.
+ * This prevents account switching and localhost deep links from silently
+ * resolving to the wrong DueQuity employee.
  */
 export async function resolveStaffSession(): Promise<
   StaffSession | null
@@ -526,6 +566,12 @@ export async function resolveStaffSession(): Promise<
     resolution.authenticatedIdentity
   ) {
     return resolution.session;
+  }
+
+  if (
+    !localDevelopmentStaffFallbackEnabled()
+  ) {
+    return null;
   }
 
   return resolveLocalDevelopmentStaffSession();

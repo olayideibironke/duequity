@@ -9,6 +9,10 @@ import {
 } from "@/components/pro/claimant-intake-discovery-card";
 
 import {
+  ProtectedSubmitButton,
+} from "@/components/ui/protected-submit-button";
+
+import {
   Badge,
 } from "@/components/ui/badge";
 
@@ -33,6 +37,13 @@ import {
 } from "@/lib/format";
 
 import {
+  listAssignedLeadActivationCandidates,
+  listAssignedLeadActivationInvitations,
+  type AssignedLeadActivationCandidate,
+  type AssignedLeadActivationInvitation,
+} from "@/server/assigned-lead-claimant-activation-service";
+
+import {
   searchClaimantIntakeCandidates,
   type ClaimantIntakeCandidate,
 } from "@/server/claimant-intake-service";
@@ -54,6 +65,7 @@ import {
 
 import {
   createClaimantFromConfirmedCallAction,
+  sendAssignedLeadClaimantActivationInvitation,
   sendClaimantActivationInvitation,
 } from "./actions";
 
@@ -82,6 +94,44 @@ type LeadClaimantState =
   | "ready_for_activation"
   | "invitation_open"
   | "activated";
+
+interface ActivationHistoryItem {
+  key:
+    string;
+
+  claimantReference:
+    string;
+
+  legalFirstName:
+    string;
+
+  legalLastName:
+    string;
+
+  email:
+    string;
+
+  mobilePhone:
+    string;
+
+  status:
+    string;
+
+  sentByStaffUserId:
+    string;
+
+  sentAt?:
+    string;
+
+  activatedAt?:
+    string;
+
+  expiresAt:
+    string;
+
+  source:
+    "claim" | "assigned_lead";
+}
 
 /* ========================================================================== */
 /* Helpers                                                                     */
@@ -129,6 +179,34 @@ function formatTimestamp(
   ).format(
     date,
   );
+}
+
+function formatPhone(
+  value:
+    string,
+): string {
+  const digits =
+    value.replace(
+      /\D/g,
+      "",
+    );
+
+  if (
+    digits.length !==
+    10
+  ) {
+    return value;
+  }
+
+  return `(${digits.slice(
+    0,
+    3,
+  )}) ${digits.slice(
+    3,
+    6,
+  )}-${digits.slice(
+    6,
+  )}`;
 }
 
 function statusTone(
@@ -940,12 +1018,11 @@ function LeadResultCard({
                   Creating the claimant links the confirmed person to this existing Claim. It does not verify entitlement, approve payment, file with an agency, or activate the claimant account.
                 </p>
 
-                <button
-                  type="submit"
-                  className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
-                >
-                  Create claimant record
-                </button>
+                <ProtectedSubmitButton
+                  label="Create claimant record"
+                  pendingLabel="Creating claimant…"
+                  requireValid
+                />
               </div>
             </form>
           </div>
@@ -983,7 +1060,7 @@ function LeadResultCard({
 }
 
 /* ========================================================================== */
-/* Activation card                                                            */
+/* Existing Claim-backed activation card                                       */
 /* ========================================================================== */
 
 function ActivationCandidateCard({
@@ -1031,6 +1108,10 @@ function ActivationCandidateCard({
             <Badge tone="info">
               Ready for activation
             </Badge>
+
+            <Badge tone="neutral">
+              Claim
+            </Badge>
           </div>
 
           <p className="mt-3 font-semibold text-ink-950">
@@ -1059,7 +1140,7 @@ function ActivationCandidateCard({
 
         {selected && (
           <Badge tone="positive">
-            Newly created
+            Selected
           </Badge>
         )}
       </div>
@@ -1199,17 +1280,223 @@ function ActivationCandidateCard({
         </Callout>
 
         <div className="flex justify-end">
-          <button
-            type="submit"
+          <ProtectedSubmitButton
+            label="Send secure activation"
+            pendingLabel="Sending activation…"
+            requireValid
             disabled={
               !mayInvite ||
               !firstName ||
               !lastName
             }
-            className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Send secure activation
-          </button>
+          />
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ========================================================================== */
+/* Admin-assigned pre-Claim activation card                                    */
+/* ========================================================================== */
+
+function AssignedLeadActivationCandidateCard({
+  candidate,
+  mayInvite,
+  selected,
+  query,
+}: {
+  candidate:
+    AssignedLeadActivationCandidate;
+
+  mayInvite:
+    boolean;
+
+  selected:
+    boolean;
+
+  query:
+    string;
+}) {
+  return (
+    <div
+      className={[
+        "rounded-2xl border bg-white p-5",
+        selected
+          ? "border-accent-300 ring-2 ring-accent-100"
+          : "border-line",
+      ].join(
+        " ",
+      )}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md bg-ink-950 px-2.5 py-1 font-mono text-xs font-semibold text-white">
+              {
+                candidate.claimantReference
+              }
+            </span>
+
+            <Badge tone="positive">
+              Ready for activation
+            </Badge>
+
+            <Badge tone="info">
+              Admin assigned
+            </Badge>
+          </div>
+
+          <p className="mt-3 font-semibold text-ink-950">
+            {
+              candidate.legalFirstName
+            }{" "}
+            {
+              candidate.legalLastName
+            }
+          </p>
+
+          <p className="mt-1 text-sm text-ink-600">
+            {
+              candidate.email
+            }
+          </p>
+
+          <p className="mt-0.5 text-xs text-ink-500">
+            Mobile:{" "}
+            {
+              formatPhone(
+                candidate.mobilePhone,
+              )
+            }
+          </p>
+        </div>
+
+        {selected && (
+          <Badge tone="positive">
+            Selected
+          </Badge>
+        )}
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">
+            Confirmed claimant
+          </p>
+
+          <div className="mt-1.5 rounded-xl border border-line bg-inset px-4 py-3 text-sm font-semibold text-ink-900">
+            {
+              candidate.legalFirstName
+            }{" "}
+            {
+              candidate.legalLastName
+            }
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">
+            Claimant ID
+          </p>
+
+          <div className="mt-1.5 rounded-xl border border-line bg-inset px-4 py-3 font-mono text-sm font-semibold text-ink-900">
+            {
+              candidate.claimantReference
+            }
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">
+            Saved email
+          </p>
+
+          <div className="mt-1.5 rounded-xl border border-line bg-inset px-4 py-3 text-sm text-ink-900">
+            {
+              candidate.email
+            }
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">
+            Saved mobile
+          </p>
+
+          <div className="mt-1.5 rounded-xl border border-line bg-inset px-4 py-3 text-sm text-ink-900">
+            {
+              formatPhone(
+                candidate.mobilePhone,
+              )
+            }
+          </div>
+        </div>
+      </div>
+
+      <Callout
+        className="mt-5"
+        tone="positive"
+        title="Saved identity is locked"
+      >
+        This activation uses the claimant identity and contact information already confirmed and saved to the Admin-assigned recovery. Staff cannot change those values from the activation step.
+      </Callout>
+
+      <form
+        action={
+          sendAssignedLeadClaimantActivationInvitation
+        }
+        className="mt-5 space-y-4"
+      >
+        <input
+          type="hidden"
+          name="workcaseId"
+          value={
+            candidate.workcaseId
+          }
+        />
+
+        <input
+          type="hidden"
+          name="q"
+          value={
+            query
+          }
+        />
+
+        <label className="flex items-start gap-3 rounded-xl border border-line bg-inset px-4 py-4">
+          <input
+            type="checkbox"
+            name="confirmation"
+            value="confirmed"
+            required
+            disabled={
+              !mayInvite
+            }
+            className="mt-0.5 size-4"
+          />
+
+          <span className="text-sm leading-relaxed text-ink-700">
+            I reviewed the saved claimant identity and contact information and intend to send the secure My DueQuity activation invitation to the confirmed email address.
+          </span>
+        </label>
+
+        <Callout
+          tone="neutral"
+          title="What happens next"
+        >
+          DueQuity sends a one-time secure activation link. The claimant reviews their saved identity, creates their private password, and then signs in to My DueQuity.
+        </Callout>
+
+        <div className="flex justify-end">
+          <ProtectedSubmitButton
+            label="Send secure activation"
+            pendingLabel="Sending activation…"
+            requireValid
+            disabled={
+              !mayInvite
+            }
+          />
         </div>
       </form>
     </div>
@@ -1292,6 +1579,8 @@ export default async function ClaimantOnboardingPage({
   const [
     activationCandidates,
     invitations,
+    assignedActivationCandidates,
+    assignedInvitations,
     intakeSearch,
     discoverySearch,
   ] =
@@ -1303,6 +1592,24 @@ export default async function ClaimantOnboardingPage({
       listClaimantActivationInvitations(
         session,
       ),
+
+      mayInvite
+        ? listAssignedLeadActivationCandidates(
+            session,
+          )
+        : Promise.resolve(
+            [] as
+              AssignedLeadActivationCandidate[],
+          ),
+
+      mayInvite
+        ? listAssignedLeadActivationInvitations(
+            session,
+          )
+        : Promise.resolve(
+            [] as
+              AssignedLeadActivationInvitation[],
+          ),
 
       shouldSearch
         ? searchClaimantIntakeCandidates({
@@ -1371,19 +1678,41 @@ export default async function ClaimantOnboardingPage({
         },
       );
 
+  const orderedAssignedActivationCandidates =
+    assignedActivationCandidates
+      .slice()
+      .sort(
+        (
+          left,
+          right,
+        ) => {
+          if (
+            left.claimantId ===
+            selectedClaimantId
+          ) {
+            return -1;
+          }
+
+          if (
+            right.claimantId ===
+            selectedClaimantId
+          ) {
+            return 1;
+          }
+
+          return left
+            .claimantReference
+            .localeCompare(
+              right.claimantReference,
+            );
+        },
+      );
+
   const superAdmin =
     session.user.role ===
     "super_admin";
 
-  /*
-   * The broader assignment-scoped invitation list above is intentionally
-   * retained for internal claimant-state detection. It prevents a reassigned
-   * claim from appearing as though no invitation exists.
-   *
-   * Staff-visible history is narrower: ordinary staff see only invitations
-   * they personally sent. Super Admin retains the complete history.
-   */
-  const historyInvitations =
+  const visibleClaimInvitations =
     superAdmin
       ? invitations
       : invitations.filter(
@@ -1393,6 +1722,130 @@ export default async function ClaimantOnboardingPage({
             invitation.sentByStaffUserId ===
             session.user.id,
         );
+
+  const visibleAssignedInvitations =
+    superAdmin
+      ? assignedInvitations
+      : assignedInvitations.filter(
+          (
+            invitation,
+          ) =>
+            invitation.sentByStaffUserId ===
+            session.user.id,
+        );
+
+  const historyItems:
+    ActivationHistoryItem[] = [
+      ...visibleClaimInvitations.map(
+        (
+          invitation,
+        ) => ({
+          key:
+            `claim-${invitation.id}`,
+
+          claimantReference:
+            invitation.claimantReference,
+
+          legalFirstName:
+            invitation.legalFirstName,
+
+          legalLastName:
+            invitation.legalLastName,
+
+          email:
+            invitation.email,
+
+          mobilePhone:
+            invitation.mobilePhone,
+
+          status:
+            invitation.status,
+
+          sentByStaffUserId:
+            invitation.sentByStaffUserId,
+
+          sentAt:
+            invitation.sentAt,
+
+          activatedAt:
+            invitation.activatedAt,
+
+          expiresAt:
+            invitation.expiresAt,
+
+          source:
+            "claim" as const,
+        }),
+      ),
+
+      ...visibleAssignedInvitations.map(
+        (
+          invitation,
+        ) => ({
+          key:
+            `assigned-${invitation.id}`,
+
+          claimantReference:
+            invitation.claimantReference,
+
+          legalFirstName:
+            invitation.legalFirstName,
+
+          legalLastName:
+            invitation.legalLastName,
+
+          email:
+            invitation.email,
+
+          mobilePhone:
+            invitation.mobilePhone,
+
+          status:
+            invitation.status,
+
+          sentByStaffUserId:
+            invitation.sentByStaffUserId,
+
+          sentAt:
+            invitation.sentAt,
+
+          activatedAt:
+            invitation.activatedAt,
+
+          expiresAt:
+            invitation.expiresAt,
+
+          source:
+            "assigned_lead" as const,
+        }),
+      ),
+    ].sort(
+      (
+        left,
+        right,
+      ) => {
+        const leftTime =
+          new Date(
+            left.sentAt ??
+              left.expiresAt,
+          ).getTime();
+
+        const rightTime =
+          new Date(
+            right.sentAt ??
+              right.expiresAt,
+          ).getTime();
+
+        return (
+          rightTime -
+          leftTime
+        );
+      },
+    );
+
+  const totalActivationCandidates =
+    orderedActivationCandidates.length +
+    orderedAssignedActivationCandidates.length;
 
   return (
     <div className="space-y-5">
@@ -1406,7 +1859,7 @@ export default async function ClaimantOnboardingPage({
         </h1>
 
         <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-600">
-          Find the Admin-assigned recovery record, verify the caller against the source property, confirm the DueQuity recovery route, create the claimant record, and send secure activation.
+          Find the Admin-assigned recovery record, verify the claimant, preserve the confirmed contact record, and send secure My DueQuity activation.
         </p>
       </div>
 
@@ -1538,7 +1991,7 @@ export default async function ClaimantOnboardingPage({
             </div>
 
             <p className="mt-2 max-w-3xl text-xs leading-relaxed text-ink-600">
-              Search the full DueQuity recovery pipeline. The record may still be in Discovery, already be an Opportunity, or already have a Claim.
+              Search the full DueQuity recovery pipeline. Admin-assigned recovery leads can begin claimant work before an official Claim exists.
             </p>
           </div>
 
@@ -1590,7 +2043,7 @@ export default async function ClaimantOnboardingPage({
                     defaultValue={
                       query
                     }
-                    placeholder="Example: Charles Cooper, James Shehan Jr, OPP-..., 51 Union St..."
+                    placeholder="Example: Charles Cooper, OPP-..., 51 Union St..."
                     className="min-w-0 flex-1 rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
                   />
 
@@ -1712,7 +2165,7 @@ export default async function ClaimantOnboardingPage({
                   tone="neutral"
                   title="How this workflow starts"
                 >
-                  Leads are assigned by the Admin. Search the claimant or property here even if the source record has not yet become an Opportunity. DueQuity identifies the current pipeline stage, DCR/MRR/attorney/blocked route, and the next controlled action automatically.
+                  Leads are assigned by Admin. Search the claimant or property here even if the source record has not yet become an Opportunity or Claim. An active Admin assignment authorizes staff to continue the assigned pre-submission workflow while DueQuity retains its internal legal, jurisdiction, payment and filing controls.
                 </Callout>
               )}
             </div>
@@ -1735,10 +2188,10 @@ export default async function ClaimantOnboardingPage({
         "invalid" && (
         <Callout
           tone="critical"
-          title="Check the activation information"
+          title="Complete the activation confirmation"
           role="alert"
         >
-          Review the claimant legal name, email and mobile number and complete the activation confirmation.
+          Review the saved claimant information and complete the activation confirmation before sending the secure invitation.
         </Callout>
       )}
 
@@ -1782,7 +2235,7 @@ export default async function ClaimantOnboardingPage({
           title="Claimant record is incomplete"
           role="alert"
         >
-          Finish the claimant identity/contact record before issuing an activation invitation.
+          Finish the claimant identity and contact record before issuing an activation invitation.
         </Callout>
       )}
 
@@ -1867,21 +2320,46 @@ export default async function ClaimantOnboardingPage({
             title="Send claimant activation"
             description={
               superAdmin
-                ? "Eligible claimant records across all staff assignments are shown. Saved identity and recovery linkage remain system-controlled."
-                : "Only claimant records currently assigned to you are shown. Saved identity and recovery linkage remain system-controlled."
+                ? "Eligible Claim-backed and Admin-assigned claimant records are shown. Saved recovery linkage remains system-controlled."
+                : "Only eligible claimant records currently assigned to you are shown. Saved identity and recovery linkage remain system-controlled."
             }
           />
 
           <CardBody>
-            {orderedActivationCandidates.length ===
+            {totalActivationCandidates ===
               0 ? (
               <EmptyState
                 compact
                 title="No claimant records awaiting invitation"
-                description="After a claimant record is created from a valid recovery, it will appear here until its secure activation is sent."
+                description="After a confirmed claimant is saved to an eligible assigned recovery or Claim, the claimant will appear here until secure activation is sent."
               />
             ) : (
               <div className="space-y-4">
+                {orderedAssignedActivationCandidates.map(
+                  (
+                    candidate,
+                  ) => (
+                    <AssignedLeadActivationCandidateCard
+                      key={
+                        candidate.workcaseId
+                      }
+                      candidate={
+                        candidate
+                      }
+                      mayInvite={
+                        mayInvite
+                      }
+                      selected={
+                        candidate.claimantId ===
+                        selectedClaimantId
+                      }
+                      query={
+                        query
+                      }
+                    />
+                  ),
+                )}
+
                 {orderedActivationCandidates.map(
                   (
                     candidate,
@@ -1912,8 +2390,8 @@ export default async function ClaimantOnboardingPage({
       <Card>
         <CardHeader
           title="Activation history"
-          description={`${historyInvitations.length.toLocaleString()} accessible claimant activation invitation${
-            historyInvitations.length ===
+          description={`${historyItems.length.toLocaleString()} accessible claimant activation invitation${
+            historyItems.length ===
             1
               ? ""
               : "s"
@@ -1921,7 +2399,7 @@ export default async function ClaimantOnboardingPage({
         />
 
         <CardBody flush>
-          {historyInvitations.length ===
+          {historyItems.length ===
             0 ? (
             <EmptyState
               compact
@@ -1931,13 +2409,13 @@ export default async function ClaimantOnboardingPage({
             />
           ) : (
             <ul className="divide-y divide-line-subtle">
-              {historyInvitations.map(
+              {historyItems.map(
                 (
                   invitation,
                 ) => (
                   <li
                     key={
-                      invitation.id
+                      invitation.key
                     }
                     className="px-4 py-4 sm:px-5"
                   >
@@ -1961,10 +2439,24 @@ export default async function ClaimantOnboardingPage({
                               invitation.status
                             }
                           </Badge>
+
+                          <Badge tone="neutral">
+                            {
+                              invitation.source ===
+                              "assigned_lead"
+                                ? "Admin assigned"
+                                : "Claim"
+                            }
+                          </Badge>
                         </div>
 
                         <p className="mt-2 font-semibold text-ink-900">
-                          {invitation.legalFirstName} {invitation.legalLastName}
+                          {
+                            invitation.legalFirstName
+                          }{" "}
+                          {
+                            invitation.legalLastName
+                          }
                         </p>
 
                         <p className="mt-1 text-sm text-ink-600">
@@ -1976,7 +2468,9 @@ export default async function ClaimantOnboardingPage({
                         <p className="mt-0.5 text-xs text-ink-500">
                           Mobile:{" "}
                           {
-                            invitation.mobilePhone
+                            formatPhone(
+                              invitation.mobilePhone,
+                            )
                           }
                         </p>
                       </div>

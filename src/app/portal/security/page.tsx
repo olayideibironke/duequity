@@ -1,6 +1,6 @@
-import type { Metadata } from "next";
-
-import { IDENTITY_STATUS } from "@/domain/status";
+import type {
+  Metadata,
+} from "next";
 
 import {
   Callout,
@@ -14,41 +14,155 @@ import {
 
 import {
   Badge,
-  StatusBadge,
 } from "@/components/ui/badge";
 
-import { TextLink } from "@/components/ui/button";
+import {
+  TextLink,
+} from "@/components/ui/button";
 
 import {
   IconLock,
   IconShield,
 } from "@/components/ui/icon";
 
-import { formatDate } from "@/lib/format";
+import {
+  formatDate,
+} from "@/lib/format";
 
-import { resolveClaimantSession } from "@/server/claimant-session";
+import {
+  resolveClaimantSession,
+} from "@/server/claimant-session";
 
-import { ClaimantAuthenticationRequired } from "@/components/ui/authentication-required";
+import {
+  ClaimantAuthenticationRequired,
+} from "@/components/ui/authentication-required";
 
-import { listClaimantOnboardings } from "@/server/claimant-onboarding-store";
+import {
+  listClaimantOnboardings,
+} from "@/server/claimant-onboarding-store";
 
-import { deleteClaimantAccount } from "./actions";
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+import {
+  deleteClaimantAccount,
+} from "./actions";
 
 export const metadata: Metadata = {
-  title: "Security",
+  title:
+    "Security",
 };
 
-export const dynamic = "force-dynamic";
+export const dynamic =
+  "force-dynamic";
 
 /* ========================================================================== */
-/* Page                                                                        */
+/* Types                                                                       */
 /* ========================================================================== */
 
 interface PortalSecurityPageProps {
   searchParams: Promise<{
-    deleteStatus?: string;
+    deleteStatus?:
+      string;
   }>;
 }
+
+interface AssignedWorkcaseRow {
+  id:
+    string;
+
+  claimant_id:
+    string;
+
+  legal_first_name:
+    string;
+
+  legal_last_name:
+    string;
+
+  auth_user_id:
+    string | null;
+
+  created_at:
+    string;
+
+  status:
+    string;
+
+  linked_claim_id:
+    string | null;
+}
+
+interface AssignedIdentityRow {
+  identity_verification:
+    string;
+
+  identity_verified_at:
+    string | null;
+}
+
+/* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
+
+function identityLabel(
+  status:
+    string,
+): string {
+  switch (
+    status
+  ) {
+    case "verified":
+      return "Verified";
+
+    case "under_review":
+      return "Under review";
+
+    case "documents_requested":
+      return "Documents requested";
+
+    case "manual_review":
+      return "Manual review";
+
+    case "failed":
+      return "Verification failed";
+
+    default:
+      return "Not started";
+  }
+}
+
+function identityTone(
+  status:
+    string,
+):
+  | "positive"
+  | "caution"
+  | "critical"
+  | "neutral" {
+  switch (
+    status
+  ) {
+    case "verified":
+      return "positive";
+
+    case "failed":
+      return "critical";
+
+    case "under_review":
+    case "documents_requested":
+    case "manual_review":
+      return "caution";
+
+    default:
+      return "neutral";
+  }
+}
+
+/* ========================================================================== */
+/* Page                                                                        */
+/* ========================================================================== */
 
 export default async function PortalSecurityPage({
   searchParams,
@@ -56,8 +170,12 @@ export default async function PortalSecurityPage({
   const session =
     await resolveClaimantSession();
 
-  if (!session) {
-    return <ClaimantAuthenticationRequired />;
+  if (
+    !session
+  ) {
+    return (
+      <ClaimantAuthenticationRequired />
+    );
   }
 
   const params =
@@ -66,17 +184,117 @@ export default async function PortalSecurityPage({
   const deleteStatus =
     params.deleteStatus;
 
+  /* ======================================================================== */
+  /* Existing Claim-backed claimant                                           */
+  /* ======================================================================== */
+
   const onboardings =
     await listClaimantOnboardings();
 
   const onboarding =
     onboardings.find(
-      (record) =>
+      (
+        record,
+      ) =>
         record.claimant.id ===
         session.claimantId,
     );
 
-  if (!onboarding) {
+  /* ======================================================================== */
+  /* Active pre-Claim claimant                                                */
+  /* ======================================================================== */
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data:
+      assignedWorkcaseData,
+    error:
+      assignedWorkcaseError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_workcases",
+      )
+      .select(
+        "id, claimant_id, legal_first_name, legal_last_name, auth_user_id, created_at, status, linked_claim_id",
+      )
+      .eq(
+        "claimant_id",
+        session.claimantId,
+      )
+      .eq(
+        "status",
+        "activated",
+      )
+      .is(
+        "linked_claim_id",
+        null,
+      )
+      .maybeSingle();
+
+  if (
+    assignedWorkcaseError
+  ) {
+    throw new Error(
+      `Unable to load claimant security record: ${assignedWorkcaseError.message}`,
+    );
+  }
+
+  const assignedWorkcase =
+    assignedWorkcaseData
+      ? assignedWorkcaseData as
+          AssignedWorkcaseRow
+      : null;
+
+  let assignedIdentity:
+    AssignedIdentityRow | null =
+    null;
+
+  if (
+    assignedWorkcase
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "assigned_lead_claimant_identity_profiles",
+        )
+        .select(
+          "identity_verification, identity_verified_at",
+        )
+        .eq(
+          "workcase_id",
+          assignedWorkcase.id,
+        )
+        .eq(
+          "claimant_id",
+          assignedWorkcase.claimant_id,
+        )
+        .maybeSingle();
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to load claimant identity security status: ${error.message}`,
+      );
+    }
+
+    assignedIdentity =
+      data
+        ? data as
+            AssignedIdentityRow
+        : null;
+  }
+
+  if (
+    !onboarding &&
+    !assignedWorkcase
+  ) {
     return (
       <div className="space-y-6">
         <div>
@@ -91,18 +309,68 @@ export default async function PortalSecurityPage({
 
         <EmptyState
           title="No claimant account connected"
-          description="No persisted claimant onboarding record is connected to the current claimant session."
+          description="No authorized claimant record is connected to the current claimant session."
         />
       </div>
     );
   }
 
-  const claimant =
-    onboarding.claimant;
+  const claimantName =
+    onboarding
+      ?.claimant
+      .legalName ??
+    [
+      assignedWorkcase
+        ?.legal_first_name,
+      assignedWorkcase
+        ?.legal_last_name,
+    ]
+      .filter(
+        Boolean,
+      )
+      .join(
+        " ");
+
+  const recordCreated =
+    onboarding
+      ?.claimant
+      .createdAt ??
+    assignedWorkcase
+      ?.created_at
+      .slice(
+        0,
+        10,
+      );
+
+  const identityVerification =
+    onboarding
+      ?.claimant
+      .identityVerification ??
+    assignedIdentity
+      ?.identity_verification ??
+    "not_started";
+
+  const identityVerifiedAt =
+    onboarding
+      ?.claimant
+      .identityVerifiedAt ??
+    assignedIdentity
+      ?.identity_verified_at
+      ?.slice(
+        0,
+        10,
+      );
+
+  const isPreClaim =
+    Boolean(
+      assignedWorkcase &&
+      !onboarding,
+    );
 
   return (
     <div className="space-y-6">
       {/* ================================================================ header */}
+
       <div>
         <h1 className="text-2xl sm:text-3xl">
           Security
@@ -115,6 +383,7 @@ export default async function PortalSecurityPage({
       </div>
 
       {/* ========================================================== account */}
+
       <Card>
         <CardHeader
           title="Current claimant record"
@@ -124,50 +393,113 @@ export default async function PortalSecurityPage({
         <CardBody>
           <DataList columns={2}>
             <DataItem label="Claimant">
-              {claimant.legalName}
+              {
+                claimantName
+              }
             </DataItem>
 
             <DataItem label="Account record created">
-              {formatDate(
-                claimant.createdAt,
-              )}
+              {
+                recordCreated
+                  ? formatDate(
+                      recordCreated,
+                    )
+                  : "Not recorded"
+              }
             </DataItem>
 
             <DataItem label="Identity verification">
-              <StatusBadge
-                status={
-                  IDENTITY_STATUS[
-                    claimant.identityVerification
-                  ]
+              <Badge
+                tone={
+                  identityTone(
+                    identityVerification,
+                  )
                 }
-                audience="claimant"
-              />
+              >
+                {
+                  identityLabel(
+                    identityVerification,
+                  )
+                }
+              </Badge>
             </DataItem>
 
-            <DataItem label="Contact consent">
-              {claimant.consentRecordedAt ? (
-                <span className="flex flex-wrap items-center gap-2">
-                  <Badge tone="positive">
-                    Recorded
-                  </Badge>
-
-                  <span>
-                    {formatDate(
-                      claimant.consentRecordedAt,
-                    )}
-                  </span>
-                </span>
-              ) : (
-                <Badge tone="caution">
-                  Not recorded
-                </Badge>
-              )}
+            <DataItem label="Recovery stage">
+              {
+                isPreClaim
+                  ? (
+                      <Badge tone="neutral">
+                        Pre-Claim
+                      </Badge>
+                    )
+                  : (
+                      <Badge tone="info">
+                        Official Claim
+                      </Badge>
+                    )
+              }
             </DataItem>
+
+            {
+              identityVerifiedAt &&
+              (
+                <DataItem label="Identity verified">
+                  {
+                    formatDate(
+                      identityVerifiedAt,
+                    )
+                  }
+                </DataItem>
+              )
+            }
+
+            {
+              onboarding
+                ? (
+                    <DataItem label="Contact consent">
+                      {
+                        onboarding
+                          .claimant
+                          .consentRecordedAt
+                          ? (
+                              <span className="flex flex-wrap items-center gap-2">
+                                <Badge tone="positive">
+                                  Recorded
+                                </Badge>
+
+                                <span>
+                                  {
+                                    formatDate(
+                                      onboarding
+                                        .claimant
+                                        .consentRecordedAt,
+                                    )
+                                  }
+                                </span>
+                              </span>
+                            )
+                          : (
+                              <Badge tone="caution">
+                                Not recorded
+                              </Badge>
+                            )
+                      }
+                    </DataItem>
+                  )
+                : (
+                    <DataItem label="Portal account">
+                      <Badge tone="positive">
+                        Active
+                      </Badge>
+                    </DataItem>
+                  )
+            }
           </DataList>
         </CardBody>
       </Card>
 
       {/* ===================================================== account access */}
+
       <Card>
         <CardHeader
           title="Account access"
@@ -224,49 +556,71 @@ export default async function PortalSecurityPage({
       </Card>
 
       {/* ==================================================== delete feedback */}
-      {deleteStatus === "invalid" ? (
-        <Callout
-          tone="critical"
-          role="alert"
-          title="Confirmation required"
-        >
-          Enter your current password and type DELETE exactly as shown before
-          submitting the request.
-        </Callout>
-      ) : null}
 
-      {deleteStatus === "invalid-password" ? (
-        <Callout
-          tone="critical"
-          role="alert"
-          title="Password could not be verified"
-        >
-          The current password you entered could not be verified.
-        </Callout>
-      ) : null}
+      {
+        deleteStatus ===
+        "invalid"
+          ? (
+              <Callout
+                tone="critical"
+                role="alert"
+                title="Confirmation required"
+              >
+                Enter your current password and type DELETE exactly as shown
+                before submitting the request.
+              </Callout>
+            )
+          : null
+      }
 
-      {deleteStatus === "unauthorized" ? (
-        <Callout
-          tone="critical"
-          role="alert"
-          title="Account deletion unavailable"
-        >
-          DueQuity could not establish an authorized production claimant
-          session for this request.
-        </Callout>
-      ) : null}
+      {
+        deleteStatus ===
+        "invalid-password"
+          ? (
+              <Callout
+                tone="critical"
+                role="alert"
+                title="Password could not be verified"
+              >
+                The current password you entered could not be verified.
+              </Callout>
+            )
+          : null
+      }
 
-      {deleteStatus === "failed" ? (
-        <Callout
-          tone="critical"
-          role="alert"
-          title="Account could not be deleted"
-        >
-          Your account was not deleted. Please try again.
-        </Callout>
-      ) : null}
+      {
+        deleteStatus ===
+        "unauthorized"
+          ? (
+              <Callout
+                tone="critical"
+                role="alert"
+                title="Account deletion unavailable"
+              >
+                DueQuity could not establish an authorized production claimant
+                session for this request.
+              </Callout>
+            )
+          : null
+      }
+
+      {
+        deleteStatus ===
+        "failed"
+          ? (
+              <Callout
+                tone="critical"
+                role="alert"
+                title="Account could not be deleted"
+              >
+                Your account was not deleted. Please try again.
+              </Callout>
+            )
+          : null
+      }
 
       {/* ======================================================= delete account */}
+
       <Card>
         <CardHeader
           title="Delete portal account"
@@ -287,16 +641,18 @@ export default async function PortalSecurityPage({
               </p>
 
               <p>
-                Your underlying claim, legal records, documents, transaction
-                history and required audit records are not erased by deleting
-                your login account. Records that DueQuity must retain remain
-                associated with the claim.
+                Your underlying recovery records, claim records where
+                applicable, documents, transaction history and required audit
+                records are not erased by deleting your login account. Records
+                that DueQuity must retain remain preserved.
               </p>
             </div>
           </Callout>
 
           <form
-            action={deleteClaimantAccount}
+            action={
+              deleteClaimantAccount
+            }
             className="mt-5 space-y-5"
           >
             <div className="space-y-2">
@@ -346,6 +702,7 @@ export default async function PortalSecurityPage({
       </Card>
 
       {/* ================================================== impersonation */}
+
       <Card elevated>
         <CardHeader
           eyebrow="Claimant safety"
@@ -356,14 +713,19 @@ export default async function PortalSecurityPage({
         <CardBody>
           <div className="rounded-md border border-accent-200 bg-accent-50 px-4 py-3.5">
             <p className="flex items-center gap-2 text-sm font-semibold text-accent-800">
-              <IconShield size={15} />
+              <IconShield
+                size={
+                  15
+                }
+              />
+
               Verify important recovery information
             </p>
 
             <p className="mt-1.5 text-sm leading-relaxed text-ink-700">
-              Compare any request you receive with the claim information shown
-              inside your authenticated DueQuity account. Do not rely only on
-              what a caller, text message, letter or email tells you.
+              Compare any request you receive with the recovery information
+              shown inside your authenticated DueQuity account. Do not rely only
+              on what a caller, text message, letter or email tells you.
             </p>
           </div>
 
@@ -372,32 +734,40 @@ export default async function PortalSecurityPage({
           </p>
 
           <ul className="mt-2.5 space-y-2">
-            {[
-              "Pay an upfront recovery fee before funds are recovered",
-              "Send money by gift card, wire transfer or cryptocurrency",
-              "Give bank account details through an unapproved message or phone request",
-              "Give a Social Security number through an unapproved message or phone request",
-              "Sell or assign ownership of your recovery claim to DueQuity",
-              "Believe that a caller represents a court, county or government agency merely because they know details from public records",
-            ].map(
-              (item) => (
-                <li
-                  key={item}
-                  className="flex gap-2.5"
-                >
-                  <Badge
-                    tone="critical"
-                    className="mt-0.5 shrink-0"
+            {
+              [
+                "Pay an upfront recovery fee before funds are recovered",
+                "Send money by gift card, wire transfer or cryptocurrency",
+                "Give bank account details through an unapproved message or phone request",
+                "Give a Social Security number through an unapproved message or phone request",
+                "Sell or assign ownership of your recovery claim to DueQuity",
+                "Believe that a caller represents a court, county or government agency merely because they know details from public records",
+              ].map(
+                (
+                  item,
+                ) => (
+                  <li
+                    key={
+                      item
+                    }
+                    className="flex gap-2.5"
                   >
-                    Never
-                  </Badge>
+                    <Badge
+                      tone="critical"
+                      className="mt-0.5 shrink-0"
+                    >
+                      Never
+                    </Badge>
 
-                  <span className="text-sm leading-relaxed text-ink-700">
-                    {item}
-                  </span>
-                </li>
-              ),
-            )}
+                    <span className="text-sm leading-relaxed text-ink-700">
+                      {
+                        item
+                      }
+                    </span>
+                  </li>
+                ),
+              )
+            }
           </ul>
 
           <div className="mt-5 rounded-md border border-line bg-inset px-4 py-3.5">
@@ -417,16 +787,20 @@ export default async function PortalSecurityPage({
       </Card>
 
       {/* ========================================================== privacy */}
+
       <Callout tone="neutral">
         <p className="flex items-start gap-2">
           <IconLock
-            size={15}
+            size={
+              15
+            }
             className="mt-0.5 shrink-0 text-ink-500"
           />
 
           <span>
             Information about DueQuity&apos;s handling of personal information
             is available in the{" "}
+
             <TextLink
               href="/privacy"
               className="text-sm"

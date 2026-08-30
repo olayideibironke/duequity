@@ -69,8 +69,7 @@ export async function GET(
       ?.trim();
 
   /*
-   * Support both the PKCE callback shape and the token-hash email-template
-   * shape. The callback accepts only an invite flow.
+   * Support both PKCE callbacks and token-hash invitation templates.
    */
   if (code) {
     const {
@@ -134,6 +133,9 @@ export async function GET(
   const admin =
     getSupabaseAdmin();
 
+  /*
+   * Claimant Auth identities may never overlap with DueQuity staff.
+   */
   const {
     data:
       staffUser,
@@ -157,7 +159,10 @@ export async function GET(
     staffError ||
     staffUser
   ) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({
+      scope:
+        "local",
+    });
 
     return redirectTo(
       request,
@@ -165,11 +170,15 @@ export async function GET(
     );
   }
 
+  /* ======================================================================== */
+  /* Existing Claim-backed activation                                         */
+  /* ======================================================================== */
+
   const {
     data:
-      invitation,
+      claimInvitationRows,
     error:
-      invitationError,
+      claimInvitationError,
   } =
     await admin
       .from(
@@ -186,13 +195,187 @@ export async function GET(
         "status",
         "sent",
       )
-      .maybeSingle();
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        1,
+      );
 
   if (
-    invitationError ||
-    !invitation
+    claimInvitationError
   ) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({
+      scope:
+        "local",
+    });
+
+    return redirectTo(
+      request,
+      "/claimant/sign-in?error=activation",
+    );
+  }
+
+  const claimInvitation =
+    claimInvitationRows?.[0];
+
+  if (
+    claimInvitation
+  ) {
+    if (
+      new Date(
+        String(
+          claimInvitation.expires_at,
+        ),
+      ).getTime() <=
+      Date.now()
+    ) {
+      await admin
+        .from(
+          "claimant_activation_invitations",
+        )
+        .update({
+          status:
+            "expired",
+
+          updated_at:
+            new Date()
+              .toISOString(),
+        })
+        .eq(
+          "id",
+          claimInvitation.id,
+        )
+        .eq(
+          "status",
+          "sent",
+        );
+
+      await supabase.auth.signOut({
+        scope:
+          "local",
+      });
+
+      return redirectTo(
+        request,
+        "/claimant/sign-in?error=activation-expired",
+      );
+    }
+
+    const {
+      data:
+        claimant,
+      error:
+        claimantError,
+    } =
+      await admin
+        .from(
+          "claimant_onboarding",
+        )
+        .select(
+          "claimant_id, claimant_reference, claimant_auth_user_id, email",
+        )
+        .eq(
+          "claimant_id",
+          claimInvitation.claimant_id,
+        )
+        .maybeSingle();
+
+    if (
+      claimantError ||
+      !claimant ||
+      claimant.claimant_auth_user_id !==
+        user.id ||
+      claimant.claimant_reference !==
+        claimInvitation.claimant_reference ||
+      String(
+        claimant.email,
+      ).toLowerCase() !==
+        String(
+          claimInvitation.email,
+        ).toLowerCase()
+    ) {
+      await supabase.auth.signOut({
+        scope:
+          "local",
+      });
+
+      return redirectTo(
+        request,
+        "/claimant/sign-in?error=activation",
+      );
+    }
+
+    return redirectTo(
+      request,
+      "/claimant/activate",
+    );
+  }
+
+  /* ======================================================================== */
+  /* Admin-assigned pre-Claim activation                                      */
+  /* ======================================================================== */
+
+  const {
+    data:
+      assignedInvitationRows,
+    error:
+      assignedInvitationError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_activation_invitations",
+      )
+      .select(
+        "id, workcase_id, claimant_id, claimant_reference, email, status, expires_at",
+      )
+      .eq(
+        "auth_user_id",
+        user.id,
+      )
+      .eq(
+        "status",
+        "sent",
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        1,
+      );
+
+  if (
+    assignedInvitationError
+  ) {
+    await supabase.auth.signOut({
+      scope:
+        "local",
+    });
+
+    return redirectTo(
+      request,
+      "/claimant/sign-in?error=activation",
+    );
+  }
+
+  const assignedInvitation =
+    assignedInvitationRows?.[0];
+
+  if (
+    !assignedInvitation
+  ) {
+    await supabase.auth.signOut({
+      scope:
+        "local",
+    });
 
     return redirectTo(
       request,
@@ -203,32 +386,23 @@ export async function GET(
   if (
     new Date(
       String(
-        invitation.expires_at,
+        assignedInvitation.expires_at,
       ),
     ).getTime() <=
     Date.now()
   ) {
-    await admin
-      .from(
-        "claimant_activation_invitations",
-      )
-      .update({
-        status:
-          "expired",
+    await admin.rpc(
+      "expire_assigned_lead_claimant_activation_invitation",
+      {
+        p_invitation_id:
+          assignedInvitation.id,
+      },
+    );
 
-        updated_at:
-          new Date().toISOString(),
-      })
-      .eq(
-        "id",
-        invitation.id,
-      )
-      .eq(
-        "status",
-        "sent",
-      );
-
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({
+      scope:
+        "local",
+    });
 
     return redirectTo(
       request,
@@ -238,38 +412,45 @@ export async function GET(
 
   const {
     data:
-      claimant,
+      workcase,
     error:
-      claimantError,
+      workcaseError,
   } =
     await admin
       .from(
-        "claimant_onboarding",
+        "assigned_lead_claimant_workcases",
       )
       .select(
-        "claimant_id, claimant_reference, claimant_auth_user_id, email",
+        "id, claimant_id, claimant_reference, email, auth_user_id, status",
       )
       .eq(
-        "claimant_id",
-        invitation.claimant_id,
+        "id",
+        assignedInvitation.workcase_id,
       )
       .maybeSingle();
 
   if (
-    claimantError ||
-    !claimant ||
-    claimant.claimant_auth_user_id !==
+    workcaseError ||
+    !workcase ||
+    workcase.claimant_id !==
+      assignedInvitation.claimant_id ||
+    workcase.claimant_reference !==
+      assignedInvitation.claimant_reference ||
+    workcase.auth_user_id !==
       user.id ||
-    claimant.claimant_reference !==
-      invitation.claimant_reference ||
+    workcase.status !==
+      "activation_sent" ||
     String(
-      claimant.email,
+      workcase.email,
     ).toLowerCase() !==
       String(
-        invitation.email,
+        assignedInvitation.email,
       ).toLowerCase()
   ) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({
+      scope:
+        "local",
+    });
 
     return redirectTo(
       request,

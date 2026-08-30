@@ -4,11 +4,9 @@ import {
 } from "next/server";
 
 import {
-  getClaimantMessageThreadForClaimant,
-  getClaimantMessagingProfile,
-  listClaimantMessageThreadsForClaimant,
-  sendClaimantPortalMessage,
-} from "@/server/claimant-message-store";
+  getClaimantPortalMailboxState,
+  sendClaimantMailboxMessage,
+} from "@/server/claimant-portal-mailbox-service";
 
 import {
   resolveClaimantSession,
@@ -19,6 +17,10 @@ export const runtime =
 
 export const dynamic =
   "force-dynamic";
+
+/* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
 
 function errorResponse(
   message:
@@ -42,14 +44,17 @@ function errorResponse(
   );
 }
 
-export async function GET(
-  request:
-    NextRequest,
-) {
+/* ========================================================================== */
+/* Get mailbox                                                                 */
+/* ========================================================================== */
+
+export async function GET() {
   const session =
     await resolveClaimantSession();
 
-  if (!session) {
+  if (
+    !session
+  ) {
     return errorResponse(
       "Claimant authentication is required.",
       401,
@@ -57,46 +62,13 @@ export async function GET(
   }
 
   try {
-    const profile =
-      await getClaimantMessagingProfile(
+    const mailbox =
+      await getClaimantPortalMailboxState(
         session.claimantId,
       );
-
-    if (!profile) {
-      return errorResponse(
-        "Claimant account could not be resolved.",
-        404,
-      );
-    }
-
-    const threads =
-      await listClaimantMessageThreadsForClaimant(
-        session.claimantId,
-      );
-
-    const threadId =
-      request.nextUrl.searchParams
-        .get(
-          "threadId",
-        )
-        ?.trim();
-
-    const thread =
-      threadId
-        ? await getClaimantMessageThreadForClaimant(
-            session.claimantId,
-            threadId,
-          )
-        : undefined;
 
     return NextResponse.json(
-      {
-        profile,
-
-        threads,
-
-        thread,
-      },
+      mailbox,
       {
         headers: {
           "Cache-Control":
@@ -110,11 +82,15 @@ export async function GET(
     return errorResponse(
       error instanceof Error
         ? error.message
-        : "Unable to load secure messages.",
+        : "Unable to load secure claimant messages.",
       409,
     );
   }
 }
+
+/* ========================================================================== */
+/* Send message                                                                */
+/* ========================================================================== */
 
 export async function POST(
   request:
@@ -123,7 +99,9 @@ export async function POST(
   const session =
     await resolveClaimantSession();
 
-  if (!session) {
+  if (
+    !session
+  ) {
     return errorResponse(
       "Claimant authentication is required.",
       401,
@@ -134,9 +112,9 @@ export async function POST(
     const formData =
       await request.formData();
 
-    const threadValue =
+    const subjectValue =
       formData.get(
-        "threadId",
+        "subject",
       );
 
     const bodyValue =
@@ -149,17 +127,6 @@ export async function POST(
         "replyToMessageId",
       );
 
-    if (
-      typeof threadValue !==
-        "string" ||
-      !threadValue.trim()
-    ) {
-      return errorResponse(
-        "A DueQuity conversation must exist before a claimant can reply.",
-        409,
-      );
-    }
-
     const files =
       formData
         .getAll(
@@ -169,61 +136,47 @@ export async function POST(
           (
             value,
           ): value is File =>
-            value instanceof File,
+            value instanceof
+            File,
         );
 
-    const thread =
-      await sendClaimantPortalMessage({
+    /*
+     * IMPORTANT:
+     *
+     * There is deliberately no recipient value accepted from the claimant.
+     *
+     * The server resolves the current authorized staff recipient directly from
+     * the claimant's DueQuity assignment. A claimant cannot alter, forge or
+     * choose the recipient through form data.
+     */
+    const mailbox =
+      await sendClaimantMailboxMessage({
         claimantId:
           session.claimantId,
 
-        threadId:
-          threadValue,
+        subject:
+          typeof subjectValue ===
+            "string"
+            ? subjectValue
+            : "",
 
         bodyText:
           typeof bodyValue ===
-          "string"
+            "string"
             ? bodyValue
             : "",
 
         replyToMessageId:
           typeof replyValue ===
-          "string"
+            "string"
             ? replyValue
             : undefined,
 
         files,
       });
 
-    const [
-      profile,
-      threads,
-    ] =
-      await Promise.all([
-        getClaimantMessagingProfile(
-          session.claimantId,
-        ),
-
-        listClaimantMessageThreadsForClaimant(
-          session.claimantId,
-        ),
-      ]);
-
-    if (!profile) {
-      return errorResponse(
-        "Claimant account could not be resolved.",
-        404,
-      );
-    }
-
     return NextResponse.json(
-      {
-        profile,
-
-        threads,
-
-        thread,
-      },
+      mailbox,
       {
         headers: {
           "Cache-Control":

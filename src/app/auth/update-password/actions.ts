@@ -1,11 +1,28 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import {
+  revalidatePath,
+} from "next/cache";
 
-import { resolveClaimantSession } from "@/server/claimant-session";
-import { resolveStaffSession } from "@/server/staff-session";
-import { getSupabaseServerAuth } from "@/server/supabase-auth";
+import {
+  redirect,
+} from "next/navigation";
+
+import {
+  resolveClaimantSession,
+} from "@/server/claimant-session";
+
+import {
+  resolveStaffSession,
+} from "@/server/staff-session";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+import {
+  getSupabaseServerAuth,
+} from "@/server/supabase-auth";
 
 type AuthAudience =
   | "staff"
@@ -14,34 +31,52 @@ type AuthAudience =
 const UPDATE_PASSWORD_PATH =
   "/auth/update-password";
 
+/* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
+
 function readFormValue(
-  formData: FormData,
-  name: string,
+  formData:
+    FormData,
+  name:
+    string,
 ): string {
   const value =
-    formData.get(name);
+    formData.get(
+      name,
+    );
 
-  return typeof value === "string"
+  return typeof value ===
+    "string"
     ? value.trim()
     : "";
 }
 
 function readAudience(
-  formData: FormData,
+  formData:
+    FormData,
 ): AuthAudience {
   return readFormValue(
     formData,
     "audience",
-  ) === "staff"
+  ) ===
+    "staff"
     ? "staff"
     : "claimant";
 }
 
+/* ========================================================================== */
+/* Update password                                                             */
+/* ========================================================================== */
+
 export async function updatePassword(
-  formData: FormData,
+  formData:
+    FormData,
 ) {
   const audience =
-    readAudience(formData);
+    readAudience(
+      formData,
+    );
 
   const password =
     readFormValue(
@@ -56,20 +91,29 @@ export async function updatePassword(
     );
 
   if (
-    password.length < 12 ||
-    password !== confirmPassword
+    password.length <
+      12 ||
+    password !==
+      confirmPassword
   ) {
     redirect(
       `${UPDATE_PASSWORD_PATH}?audience=${audience}&status=invalid`,
     );
   }
 
+  /* ======================================================================== */
+  /* Authorized DueQuity account                                              */
+  /* ======================================================================== */
+
   const authorizedSession =
-    audience === "staff"
+    audience ===
+    "staff"
       ? await resolveStaffSession()
       : await resolveClaimantSession();
 
-  if (!authorizedSession) {
+  if (
+    !authorizedSession
+  ) {
     const supabase =
       await getSupabaseServerAuth();
 
@@ -80,8 +124,79 @@ export async function updatePassword(
     );
   }
 
+  /* ======================================================================== */
+  /* Current authenticated Supabase identity                                  */
+  /* ======================================================================== */
+
   const supabase =
     await getSupabaseServerAuth();
+
+  const {
+    data: {
+      user:
+        authUser,
+    },
+    error:
+      authUserError,
+  } =
+    await supabase.auth.getUser();
+
+  if (
+    authUserError ||
+    !authUser
+  ) {
+    await supabase.auth.signOut();
+
+    redirect(
+      `${UPDATE_PASSWORD_PATH}?audience=${audience}&status=expired`,
+    );
+  }
+
+  /* ======================================================================== */
+  /* Current-password reuse guard                                             */
+  /* ======================================================================== */
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data:
+      passwordMatches,
+    error:
+      passwordMatchError,
+  } =
+    await admin.rpc(
+      "current_auth_password_matches",
+      {
+        p_auth_user_id:
+          authUser.id,
+
+        p_candidate_password:
+          password,
+      },
+    );
+
+  if (
+    passwordMatchError ||
+    typeof passwordMatches !==
+      "boolean"
+  ) {
+    redirect(
+      `${UPDATE_PASSWORD_PATH}?audience=${audience}&status=failed`,
+    );
+  }
+
+  if (
+    passwordMatches
+  ) {
+    redirect(
+      `${UPDATE_PASSWORD_PATH}?audience=${audience}&status=password-reused`,
+    );
+  }
+
+  /* ======================================================================== */
+  /* Persist new password                                                     */
+  /* ======================================================================== */
 
   const {
     error,
@@ -90,7 +205,9 @@ export async function updatePassword(
       password,
     });
 
-  if (error) {
+  if (
+    error
+  ) {
     redirect(
       `${UPDATE_PASSWORD_PATH}?audience=${audience}&status=failed`,
     );

@@ -1,4 +1,6 @@
-import type { Metadata } from "next";
+import type {
+  Metadata,
+} from "next";
 
 import Link from "next/link";
 
@@ -24,7 +26,9 @@ import {
   StatusBadge,
 } from "@/components/ui/badge";
 
-import { ButtonLink } from "@/components/ui/button";
+import {
+  ButtonLink,
+} from "@/components/ui/button";
 
 import {
   Amount,
@@ -42,24 +46,76 @@ import {
   plural,
 } from "@/lib/format";
 
-import { resolveClaimantSession } from "@/server/claimant-session";
+import {
+  resolveClaimantSession,
+} from "@/server/claimant-session";
 
-import { ClaimantAuthenticationRequired } from "@/components/ui/authentication-required";
+import {
+  ClaimantAuthenticationRequired,
+} from "@/components/ui/authentication-required";
 
-import { listClaimantOnboardings } from "@/server/claimant-onboarding-store";
+import {
+  listClaimantOnboardings,
+} from "@/server/claimant-onboarding-store";
 
-import { resolveClaimRecord } from "@/server/claim-record";
+import {
+  resolveClaimRecord,
+} from "@/server/claim-record";
 
-import { getPropertyById } from "@/server/opportunity-store";
+import {
+  getPropertyById,
+} from "@/server/opportunity-store";
 
-import { listClaimDocumentRequests } from "@/server/claim-document-store";
+import {
+  listClaimDocumentRequests,
+} from "@/server/claim-document-store";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
 
 export const metadata: Metadata = {
-  title: "My Duequity",
+  title:
+    "My Duequity",
 };
 
 export const dynamic =
   "force-dynamic";
+
+/* ========================================================================== */
+/* Pre-Claim rows                                                              */
+/* ========================================================================== */
+
+interface AssignedWorkcaseRow {
+  id:
+    string;
+
+  claimant_id:
+    string;
+
+  claimant_reference:
+    string;
+
+  legal_first_name:
+    string;
+
+  legal_last_name:
+    string;
+
+  status:
+    string;
+
+  linked_claim_id:
+    string | null;
+}
+
+interface AssignedIdentityRow {
+  identity_verification:
+    string;
+
+  identity_verified_at:
+    string | null;
+}
 
 /* ========================================================================== */
 /* Claimant-facing claim status                                                */
@@ -80,17 +136,6 @@ function claimantFacingClaimStatus({
       status
     ];
 
-  /*
-   * The operational claim can legitimately remain in the internal
-   * "documentation" phase while Duequity completes non-claimant controls.
-   *
-   * The shared documentation descriptor says "Documents needed" to claimants,
-   * but that wording is inaccurate once every claimant document request is
-   * accepted.
-   *
-   * Do not mutate the underlying Claim status here. This is only the
-   * claimant-facing presentation of the current persisted state.
-   */
   if (
     status ===
       "documentation" &&
@@ -118,18 +163,6 @@ function claimantFacingClaimStatus({
 /* ========================================================================== */
 
 export default async function PortalOverviewPage() {
-  /*
-   * Temporary session boundary.
-   *
-   * The URL no longer selects claimant identity. The current claimant is
-   * resolved only through the session layer. Production authentication will
-   * replace that temporary session implementation later.
-   *
-   * Claimants may view only persisted claims and onboarding records already
-   * connected to their authenticated claimant profile. Property checking,
-   * surplus discovery and claimant-location research are staff-only
-   * capabilities and are not exposed through the claimant portal.
-   */
   const session =
     await resolveClaimantSession();
 
@@ -142,7 +175,7 @@ export default async function PortalOverviewPage() {
   }
 
   /* ======================================================================== */
-  /* Claimant-scoped persisted onboarding                                     */
+  /* Claim-backed claimant                                                    */
   /* ======================================================================== */
 
   const allOnboardings =
@@ -163,7 +196,98 @@ export default async function PortalOverviewPage() {
     ]?.claimant;
 
   /* ======================================================================== */
-  /* Persisted claims                                                         */
+  /* Active pre-Claim claimant                                                */
+  /* ======================================================================== */
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data:
+      assignedWorkcaseData,
+    error:
+      assignedWorkcaseError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_workcases",
+      )
+      .select(
+        "id, claimant_id, claimant_reference, legal_first_name, legal_last_name, status, linked_claim_id",
+      )
+      .eq(
+        "claimant_id",
+        session.claimantId,
+      )
+      .eq(
+        "status",
+        "activated",
+      )
+      .is(
+        "linked_claim_id",
+        null,
+      )
+      .maybeSingle();
+
+  if (
+    assignedWorkcaseError
+  ) {
+    throw new Error(
+      `Unable to load claimant recovery account: ${assignedWorkcaseError.message}`,
+    );
+  }
+
+  const assignedWorkcase =
+    assignedWorkcaseData
+      ? assignedWorkcaseData as
+          AssignedWorkcaseRow
+      : null;
+
+  let assignedIdentity:
+    AssignedIdentityRow | null =
+    null;
+
+  if (
+    assignedWorkcase
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "assigned_lead_claimant_identity_profiles",
+        )
+        .select(
+          "identity_verification, identity_verified_at",
+        )
+        .eq(
+          "workcase_id",
+          assignedWorkcase.id,
+        )
+        .eq(
+          "claimant_id",
+          assignedWorkcase.claimant_id,
+        )
+        .maybeSingle();
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to load claimant identity status: ${error.message}`,
+      );
+    }
+
+    assignedIdentity =
+      data
+        ? data as
+            AssignedIdentityRow
+        : null;
+  }
+
+  /* ======================================================================== */
+  /* Persisted Claims                                                         */
   /* ======================================================================== */
 
   const claimRows =
@@ -184,10 +308,6 @@ export default async function PortalOverviewPage() {
               return undefined;
             }
 
-            /*
-             * Fail closed if persisted onboarding and the resolved claim do
-             * not describe the same claimant relationship.
-             */
             const claimantParticipant =
               resolved.claim.participants.find(
                 (
@@ -313,6 +433,14 @@ export default async function PortalOverviewPage() {
       0,
     );
 
+  const activeRecoveryCount =
+    activeClaims.length +
+    (
+      assignedWorkcase
+        ? 1
+        : 0
+    );
+
   /* ======================================================================== */
   /* Next claimant action                                                     */
   /* ======================================================================== */
@@ -341,9 +469,26 @@ export default async function PortalOverviewPage() {
         0
       ];
 
+  const assignedLegalName =
+    assignedWorkcase
+      ? [
+          assignedWorkcase
+            .legal_first_name,
+          assignedWorkcase
+            .legal_last_name,
+        ]
+          .filter(
+            Boolean,
+          )
+          .join(
+            " ",
+          )
+      : undefined;
+
   const preferredName =
     claimant?.preferredName?.trim() ||
-    claimant?.legalName?.trim();
+    claimant?.legalName?.trim() ||
+    assignedLegalName;
 
   const firstName =
     preferredName
@@ -352,6 +497,11 @@ export default async function PortalOverviewPage() {
       )[
         0
       ];
+
+  const assignedIdentityVerified =
+    assignedIdentity
+      ?.identity_verification ===
+    "verified";
 
   return (
     <div className="space-y-8">
@@ -377,10 +527,12 @@ export default async function PortalOverviewPage() {
                   "recovery",
                   "recoveries",
                 )} with Duequity.`
-              : claimRows.length >
-                  0
-                ? "You do not currently have an active recovery."
-                : "Your recovery information will appear here when a claim is connected to your account."
+              : assignedWorkcase
+                ? "Your Duequity recovery account is active. No official claim has been opened yet."
+                : claimRows.length >
+                    0
+                  ? "You do not currently have an active recovery."
+                  : "Your recovery information will appear here when a claim is connected to your account."
           }
         </p>
       </div>
@@ -509,7 +661,30 @@ export default async function PortalOverviewPage() {
                   </p>
                 </Callout>
               )
-            : null
+            : assignedWorkcase
+              ? (
+                  <Callout
+                    tone={
+                      assignedIdentityVerified
+                        ? "positive"
+                        : "neutral"
+                    }
+                    title={
+                      assignedIdentityVerified
+                        ? "Your identity is verified"
+                        : "Your recovery account is active"
+                    }
+                  >
+                    <p>
+                      {
+                        assignedIdentityVerified
+                          ? "Your portal and identity verification are complete. Nothing else is currently requested from you. An official claim will appear here only when Duequity completes the required claim-opening controls."
+                          : "Your recovery account is active. Check the Identity section for the current identity-verification status."
+                      }
+                    </p>
+                  </Callout>
+                )
+              : null
       }
 
       {/* ============================================================ summary */}
@@ -519,14 +694,18 @@ export default async function PortalOverviewPage() {
           label="Active recoveries"
           value={
             formatCount(
-              activeClaims.length,
+              activeRecoveryCount,
             )
           }
           context={
-            activeClaims.length >
-            0
-              ? "Currently in progress"
-              : "None currently"
+            assignedWorkcase &&
+            activeClaims.length ===
+              0
+              ? "Recovery account active, claim not opened yet"
+              : activeRecoveryCount >
+                  0
+                ? "Currently in progress"
+                : "None currently"
           }
         />
 
@@ -629,8 +808,12 @@ export default async function PortalOverviewPage() {
             ? (
                 <EmptyState
                   className="mt-4"
-                  title="No claims connected"
-                  description="No persisted recovery claim is currently connected to this claimant account."
+                  title="No official claims connected"
+                  description={
+                    assignedWorkcase
+                      ? "Your recovery account is active, but no official Duequity claim has been opened yet."
+                      : "No persisted recovery claim is currently connected to this claimant account."
+                  }
                 />
               )
             : (
@@ -886,10 +1069,10 @@ export default async function PortalOverviewPage() {
         title="Your recovery information"
       >
         <p>
-          This portal displays only persisted claim and onboarding records
-          connected to the current claimant session. Duequity does not display
-          internal staff notes, risk analysis, or records belonging to another
-          claimant.
+          This portal displays only persisted recovery workcases, claims and
+          onboarding records connected to the current claimant session. Duequity
+          does not display internal staff notes, risk analysis, or records
+          belonging to another claimant.
         </p>
       </Callout>
     </div>

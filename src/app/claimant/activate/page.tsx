@@ -5,6 +5,10 @@ import type {
 import Link from "next/link";
 
 import {
+  ProtectedSubmitButton,
+} from "@/components/ui/protected-submit-button";
+
+import {
   Callout,
   Card,
   CardBody,
@@ -48,26 +52,341 @@ interface ActivateClaimantPageProps {
   }>;
 }
 
-interface InvitationRow {
-  id: string;
+type ActivationSource =
+  | "claim"
+  | "assigned_lead";
 
-  claimant_id: string;
+interface ActivationInvitation {
+  id:
+    string;
 
-  claimant_reference: string;
+  claimantId:
+    string;
 
-  legal_first_name: string;
+  claimantReference:
+    string;
 
-  legal_last_name: string;
+  legalFirstName:
+    string;
 
-  email: string;
+  legalLastName:
+    string;
 
-  status: string;
+  email:
+    string;
 
-  expires_at: string;
+  status:
+    string;
+
+  expiresAt:
+    string;
+
+  source:
+    ActivationSource;
+
+  recoveryReference?:
+    string;
 }
 
-interface ClaimantRow {
-  claim_reference: string;
+interface ClaimInvitationRow {
+  id:
+    string;
+
+  claimant_id:
+    string;
+
+  claimant_reference:
+    string;
+
+  legal_first_name:
+    string;
+
+  legal_last_name:
+    string;
+
+  email:
+    string;
+
+  status:
+    string;
+
+  expires_at:
+    string;
+}
+
+interface ClaimReferenceRow {
+  claim_reference:
+    string;
+}
+
+interface AssignedLeadInvitationRow {
+  id:
+    string;
+
+  workcase_id:
+    string;
+
+  claimant_id:
+    string;
+
+  claimant_reference:
+    string;
+
+  legal_first_name:
+    string;
+
+  legal_last_name:
+    string;
+
+  email:
+    string;
+
+  status:
+    string;
+
+  expires_at:
+    string;
+}
+
+interface AssignedLeadWorkcaseReferenceRow {
+  discovered_record_id:
+    string;
+}
+
+/* ========================================================================== */
+/* Existing Claim-backed invitation                                            */
+/* ========================================================================== */
+
+async function findClaimInvitation(
+  authUserId:
+    string,
+): Promise<
+  ActivationInvitation | undefined
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .select(
+        "id, claimant_id, claimant_reference, legal_first_name, legal_last_name, email, status, expires_at",
+      )
+      .eq(
+        "auth_user_id",
+        authUserId,
+      )
+      .in(
+        "status",
+        [
+          "sent",
+          "activated",
+        ],
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        1,
+      )
+      .maybeSingle();
+
+  if (
+    error ||
+    !data
+  ) {
+    return undefined;
+  }
+
+  const invitation =
+    data as unknown as
+      ClaimInvitationRow;
+
+  const {
+    data:
+      claimantData,
+  } =
+    await admin
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "claim_reference",
+      )
+      .eq(
+        "claimant_id",
+        invitation.claimant_id,
+      )
+      .maybeSingle();
+
+  const claimant =
+    claimantData
+      ? claimantData as unknown as
+          ClaimReferenceRow
+      : undefined;
+
+  return {
+    id:
+      invitation.id,
+
+    claimantId:
+      invitation.claimant_id,
+
+    claimantReference:
+      invitation.claimant_reference,
+
+    legalFirstName:
+      invitation.legal_first_name,
+
+    legalLastName:
+      invitation.legal_last_name,
+
+    email:
+      invitation.email,
+
+    status:
+      invitation.status,
+
+    expiresAt:
+      invitation.expires_at,
+
+    source:
+      "claim",
+
+    recoveryReference:
+      claimant
+        ? claimant.claim_reference
+        : undefined,
+  };
+}
+
+/* ========================================================================== */
+/* Admin-assigned pre-Claim invitation                                         */
+/* ========================================================================== */
+
+async function findAssignedLeadInvitation(
+  authUserId:
+    string,
+): Promise<
+  ActivationInvitation | undefined
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_activation_invitations",
+      )
+      .select(
+        "id, workcase_id, claimant_id, claimant_reference, legal_first_name, legal_last_name, email, status, expires_at",
+      )
+      .eq(
+        "auth_user_id",
+        authUserId,
+      )
+      .in(
+        "status",
+        [
+          "sent",
+          "activated",
+        ],
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        1,
+      )
+      .maybeSingle();
+
+  if (
+    error ||
+    !data
+  ) {
+    return undefined;
+  }
+
+  const invitation =
+    data as unknown as
+      AssignedLeadInvitationRow;
+
+  const {
+    data:
+      workcaseData,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_workcases",
+      )
+      .select(
+        "discovered_record_id",
+      )
+      .eq(
+        "id",
+        invitation.workcase_id,
+      )
+      .eq(
+        "auth_user_id",
+        authUserId,
+      )
+      .maybeSingle();
+
+  const workcase =
+    workcaseData
+      ? workcaseData as unknown as
+          AssignedLeadWorkcaseReferenceRow
+      : undefined;
+
+  return {
+    id:
+      invitation.id,
+
+    claimantId:
+      invitation.claimant_id,
+
+    claimantReference:
+      invitation.claimant_reference,
+
+    legalFirstName:
+      invitation.legal_first_name,
+
+    legalLastName:
+      invitation.legal_last_name,
+
+    email:
+      invitation.email,
+
+    status:
+      invitation.status,
+
+    expiresAt:
+      invitation.expires_at,
+
+    source:
+      "assigned_lead",
+
+    recoveryReference:
+      workcase
+        ? workcase.discovered_record_id
+        : undefined,
+  };
 }
 
 /* ========================================================================== */
@@ -90,76 +409,30 @@ export default async function ActivateClaimantPage({
   } =
     await supabase.auth.getUser();
 
-  const admin =
-    getSupabaseAdmin();
-
   let invitation:
-    InvitationRow | undefined;
+    ActivationInvitation | undefined;
 
-  let claim:
-    ClaimantRow | undefined;
+  if (
+    user
+  ) {
+    /*
+     * Preserve the established Claim-backed activation path first.
+     *
+     * Only when the Auth identity has no Claim-backed activation record do we
+     * resolve the Admin-assigned pre-Claim claimant invitation.
+     */
+    invitation =
+      await findClaimInvitation(
+        user.id,
+      );
 
-  if (user) {
-    const {
-      data,
-    } =
-      await admin
-        .from(
-          "claimant_activation_invitations",
-        )
-        .select(
-          "id, claimant_id, claimant_reference, legal_first_name, legal_last_name, email, status, expires_at",
-        )
-        .eq(
-          "auth_user_id",
-          user.id,
-        )
-        .in(
-          "status",
-          [
-            "sent",
-            "activated",
-          ],
-        )
-        .order(
-          "created_at",
-          {
-            ascending:
-              false,
-          },
-        )
-        .limit(
-          1,
-        )
-        .maybeSingle();
-
-    if (data) {
+    if (
+      !invitation
+    ) {
       invitation =
-        data as InvitationRow;
-
-      const {
-        data:
-          claimantData,
-      } =
-        await admin
-          .from(
-            "claimant_onboarding",
-          )
-          .select(
-            "claim_reference",
-          )
-          .eq(
-            "claimant_id",
-            invitation.claimant_id,
-          )
-          .maybeSingle();
-
-      if (
-        claimantData
-      ) {
-        claim =
-          claimantData as ClaimantRow;
-      }
+        await findAssignedLeadInvitation(
+          user.id,
+        );
     }
   }
 
@@ -167,7 +440,7 @@ export default async function ActivateClaimantPage({
     invitation?.status ===
       "sent" &&
     new Date(
-      invitation.expires_at,
+      invitation.expiresAt,
     ).getTime() <=
       Date.now();
 
@@ -214,6 +487,17 @@ export default async function ActivateClaimantPage({
         )}
 
         {params.status ===
+          "invalid-invitation" && (
+          <Callout
+            tone="critical"
+            role="alert"
+            title="Valid invitation required"
+          >
+            This activation session could not be verified. Open the secure activation link sent by DueQuity.
+          </Callout>
+        )}
+
+        {params.status ===
           "unavailable" && (
           <Callout
             tone="critical"
@@ -240,7 +524,9 @@ export default async function ActivateClaimantPage({
 
         {!invitation &&
           params.status !==
-            "expired" && (
+            "expired" &&
+          params.status !==
+            "invalid-invitation" && (
           <Callout
             tone="critical"
             role="alert"
@@ -272,8 +558,12 @@ export default async function ActivateClaimantPage({
                     </p>
 
                     <div className="mt-1.5 rounded-xl border border-line bg-inset px-4 py-3 text-sm font-semibold text-ink-900">
-                      {invitation.legal_first_name}{" "}
-                      {invitation.legal_last_name}
+                      {
+                        invitation.legalFirstName
+                      }{" "}
+                      {
+                        invitation.legalLastName
+                      }
                     </div>
 
                     <p className="mt-1 text-xs text-ink-500">
@@ -288,7 +578,7 @@ export default async function ActivateClaimantPage({
 
                     <div className="mt-1.5 rounded-xl border border-line bg-ink-950 px-4 py-3 font-mono text-sm font-semibold text-white">
                       {
-                        invitation.claimant_reference
+                        invitation.claimantReference
                       }
                     </div>
 
@@ -309,7 +599,9 @@ export default async function ActivateClaimantPage({
                     </div>
                   </div>
 
-                  {claim && (
+                  {invitation.source ===
+                    "claim" &&
+                    invitation.recoveryReference && (
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">
                         Recovery reference
@@ -317,9 +609,26 @@ export default async function ActivateClaimantPage({
 
                       <div className="mt-1.5 rounded-xl border border-line bg-inset px-4 py-3 font-mono text-sm text-ink-800">
                         {
-                          claim.claim_reference
+                          invitation.recoveryReference
                         }
                       </div>
+                    </div>
+                  )}
+
+                  {invitation.source ===
+                    "assigned_lead" && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">
+                        Recovery stage
+                      </p>
+
+                      <div className="mt-1.5 rounded-xl border border-line bg-inset px-4 py-3 text-sm font-semibold text-ink-900">
+                        Assigned DueQuity recovery
+                      </div>
+
+                      <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                        Your recovery is already linked to your DueQuity account. Additional claim processing controls remain managed by DueQuity.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -383,12 +692,12 @@ export default async function ActivateClaimantPage({
                     Account creation is not blocked by your ID upload. After you sign in, DueQuity will require one current government-issued photo ID before claim processing can continue: a valid Driver&apos;s License, valid U.S. Passport, valid State ID, or another current government-issued photo ID.
                   </Callout>
 
-                  <button
-                    type="submit"
-                    className="w-full rounded-xl bg-ink-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
-                  >
-                    Activate My DueQuity Account
-                  </button>
+                  <ProtectedSubmitButton
+                    label="Activate My DueQuity Account"
+                    pendingLabel="Activating account…"
+                    requireValid
+                    className="w-full"
+                  />
                 </form>
               </CardBody>
             </Card>

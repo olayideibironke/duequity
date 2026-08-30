@@ -3,6 +3,10 @@ import {
 } from "@/components/ui/badge";
 
 import {
+  ProtectedSubmitButton,
+} from "@/components/ui/protected-submit-button";
+
+import {
   Callout,
 } from "@/components/ui/surface";
 
@@ -59,6 +63,7 @@ function promotionTone(
   switch (
     candidate.promotionState
   ) {
+    case "admin_assigned_ready":
     case "ready_for_promotion":
       return "positive";
 
@@ -81,6 +86,9 @@ function promotionTitle(
   switch (
     candidate.promotionState
   ) {
+    case "admin_assigned_ready":
+      return "Admin assigned · Ready for work";
+
     case "ready_for_promotion":
       return "Ready for Opportunity promotion";
 
@@ -105,6 +113,9 @@ function promotionMessage(
   switch (
     candidate.promotionState
   ) {
+    case "admin_assigned_ready":
+      return "DueQuity Admin has assigned this exact recovery lead to your staff account. Continue your assigned work from this record. Internal research and compliance administration remain controlled by DueQuity and do not block your staff workflow.";
+
     case "ready_for_promotion":
       return "This source record has been reviewed, its required recovery enrichment is present, and the current DueQuity jurisdiction route is cleared. Internal processing may advance it through the controlled Opportunity workflow.";
 
@@ -196,6 +207,81 @@ function formatUsPhone(
 }
 
 /* ========================================================================== */
+/* Confirmation control                                                        */
+/* ========================================================================== */
+
+function ConfirmationControl({
+  name,
+  children,
+  locked,
+}: {
+  name:
+    "propertyConnectionConfirmed" |
+    "activationMaterialsConsentConfirmed";
+
+  children:
+    React.ReactNode;
+
+  locked:
+    boolean;
+}) {
+  return (
+    <label
+      className={[
+        "flex items-start gap-3 rounded-xl border px-4 py-4",
+        locked
+          ? "border-accent-200 bg-accent-50"
+          : "border-line bg-inset",
+      ].join(
+        " ",
+      )}
+    >
+      {locked && (
+        <input
+          type="hidden"
+          name={
+            name
+          }
+          value="confirmed"
+        />
+      )}
+
+      <input
+        type="checkbox"
+        name={
+          locked
+            ? undefined
+            : name
+        }
+        value="confirmed"
+        required={
+          !locked
+        }
+        disabled={
+          locked
+        }
+        defaultChecked={
+          locked
+        }
+        className="mt-0.5 size-4"
+      />
+
+      <span className="min-w-0 text-sm leading-relaxed text-ink-700">
+        {
+          children
+        }
+
+        {locked && (
+          <span className="mt-1 block text-xs font-semibold text-accent-700">
+            ✓ Confirmed, saved and locked
+          </span>
+        )}
+      </span>
+    </label>
+  );
+}
+
+/* ========================================================================== */
 /* Contact form                                                                */
 /* ========================================================================== */
 
@@ -241,7 +327,7 @@ function ProspectiveContactForm({
 
           <p className="mt-1 text-xs leading-relaxed text-ink-500">
             {update
-              ? "Use this only when the claimant re-confirms corrected contact information."
+              ? "Saved confirmations remain locked. Change contact information only when the claimant re-confirms a correction."
               : "Use this after speaking directly with the assigned lead and confirming they want DueQuity to continue."}
           </p>
         </div>
@@ -354,69 +440,85 @@ function ProspectiveContactForm({
                 id={`prospectivePhone-${candidate.discoveredRecordId}`}
                 name="mobilePhone"
                 type="tel"
-                inputMode="tel"
+                inputMode="numeric"
                 autoComplete="tel-national"
                 required
+                minLength={10}
+                maxLength={10}
+                pattern="[0-9]{10}"
                 defaultValue={
                   defaults?.mobilePhone ??
                   ""
                 }
-                placeholder="(555) 123-4567"
+                placeholder="2025550147"
+                title="Enter exactly 10 digits with no spaces or punctuation."
                 className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
               />
 
               <p className="text-xs leading-relaxed text-ink-500">
-                A confirmed 10-digit U.S. mobile number is required.
+                Enter exactly 10 digits. Example: 2025550147.
               </p>
             </div>
           </div>
 
           <div className="space-y-3">
-            <label className="flex items-start gap-3 rounded-xl border border-line bg-inset px-4 py-4">
-              <input
-                type="checkbox"
-                name="propertyConnectionConfirmed"
-                value="confirmed"
-                required
-                className="mt-0.5 size-4"
-              />
+            <ConfirmationControl
+              name="propertyConnectionConfirmed"
+              locked={
+                update
+              }
+            >
+              The claimant confirmed that they previously owned or had an interest in the property shown on this recovery record.
+            </ConfirmationControl>
 
-              <span className="text-sm leading-relaxed text-ink-700">
-                The claimant confirmed that they previously owned or had an interest in the property shown on this recovery record.
-              </span>
-            </label>
-
-            <label className="flex items-start gap-3 rounded-xl border border-line bg-inset px-4 py-4">
-              <input
-                type="checkbox"
-                name="activationMaterialsConsentConfirmed"
-                value="confirmed"
-                required
-                className="mt-0.5 size-4"
-              />
-
-              <span className="text-sm leading-relaxed text-ink-700">
-                The claimant wants DueQuity to proceed and gave permission for DueQuity to send onboarding and secure activation materials to the confirmed email address.
-              </span>
-            </label>
+            <ConfirmationControl
+              name="activationMaterialsConsentConfirmed"
+              locked={
+                update
+              }
+            >
+              The claimant wants DueQuity to proceed and gave permission for DueQuity to send onboarding and secure activation materials to the confirmed email address.
+            </ConfirmationControl>
           </div>
 
-          <Callout
-            tone="neutral"
-            title="This does not create the claimant yet"
-          >
-            Saving this form records the verified interested contact on the assigned recovery lead. It does not create an official claimant identity, bypass recovery review, create an Opportunity, create a Claim, or send an activation invitation.
-          </Callout>
+          {update ? (
+            <Callout
+              tone="positive"
+              title="Confirmations saved"
+            >
+              The claimant&apos;s property connection and permission to proceed are already recorded. Those confirmations are locked to protect the audit trail. Only corrected claimant contact information should be updated here.
+            </Callout>
+          ) : (
+            <Callout
+              tone="neutral"
+              title="Assigned lead record"
+            >
+              Saving this form records the verified claimant contact and consent on this exact Admin-assigned recovery lead. Your assigned workflow remains active after the contact is saved.
+            </Callout>
+          )}
 
           <div className="flex justify-end">
-            <button
-              type="submit"
-              className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
-            >
-              {update
-                ? "Save updated contact"
-                : "Save claimant contact"}
-            </button>
+            <ProtectedSubmitButton
+              label={
+                update
+                  ? "Save updated contact"
+                  : "Save claimant contact"
+              }
+              pendingLabel={
+                update
+                  ? "Saving updated contact…"
+                  : "Saving claimant contact…"
+              }
+              successLabel={
+                update
+                  ? "✓ Contact saved"
+                  : "✓ Claimant contact saved"
+              }
+              requireDirty={
+                update
+              }
+              className="min-w-52"
+            />
           </div>
         </form>
       </div>
@@ -447,6 +549,9 @@ export async function ClaimantIntakeDiscoveryCard({
         })
       : undefined;
 
+  const assignmentAuthorized =
+    candidate.staffWorkAuthorized;
+
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
       <div className="border-b border-line-subtle px-5 py-5">
@@ -459,44 +564,60 @@ export async function ClaimantIntakeDiscoveryCard({
                 }
               </span>
 
-              <Badge tone="neutral">
-                Discovery record
-              </Badge>
-
               <Badge
                 tone={
-                  candidate.route.intakeCleared
-                    ? "positive"
-                    : candidate.route.code ===
-                        "ATTY"
-                      ? "caution"
-                      : "critical"
-                }
-              >
-                {
-                  candidate.route.code
-                }{" "}
-                ·{" "}
-                {
-                  candidate.route.label
-                }
-              </Badge>
-
-              <Badge
-                tone={
-                  candidate.stage ===
-                  "discovered_reviewed"
+                  assignmentAuthorized
                     ? "info"
-                    : "caution"
+                    : "neutral"
                 }
               >
-                {
-                  candidate.stage ===
-                  "discovered_reviewed"
-                    ? "Reviewed"
-                    : "New source record"
-                }
+                {assignmentAuthorized
+                  ? "Assigned recovery lead"
+                  : "Discovery record"}
               </Badge>
+
+              {assignmentAuthorized ? (
+                <Badge tone="positive">
+                  READY · Admin assigned
+                </Badge>
+              ) : (
+                <Badge
+                  tone={
+                    candidate.route.intakeCleared
+                      ? "positive"
+                      : candidate.route.code ===
+                          "ATTY"
+                        ? "caution"
+                        : "critical"
+                  }
+                >
+                  {
+                    candidate.route.code
+                  }{" "}
+                  ·{" "}
+                  {
+                    candidate.route.label
+                  }
+                </Badge>
+              )}
+
+              {!assignmentAuthorized && (
+                <Badge
+                  tone={
+                    candidate.stage ===
+                    "discovered_reviewed"
+                      ? "info"
+                      : "caution"
+                  }
+                >
+                  {
+                    candidate.stage ===
+                    "discovered_reviewed"
+                      ? "Reviewed"
+                      : "New source record"
+                  }
+                </Badge>
+              )}
 
               {savedContact && (
                 <Badge tone="positive">
@@ -538,7 +659,9 @@ export async function ClaimantIntakeDiscoveryCard({
       <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="border-b border-line-subtle px-5 py-5 lg:border-b-0 lg:border-r">
           <p className="eyebrow text-ink-500">
-            Government / source record
+            {assignmentAuthorized
+              ? "Assigned recovery information"
+              : "Government / source record"}
           </p>
 
           <dl className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -621,16 +744,16 @@ export async function ClaimantIntakeDiscoveryCard({
 
             <div>
               <dt className="text-xs font-medium text-ink-500">
-                Current stage
+                Work status
               </dt>
 
               <dd className="mt-1 text-sm font-semibold text-ink-900">
-                {
-                  candidate.stage ===
-                  "discovered_reviewed"
+                {assignmentAuthorized
+                  ? "Ready for staff work"
+                  : candidate.stage ===
+                      "discovered_reviewed"
                     ? "Discovery reviewed"
-                    : "Discovery awaiting review"
-                }
+                    : "Discovery awaiting review"}
               </dd>
             </div>
 
@@ -649,79 +772,111 @@ export async function ClaimantIntakeDiscoveryCard({
         </div>
 
         <div className="px-5 py-5">
-          <p className="eyebrow text-ink-500">
-            DueQuity recovery route
-          </p>
+          {assignmentAuthorized ? (
+            <>
+              <p className="eyebrow text-ink-500">
+                Work authorization
+              </p>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="rounded-lg bg-ink-950 px-3 py-1.5 font-mono text-sm font-bold tracking-wide text-white">
-              {
-                candidate.route.code
-              }
-            </span>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-lg bg-ink-950 px-3 py-1.5 font-mono text-sm font-bold tracking-wide text-white">
+                  READY
+                </span>
 
-            <Badge
-              tone={
-                candidate.route.intakeCleared
-                  ? "positive"
-                  : candidate.route.code ===
-                      "ATTY"
-                    ? "caution"
-                    : "critical"
-              }
-            >
-              {
-                candidate.route.label
-              }
-            </Badge>
-          </div>
+                <Badge tone="positive">
+                  Admin assigned
+                </Badge>
+              </div>
 
-          <dl className="mt-5 space-y-4">
-            <div>
-              <dt className="text-xs font-medium text-ink-500">
-                Filing control
-              </dt>
+              <Callout
+                className="mt-5"
+                tone="positive"
+                title="Ready for staff work"
+              >
+                DueQuity Admin assigned this exact lead to your account. Continue the claimant contact and operational workflow from here. Internal jurisdiction, research and compliance administration remain controlled by DueQuity and are not staff-facing blockers.
+              </Callout>
 
-              <dd className="mt-1 text-sm font-semibold text-ink-900">
-                {
-                  candidate.route.filingPartyLabel
+              <p className="mt-4 text-xs leading-relaxed text-ink-500">
+                Assignment does not expose unrelated recovery records and does not allow staff to change DueQuity legal, payment, fee or jurisdiction controls.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="eyebrow text-ink-500">
+                DueQuity recovery route
+              </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="rounded-lg bg-ink-950 px-3 py-1.5 font-mono text-sm font-bold tracking-wide text-white">
+                  {
+                    candidate.route.code
+                  }
+                </span>
+
+                <Badge
+                  tone={
+                    candidate.route.intakeCleared
+                      ? "positive"
+                      : candidate.route.code ===
+                          "ATTY"
+                        ? "caution"
+                        : "critical"
+                  }
+                >
+                  {
+                    candidate.route.label
+                  }
+                </Badge>
+              </div>
+
+              <dl className="mt-5 space-y-4">
+                <div>
+                  <dt className="text-xs font-medium text-ink-500">
+                    Filing control
+                  </dt>
+
+                  <dd className="mt-1 text-sm font-semibold text-ink-900">
+                    {
+                      candidate.route.filingPartyLabel
+                    }
+                  </dd>
+                </div>
+
+                <div>
+                  <dt className="text-xs font-medium text-ink-500">
+                    Payment route
+                  </dt>
+
+                  <dd className="mt-1 text-sm font-semibold text-ink-900">
+                    {
+                      candidate.route.paymentRouteLabel
+                    }
+                  </dd>
+                </div>
+              </dl>
+
+              <Callout
+                className="mt-5"
+                tone={
+                  candidate.route.intakeCleared
+                    ? "positive"
+                    : candidate.route.code ===
+                        "ATTY"
+                      ? "caution"
+                      : "critical"
                 }
-              </dd>
-            </div>
-
-            <div>
-              <dt className="text-xs font-medium text-ink-500">
-                Payment route
-              </dt>
-
-              <dd className="mt-1 text-sm font-semibold text-ink-900">
-                {
-                  candidate.route.paymentRouteLabel
+                title={
+                  candidate.route.intakeCleared
+                    ? "Jurisdiction route identified"
+                    : "Route not cleared"
                 }
-              </dd>
-            </div>
-          </dl>
-
-          <Callout
-            className="mt-5"
-            tone={
-              candidate.route.intakeCleared
-                ? "positive"
-                : candidate.route.code ===
-                    "ATTY"
-                  ? "caution"
-                  : "critical"
-            }
-            title={
-              candidate.route.intakeCleared
-                ? "Jurisdiction route identified"
-                : "Route not cleared"
-            }
-          >
-            {
-              candidate.route.reason
-            }
-          </Callout>
+              >
+                {
+                  candidate.route.reason
+                }
+              </Callout>
+            </>
+          )}
         </div>
       </div>
 
@@ -765,7 +920,7 @@ export async function ClaimantIntakeDiscoveryCard({
               tone="positive"
               title="Claimant interested · Contact saved"
             >
-              The claimant&apos;s confirmed contact information is attached to this assigned recovery and will remain available while internal processing continues.
+              The claimant&apos;s confirmed contact information is attached to this assigned recovery and remains available as the staff workflow continues.
             </Callout>
 
             <div className="rounded-2xl border border-line bg-white p-5">
@@ -851,12 +1006,21 @@ export async function ClaimantIntakeDiscoveryCard({
               </dl>
             </div>
 
-            <Callout
-              tone="caution"
-              title="Internal recovery processing pending"
-            >
-              The verified claimant contact is safely recorded. DueQuity still must complete the applicable source review, enrichment, Opportunity and Claim controls before an official claimant record may be created.
-            </Callout>
+            {assignmentAuthorized ? (
+              <Callout
+                tone="positive"
+                title="Assigned workflow remains active"
+              >
+                This contact belongs to your Admin-assigned lead. Continue the staff workflow without returning to the confidential Discovery database for clearance.
+              </Callout>
+            ) : (
+              <Callout
+                tone="caution"
+                title="Internal recovery processing pending"
+              >
+                The verified claimant contact is safely recorded. DueQuity still must complete the applicable internal processing controls before official claimant creation.
+              </Callout>
+            )}
 
             <ProspectiveContactForm
               candidate={
@@ -878,7 +1042,8 @@ export async function ClaimantIntakeDiscoveryCard({
               update
             />
           </div>
-        ) : candidate.route.intakeCleared ? (
+        ) : assignmentAuthorized ||
+          candidate.route.intakeCleared ? (
           <div className="mt-5">
             <ProspectiveContactForm
               candidate={
@@ -901,13 +1066,27 @@ export async function ClaimantIntakeDiscoveryCard({
       </div>
 
       <div className="border-t border-line-subtle px-5 py-5">
-        <p className="text-sm font-semibold text-ink-900">
-          Claimant creation is not available yet
-        </p>
+        {assignmentAuthorized ? (
+          <>
+            <p className="text-sm font-semibold text-ink-900">
+              Admin-controlled assignment
+            </p>
 
-        <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-500">
-          This record is still in Discovery. Saving verified contact information does not bypass DueQuity&apos;s review, enrichment, Opportunity or Claim controls. Once the recovery reaches the appropriate Claim stage, the confirmed contact information can be carried forward into official claimant creation and secure activation.
-        </p>
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-500">
+              Your authority to work this recovery comes from the active Admin assignment. Access ends if Admin reassigns or closes the assignment. The assignment does not expose unrelated DueQuity records and does not let staff alter legal filing, payment, pricing or jurisdiction controls.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-ink-900">
+              Claimant creation is not available yet
+            </p>
+
+            <p className="mt-1 max-w-3xl text-xs leading-relaxed text-ink-500">
+              This record remains in the Administrator-controlled Discovery workflow until the internal Opportunity and Claim controls are satisfied.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );

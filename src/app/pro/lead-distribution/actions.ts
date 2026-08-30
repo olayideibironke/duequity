@@ -140,7 +140,7 @@ export async function assignDiscoveryLeadAction(
 
   if (!session) {
     redirect(
-      "/auth/login?audience=staff",
+      "/staff/sign-in",
     );
   }
 
@@ -250,7 +250,7 @@ export async function uploadAndAssignLeadWorkbookAction(
 
   if (!session) {
     redirect(
-      "/auth/login?audience=staff",
+      "/staff/sign-in",
     );
   }
 

@@ -95,11 +95,15 @@ export async function activateClaimantAccount(
   const admin =
     getSupabaseAdmin();
 
+  /* ======================================================================== */
+  /* Resolve existing Claim-backed invitation first                           */
+  /* ======================================================================== */
+
   const {
     data:
-      invitation,
+      claimInvitationRows,
     error:
-      invitationError,
+      claimInvitationError,
   } =
     await admin
       .from(
@@ -116,46 +120,267 @@ export async function activateClaimantAccount(
         "status",
         "sent",
       )
-      .maybeSingle();
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        1,
+      );
 
   if (
-    invitationError ||
-    !invitation
+    claimInvitationError
   ) {
     redirect(
       `${ACTIVATE_PATH}?status=invalid-invitation`,
     );
   }
 
+  const claimInvitation =
+    claimInvitationRows?.[0];
+
+  /* ======================================================================== */
+  /* Existing Claim-backed activation                                         */
+  /* ======================================================================== */
+
   if (
-    new Date(
-      String(
-        invitation.expires_at,
-      ),
-    ).getTime() <=
-    Date.now()
+    claimInvitation
   ) {
+    if (
+      new Date(
+        String(
+          claimInvitation.expires_at,
+        ),
+      ).getTime() <=
+      Date.now()
+    ) {
+      await admin
+        .from(
+          "claimant_activation_invitations",
+        )
+        .update({
+          status:
+            "expired",
+
+          updated_at:
+            new Date()
+              .toISOString(),
+        })
+        .eq(
+          "id",
+          claimInvitation.id,
+        )
+        .eq(
+          "status",
+          "sent",
+        );
+
+      await supabase.auth.signOut({
+        scope:
+          "local",
+      });
+
+      redirect(
+        `${ACTIVATE_PATH}?status=expired`,
+      );
+    }
+
+    const {
+      data:
+        claimant,
+      error:
+        claimantError,
+    } =
+      await admin
+        .from(
+          "claimant_onboarding",
+        )
+        .select(
+          "claimant_id, claimant_reference, claimant_auth_user_id, email",
+        )
+        .eq(
+          "claimant_id",
+          claimInvitation.claimant_id,
+        )
+        .maybeSingle();
+
+    if (
+      claimantError ||
+      !claimant ||
+      claimant.claimant_auth_user_id !==
+        user.id ||
+      claimant.claimant_reference !==
+        claimInvitation.claimant_reference ||
+      String(
+        claimant.email,
+      ).toLowerCase() !==
+        String(
+          claimInvitation.email,
+        ).toLowerCase()
+    ) {
+      await supabase.auth.signOut({
+        scope:
+          "local",
+      });
+
+      redirect(
+        `${ACTIVATE_PATH}?status=invalid-invitation`,
+      );
+    }
+
+    const {
+      error:
+        passwordError,
+    } =
+      await supabase.auth.updateUser({
+        password,
+      });
+
+    if (
+      passwordError
+    ) {
+      redirect(
+        `${ACTIVATE_PATH}?status=unavailable`,
+      );
+    }
+
+    const activatedAt =
+      new Date()
+        .toISOString();
+
+    const {
+      data:
+        activatedInvitation,
+      error:
+        activationError,
+    } =
+      await admin
+        .from(
+          "claimant_activation_invitations",
+        )
+        .update({
+          status:
+            "activated",
+
+          activated_at:
+            activatedAt,
+
+          updated_at:
+            activatedAt,
+        })
+        .eq(
+          "id",
+          claimInvitation.id,
+        )
+        .eq(
+          "status",
+          "sent",
+        )
+        .select(
+          "id",
+        )
+        .maybeSingle();
+
+    if (
+      activationError ||
+      !activatedInvitation
+    ) {
+      await supabase.auth.signOut({
+        scope:
+          "local",
+      });
+
+      redirect(
+        `${ACTIVATE_PATH}?status=unavailable`,
+      );
+    }
+
+    await supabase.auth.signOut({
+      scope:
+        "local",
+    });
+
+    revalidatePath(
+      "/",
+      "layout",
+    );
+
+    redirect(
+      "/claimant/sign-in?account=activated",
+    );
+  }
+
+  /* ======================================================================== */
+  /* Admin-assigned pre-Claim activation                                      */
+  /* ======================================================================== */
+
+  const {
+    data:
+      assignedInvitationRows,
+    error:
+      assignedInvitationError,
+  } =
     await admin
       .from(
-        "claimant_activation_invitations",
+        "assigned_lead_claimant_activation_invitations",
       )
-      .update({
-        status:
-          "expired",
-
-        updated_at:
-          new Date().toISOString(),
-      })
+      .select(
+        "id, workcase_id, claimant_id, claimant_reference, email, status, expires_at",
+      )
       .eq(
-        "id",
-        invitation.id,
+        "auth_user_id",
+        user.id,
       )
       .eq(
         "status",
         "sent",
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        1,
       );
 
-    await supabase.auth.signOut();
+  if (
+    assignedInvitationError ||
+    !assignedInvitationRows?.[0]
+  ) {
+    redirect(
+      `${ACTIVATE_PATH}?status=invalid-invitation`,
+    );
+  }
+
+  const assignedInvitation =
+    assignedInvitationRows[0];
+
+  if (
+    new Date(
+      String(
+        assignedInvitation.expires_at,
+      ),
+    ).getTime() <=
+    Date.now()
+  ) {
+    await admin.rpc(
+      "expire_assigned_lead_claimant_activation_invitation",
+      {
+        p_invitation_id:
+          assignedInvitation.id,
+      },
+    );
+
+    await supabase.auth.signOut({
+      scope:
+        "local",
+    });
 
     redirect(
       `${ACTIVATE_PATH}?status=expired`,
@@ -164,38 +389,45 @@ export async function activateClaimantAccount(
 
   const {
     data:
-      claimant,
+      workcase,
     error:
-      claimantError,
+      workcaseError,
   } =
     await admin
       .from(
-        "claimant_onboarding",
+        "assigned_lead_claimant_workcases",
       )
       .select(
-        "claimant_id, claimant_reference, claimant_auth_user_id, email",
+        "id, claimant_id, claimant_reference, email, auth_user_id, status",
       )
       .eq(
-        "claimant_id",
-        invitation.claimant_id,
+        "id",
+        assignedInvitation.workcase_id,
       )
       .maybeSingle();
 
   if (
-    claimantError ||
-    !claimant ||
-    claimant.claimant_auth_user_id !==
+    workcaseError ||
+    !workcase ||
+    workcase.claimant_id !==
+      assignedInvitation.claimant_id ||
+    workcase.claimant_reference !==
+      assignedInvitation.claimant_reference ||
+    workcase.auth_user_id !==
       user.id ||
-    claimant.claimant_reference !==
-      invitation.claimant_reference ||
+    workcase.status !==
+      "activation_sent" ||
     String(
-      claimant.email,
+      workcase.email,
     ).toLowerCase() !==
       String(
-        invitation.email,
+        assignedInvitation.email,
       ).toLowerCase()
   ) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({
+      scope:
+        "local",
+    });
 
     redirect(
       `${ACTIVATE_PATH}?status=invalid-invitation`,
@@ -218,59 +450,45 @@ export async function activateClaimantAccount(
     );
   }
 
-  const activatedAt =
-    new Date().toISOString();
-
   const {
     data:
-      activatedInvitation,
+      activatedWorkcase,
     error:
       activationError,
   } =
-    await admin
-      .from(
-        "claimant_activation_invitations",
-      )
-      .update({
-        status:
-          "activated",
+    await admin.rpc(
+      "activate_assigned_lead_claimant_workcase",
+      {
+        p_auth_user_id:
+          user.id,
 
-        activated_at:
-          activatedAt,
-
-        updated_at:
-          activatedAt,
-      })
-      .eq(
-        "id",
-        invitation.id,
-      )
-      .eq(
-        "status",
-        "sent",
-      )
-      .select(
-        "id",
-      )
-      .maybeSingle();
+        p_claimant_id:
+          assignedInvitation.claimant_id,
+      },
+    );
 
   if (
     activationError ||
-    !activatedInvitation
+    !Array.isArray(
+      activatedWorkcase,
+    ) ||
+    activatedWorkcase.length !==
+      1
   ) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({
+      scope:
+        "local",
+    });
 
     redirect(
       `${ACTIVATE_PATH}?status=unavailable`,
     );
   }
 
-  /*
-   * Account activation is complete, but the identity-document gate remains
-   * independent. The claimant may sign in and use the portal while the claim
-   * remains blocked from further processing until government ID is accepted.
-   */
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({
+    scope:
+      "local",
+  });
 
   revalidatePath(
     "/",

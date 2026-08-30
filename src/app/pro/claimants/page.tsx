@@ -1,6 +1,10 @@
-import type { Metadata } from "next";
+import type {
+  Metadata,
+} from "next";
 
-import { IDENTITY_STATUS } from "@/domain/status";
+import {
+  IDENTITY_STATUS,
+} from "@/domain/status";
 
 import {
   claimantOnboardingStatus,
@@ -9,11 +13,24 @@ import {
   type PersistedClaimantOnboarding,
 } from "@/server/claimant-onboarding-store";
 
-import { resolveClaimRecord } from "@/server/claim-record";
+import {
+  listAssignedLeadClaimantOperationsForStaff,
+  type AssignedLeadClaimantOperationsRecord,
+} from "@/server/assigned-lead-claimant-operations-service";
 
-import { Card, EmptyState } from "@/components/ui/surface";
+import {
+  resolveClaimRecord,
+} from "@/server/claim-record";
 
-import { Badge, StatusBadge } from "@/components/ui/badge";
+import {
+  Card,
+  EmptyState,
+} from "@/components/ui/surface";
+
+import {
+  Badge,
+  StatusBadge,
+} from "@/components/ui/badge";
 
 import {
   RecordList,
@@ -29,40 +46,61 @@ import {
   TR,
 } from "@/components/ui/table";
 
-import { formatDate, formatPhone, plural } from "@/lib/format";
+import {
+  formatDate,
+  formatPhone,
+  plural,
+} from "@/lib/format";
 
-import { resolveStaffSession } from "@/server/staff-session";
+import {
+  resolveStaffSession,
+} from "@/server/staff-session";
 
-import { getSupabaseAdmin } from "@/server/supabase-admin";
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
 
-import { StaffAuthenticationRequired } from "@/components/ui/authentication-required";
+import {
+  StaffAuthenticationRequired,
+} from "@/components/ui/authentication-required";
 
 export const metadata: Metadata = {
-  title: "Claimants",
+  title:
+    "Claimants",
 };
 
-export const dynamic = "force-dynamic";
+export const dynamic =
+  "force-dynamic";
 
 /* ========================================================================== */
 /* Types                                                                       */
 /* ========================================================================== */
 
 interface ClaimantRegisterRecord {
-  onboarding: PersistedClaimantOnboarding;
+  onboarding:
+    PersistedClaimantOnboarding;
 
-  claimCount: number;
+  claimCount:
+    number;
 
-  claimReferences: string[];
+  claimReferences:
+    string[];
 
-  onboardingStatus: ClaimantOnboardingStatus;
+  onboardingStatus:
+    ClaimantOnboardingStatus;
 }
 
 /* ========================================================================== */
 /* Helpers                                                                     */
 /* ========================================================================== */
 
-function onboardingStatusLabel(status: ClaimantOnboardingStatus): string {
-  switch (status) {
+function onboardingStatusLabel(
+  status:
+    ClaimantOnboardingStatus,
+): string {
+  switch (
+    status
+  ) {
     case "identity_pending":
       return "Identity pending";
 
@@ -81,15 +119,97 @@ function onboardingStatusLabel(status: ClaimantOnboardingStatus): string {
 }
 
 function onboardingStatusTone(
-  status: ClaimantOnboardingStatus,
-): "positive" | "caution" | "neutral" {
-  switch (status) {
-    case "complete":
+  status:
+    ClaimantOnboardingStatus,
+):
+  | "positive"
+  | "caution"
+  | "neutral" {
+  return status ===
+    "complete"
+    ? "positive"
+    : "caution";
+}
+
+function primaryEmail(
+  onboarding:
+    PersistedClaimantOnboarding,
+) {
+  return onboarding
+    .claimant
+    .contactMethods
+    .find(
+      (
+        method,
+      ) =>
+        method.kind ===
+        "email",
+    );
+}
+
+function mobilePhone(
+  onboarding:
+    PersistedClaimantOnboarding,
+) {
+  return onboarding
+    .claimant
+    .contactMethods
+    .find(
+      (
+        method,
+      ) =>
+        method.kind ===
+        "mobile",
+    );
+}
+
+function preClaimIdentityLabel(
+  record:
+    AssignedLeadClaimantOperationsRecord,
+): string {
+  switch (
+    record.identityVerification
+  ) {
+    case "verified":
+      return "Verified";
+
+    case "under_review":
+      return "Under review";
+
+    case "failed":
+      return "Failed";
+
+    case "manual_review":
+      return "Manual review";
+
+    case "not_started":
+      return "Not started";
+
+    default:
+      return "Documents requested";
+  }
+}
+
+function preClaimIdentityTone(
+  record:
+    AssignedLeadClaimantOperationsRecord,
+):
+  | "positive"
+  | "caution"
+  | "critical"
+  | "neutral" {
+  switch (
+    record.identityVerification
+  ) {
+    case "verified":
       return "positive";
 
-    case "identity_pending":
-    case "disclosures_pending":
-    case "agreement_pending":
+    case "failed":
+      return "critical";
+
+    case "under_review":
+    case "manual_review":
+    case "documents_requested":
       return "caution";
 
     default:
@@ -97,23 +217,14 @@ function onboardingStatusTone(
   }
 }
 
-function primaryEmail(onboarding: PersistedClaimantOnboarding) {
-  return onboarding.claimant.contactMethods.find(
-    (method) => method.kind === "email",
-  );
-}
-
-function mobilePhone(onboarding: PersistedClaimantOnboarding) {
-  return onboarding.claimant.contactMethods.find(
-    (method) => method.kind === "mobile",
-  );
-}
-
 async function staffNameDirectory(
   records:
     PersistedClaimantOnboarding[],
 ): Promise<
-  Map<string, string>
+  Map<
+    string,
+    string
+  >
 > {
   const ids =
     [
@@ -155,7 +266,9 @@ async function staffNameDirectory(
         ids,
       );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to load claimant staff attribution: ${error.message}`,
     );
@@ -182,7 +295,7 @@ async function staffNameDirectory(
 }
 
 /* ========================================================================== */
-/* Production register loader                                                  */
+/* Official Claim register                                                     */
 /* ========================================================================== */
 
 async function loadClaimantRegister(
@@ -194,54 +307,119 @@ async function loadClaimantRegister(
         >
       >
     >,
-): Promise<ClaimantRegisterRecord[]> {
+): Promise<
+  ClaimantRegisterRecord[]
+> {
   const onboardings =
     await listClaimantOnboardingsForStaff(
       session,
     );
 
-  const grouped = new Map<string, PersistedClaimantOnboarding[]>();
+  const grouped =
+    new Map<
+      string,
+      PersistedClaimantOnboarding[]
+    >();
 
-  for (const onboarding of onboardings) {
-    const existing = grouped.get(onboarding.claimant.id) ?? [];
+  for (
+    const onboarding of
+      onboardings
+  ) {
+    const existing =
+      grouped.get(
+        onboarding.claimant.id,
+      ) ??
+      [];
 
-    existing.push(onboarding);
+    existing.push(
+      onboarding,
+    );
 
-    grouped.set(onboarding.claimant.id, existing);
+    grouped.set(
+      onboarding.claimant.id,
+      existing,
+    );
   }
 
-  const records = await Promise.all(
-    [...grouped.values()].map(async (claimantOnboardings) => {
-      const sorted = [...claimantOnboardings].sort((left, right) =>
-        right.updatedAt.localeCompare(left.updatedAt),
-      );
+  const records =
+    await Promise.all(
+      [
+        ...grouped.values(),
+      ].map(
+        async (
+          claimantOnboardings,
+        ) => {
+          const sorted =
+            [
+              ...claimantOnboardings,
+            ].sort(
+              (
+                left,
+                right,
+              ) =>
+                right.updatedAt.localeCompare(
+                  left.updatedAt,
+                ),
+            );
 
-      const latest = sorted[0];
+          const latest =
+            sorted[0];
 
-      const resolvedClaims = await Promise.all(
-        sorted.map((onboarding) => resolveClaimRecord(onboarding.claimId)),
-      );
+          const resolvedClaims =
+            await Promise.all(
+              sorted.map(
+                (
+                  onboarding,
+                ) =>
+                  resolveClaimRecord(
+                    onboarding.claimId,
+                  ),
+              ),
+            );
 
-      const existingClaims = resolvedClaims.filter((result) => Boolean(result));
+          const existingClaims =
+            resolvedClaims.filter(
+              Boolean,
+            );
 
-      const claimReferences = [
-        ...new Set(existingClaims.map((result) => result!.claim.reference)),
-      ];
+          const claimReferences =
+            [
+              ...new Set(
+                existingClaims.map(
+                  (
+                    result,
+                  ) =>
+                    result!.claim.reference,
+                ),
+              ),
+            ];
 
-      return {
-        onboarding: latest,
+          return {
+            onboarding:
+              latest,
 
-        claimCount: existingClaims.length,
+            claimCount:
+              existingClaims.length,
 
-        claimReferences,
+            claimReferences,
 
-        onboardingStatus: claimantOnboardingStatus(latest),
-      };
-    }),
-  );
+            onboardingStatus:
+              claimantOnboardingStatus(
+                latest,
+              ),
+          };
+        },
+      ),
+    );
 
-  return records.sort((left, right) =>
-    right.onboarding.updatedAt.localeCompare(left.onboarding.updatedAt),
+  return records.sort(
+    (
+      left,
+      right,
+    ) =>
+      right.onboarding.updatedAt.localeCompare(
+        left.onboarding.updatedAt,
+      ),
   );
 }
 
@@ -253,14 +431,27 @@ export default async function ProClaimantsPage() {
   const session =
     await resolveStaffSession();
 
-  if (!session) {
-    return <StaffAuthenticationRequired />;
+  if (
+    !session
+  ) {
+    return (
+      <StaffAuthenticationRequired />
+    );
   }
 
-  const claimants =
-    await loadClaimantRegister(
-      session,
-    );
+  const [
+    claimants,
+    preClaimClaimants,
+  ] =
+    await Promise.all([
+      loadClaimantRegister(
+        session,
+      ),
+
+      listAssignedLeadClaimantOperationsForStaff(
+        session,
+      ),
+    ]);
 
   const superAdmin =
     session.user.role ===
@@ -276,17 +467,44 @@ export default async function ProClaimantsPage() {
               record.onboarding,
           ),
         )
-      : new Map<string, string>();
+      : new Map<
+          string,
+          string
+        >();
 
-  const incomplete = claimants.filter(
-    (record) => record.onboardingStatus !== "complete",
-  );
+  const incompleteClaimants =
+    claimants.filter(
+      (
+        record,
+      ) =>
+        record.onboardingStatus !==
+        "complete",
+    );
+
+  const incompletePreClaim =
+    preClaimClaimants.filter(
+      (
+        record,
+      ) =>
+        record.identityVerification !==
+        "verified",
+    );
+
+  const incompleteCount =
+    incompleteClaimants.length +
+    incompletePreClaim.length;
+
+  const totalCount =
+    claimants.length +
+    preClaimClaimants.length;
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <p className="eyebrow text-ink-500">Work</p>
+          <p className="eyebrow text-ink-500">
+            Work
+          </p>
 
           <h1 className="mt-1.5 text-2xl">
             {superAdmin
@@ -296,27 +514,35 @@ export default async function ProClaimantsPage() {
 
           <p className="mt-1 max-w-3xl text-sm text-ink-600">
             {superAdmin
-              ? "All persisted claimant records across DueQuity, including permanent staff origination and current operational assignment."
-              : "Persisted claimant records currently assigned to your DueQuity staff account. Sensitive identity information is deliberately excluded from this register."}
+              ? "Claimant records across DueQuity, including active pre-Claim recovery workcases and claimants already linked to an official persisted Claim."
+              : "Claimants currently assigned to your DueQuity staff account, including activated pre-Claim recovery workcases and official persisted Claims."}
           </p>
         </div>
       </div>
 
-      {incomplete.length > 0 && (
+      {incompleteCount >
+        0 && (
         <div className="rounded-md border border-caution-200 bg-caution-50 px-4 py-3">
           <p className="text-sm font-semibold text-caution-800">
-            {incomplete.length} {plural(incomplete.length, "claimant")} still
-            have onboarding controls to complete.
+            {
+              incompleteCount
+            }{" "}
+            {plural(
+              incompleteCount,
+              "claimant",
+            )}{" "}
+            still have operational controls to complete.
           </p>
 
           <p className="mt-1 text-sm leading-relaxed text-ink-700">
-            Identity verification, required disclosures, and service-agreement
-            acceptance remain separate persisted controls.
+            Pre-Claim identity controls remain separate from official Claim
+            disclosures, agreements, jurisdiction and commercial requirements.
           </p>
         </div>
       )}
 
-      {claimants.length === 0 ? (
+      {totalCount ===
+        0 ? (
         <EmptyState
           title={
             superAdmin
@@ -325,144 +551,164 @@ export default async function ProClaimantsPage() {
           }
           description={
             superAdmin
-              ? "Claimants will appear here after claimant onboarding has been started for a persisted recovery claim."
-              : "A claimant will appear here when you start their onboarding or when Super Admin assigns an existing claimant to you."
+              ? "Activated claimant workcases and official Claim claimant records will appear here."
+              : "A claimant will appear here after an assigned lead becomes an activated claimant workcase or an official Claim is assigned to you."
           }
         />
       ) : (
         <Card className="overflow-hidden">
           <TableToolbar
-            count={claimants.length}
+            count={
+              totalCount
+            }
             noun={{
-              one: "claimant",
+              one:
+                "claimant",
 
-              many: "claimants",
+              many:
+                "claimants",
             }}
           />
 
           <div className="hidden lg:block">
             <TableRegion label="Claimant register">
-              <Table caption="Persisted claimants with identity, onboarding, contact, consent, staff ownership and linked claim status">
+              <Table caption="Assigned claimant register containing pre-Claim workcases and official Claim-backed claimant records">
                 <THead>
-                  <TH>Claimant</TH>
+                  <TH>
+                    Claimant
+                  </TH>
 
-                  <TH width="11%">Reference</TH>
+                  <TH width="11%">
+                    Reference
+                  </TH>
 
-                  <TH width="13%">Identity</TH>
+                  <TH width="12%">
+                    Identity
+                  </TH>
 
-                  <TH width="14%">Onboarding</TH>
+                  <TH width="12%">
+                    Stage
+                  </TH>
 
-                  <TH width="16%">Contact</TH>
+                  <TH width="17%">
+                    Contact
+                  </TH>
 
                   {superAdmin && (
-                    <TH width="12%">Brought by</TH>
+                    <TH width="11%">
+                      Brought by
+                    </TH>
                   )}
 
                   {superAdmin && (
-                    <TH width="12%">Managed by</TH>
+                    <TH width="11%">
+                      Managed by
+                    </TH>
                   )}
 
-                  <TH width="8%">Claims</TH>
+                  <TH width="9%">
+                    Claims
+                  </TH>
 
-                  <TH width="10%">Consent</TH>
+                  <TH width="12%">
+                    Status
+                  </TH>
                 </THead>
 
                 <TBody>
-                  {claimants.map((record) => {
-                    const {
-                      onboarding,
-                      onboardingStatus,
-                      claimCount,
-                      claimReferences,
-                    } = record;
-
-                    const claimant = onboarding.claimant;
-
-                    const email = primaryEmail(onboarding);
-
-                    const mobile = mobilePhone(onboarding);
-
-                    return (
+                  {preClaimClaimants.map(
+                    (
+                      record,
+                    ) => (
                       <TR
-                        key={claimant.id}
+                        key={`preclaim-${record.claimantId}`}
                         tone={
-                          onboardingStatus !== "complete"
+                          record.identityVerification !==
+                          "verified"
                             ? "caution"
                             : undefined
                         }
                       >
                         <TDPrimary
-                          href={`/pro/claimants/${claimant.id}`}
-                          secondary={
-                            claimant.preferredName
-                              ? `Preferred name: ${claimant.preferredName}`
-                              : `Created ${formatDate(claimant.createdAt)}`
-                          }
+                          href={`/pro/claimants/workcases/${record.claimantId}`}
+                          secondary={`Activated recovery workcase · updated ${formatDate(
+                            record.updatedAt.slice(
+                              0,
+                              10,
+                            ),
+                          )}`}
                         >
-                          {claimant.legalName}
+                          {
+                            record.legalName
+                          }
                         </TDPrimary>
 
                         <TD nowrap>
                           <span className="font-mono text-xs text-ink-600">
-                            {claimant.reference}
+                            {
+                              record.claimantReference
+                            }
                           </span>
                         </TD>
 
                         <TD>
-                          <StatusBadge
-                            status={
-                              IDENTITY_STATUS[claimant.identityVerification]
+                          <Badge
+                            tone={
+                              preClaimIdentityTone(
+                                record,
+                              )
                             }
-                          />
-
-                          {claimant.identityVerifiedAt && (
-                            <span className="mt-0.5 block text-2xs text-ink-400">
-                              Verified {formatDate(claimant.identityVerifiedAt)}
-                            </span>
-                          )}
-                        </TD>
-
-                        <TD>
-                          <Badge tone={onboardingStatusTone(onboardingStatus)}>
-                            {onboardingStatusLabel(onboardingStatus)}
+                          >
+                            {
+                              preClaimIdentityLabel(
+                                record,
+                              )
+                            }
                           </Badge>
 
-                          {onboarding.serviceAgreement && (
+                          {record.identityVerifiedAt && (
                             <span className="mt-0.5 block text-2xs text-ink-400">
-                              Agreement signed{" "}
-                              {formatDate(onboarding.serviceAgreement.signedAt)}
-                            </span>
-                          )}
-                        </TD>
-
-                        <TD>
-                          {email && (
-                            <span className="block truncate text-xs text-ink-700">
-                              {email.value}
-
-                              {email.verified && (
-                                <span className="ml-1 text-accent-700">
-                                  verified
-                                </span>
+                              Verified{" "}
+                              {formatDate(
+                                record.identityVerifiedAt.slice(
+                                  0,
+                                  10,
+                                ),
                               )}
                             </span>
                           )}
+                        </TD>
 
-                          {mobile && (
-                            <span className="mt-0.5 block text-2xs text-ink-500">
-                              {formatPhone(mobile.value)}
+                        <TD>
+                          <Badge tone="neutral">
+                            Pre-Claim
+                          </Badge>
 
-                              {mobile.verified ? " / verified" : ""}
-                            </span>
-                          )}
+                          <span className="mt-0.5 block text-2xs text-ink-400">
+                            No official Claim yet
+                          </span>
+                        </TD>
+
+                        <TD>
+                          <span className="block truncate text-xs text-ink-700">
+                            {
+                              record.email
+                            }
+                          </span>
+
+                          <span className="mt-0.5 block text-2xs text-ink-500">
+                            {formatPhone(
+                              record.mobilePhone,
+                            )}
+                          </span>
                         </TD>
 
                         {superAdmin && (
                           <TD>
                             <span className="text-xs text-ink-700">
-                              {staffNames.get(
-                                onboarding.originatingStaffUserId,
-                              ) ?? onboarding.originatingStaffUserId}
+                              {
+                                record.originatingStaffName
+                              }
                             </span>
                           </TD>
                         )}
@@ -470,44 +716,228 @@ export default async function ProClaimantsPage() {
                         {superAdmin && (
                           <TD>
                             <span className="text-xs text-ink-700">
-                              {staffNames.get(
-                                onboarding.assignedStaffUserId,
-                              ) ?? onboarding.assignedStaffUserId}
+                              {
+                                record.assignedStaffName
+                              }
                             </span>
                           </TD>
                         )}
 
                         <TD numeric>
                           <span className="text-sm text-ink-800">
-                            {claimCount}
+                            0
                           </span>
 
-                          {claimReferences.length > 0 && (
-                            <span
-                              className="mt-0.5 block max-w-28 truncate font-mono text-2xs text-ink-400"
-                              title={claimReferences.join(", ")}
-                            >
-                              {claimReferences.join(", ")}
+                          <span className="mt-0.5 block text-2xs text-ink-400">
+                            Not created
+                          </span>
+                        </TD>
+
+                        <TD>
+                          <Badge
+                            tone={
+                              record.portalAccountActive
+                                ? "positive"
+                                : "caution"
+                            }
+                          >
+                            {record.portalAccountActive
+                              ? "Portal active"
+                              : "Portal pending"}
+                          </Badge>
+
+                          {record.unreadMessageCount >
+                            0 && (
+                            <span className="mt-0.5 block text-2xs font-semibold text-accent-700">
+                              {
+                                record.unreadMessageCount
+                              }{" "}
+                              unread
                             </span>
                           )}
                         </TD>
-
-                        <TD nowrap>
-                          {claimant.consentRecordedAt ? (
-                            <>
-                              <Badge tone="positive">Recorded</Badge>
-
-                              <span className="mt-0.5 block text-2xs text-ink-400">
-                                {formatDate(claimant.consentRecordedAt)}
-                              </span>
-                            </>
-                          ) : (
-                            <Badge tone="caution">Not recorded</Badge>
-                          )}
-                        </TD>
                       </TR>
-                    );
-                  })}
+                    ),
+                  )}
+
+                  {claimants.map(
+                    (
+                      record,
+                    ) => {
+                      const {
+                        onboarding,
+                        onboardingStatus,
+                        claimCount,
+                        claimReferences,
+                      } =
+                        record;
+
+                      const claimant =
+                        onboarding.claimant;
+
+                      const email =
+                        primaryEmail(
+                          onboarding,
+                        );
+
+                      const mobile =
+                        mobilePhone(
+                          onboarding,
+                        );
+
+                      return (
+                        <TR
+                          key={`claim-${claimant.id}`}
+                          tone={
+                            onboardingStatus !==
+                            "complete"
+                              ? "caution"
+                              : undefined
+                          }
+                        >
+                          <TDPrimary
+                            href={`/pro/claimants/${claimant.id}`}
+                            secondary={
+                              claimant.preferredName
+                                ? `Preferred name: ${claimant.preferredName}`
+                                : `Created ${formatDate(
+                                    claimant.createdAt,
+                                  )}`
+                            }
+                          >
+                            {
+                              claimant.legalName
+                            }
+                          </TDPrimary>
+
+                          <TD nowrap>
+                            <span className="font-mono text-xs text-ink-600">
+                              {
+                                claimant.reference
+                              }
+                            </span>
+                          </TD>
+
+                          <TD>
+                            <StatusBadge
+                              status={
+                                IDENTITY_STATUS[
+                                  claimant.identityVerification
+                                ]
+                              }
+                            />
+
+                            {claimant.identityVerifiedAt && (
+                              <span className="mt-0.5 block text-2xs text-ink-400">
+                                Verified{" "}
+                                {formatDate(
+                                  claimant.identityVerifiedAt,
+                                )}
+                              </span>
+                            )}
+                          </TD>
+
+                          <TD>
+                            <Badge tone="info">
+                              Official Claim
+                            </Badge>
+                          </TD>
+
+                          <TD>
+                            {email && (
+                              <span className="block truncate text-xs text-ink-700">
+                                {
+                                  email.value
+                                }
+
+                                {email.verified && (
+                                  <span className="ml-1 text-accent-700">
+                                    verified
+                                  </span>
+                                )}
+                              </span>
+                            )}
+
+                            {mobile && (
+                              <span className="mt-0.5 block text-2xs text-ink-500">
+                                {formatPhone(
+                                  mobile.value,
+                                )}
+
+                                {mobile.verified
+                                  ? " / verified"
+                                  : ""}
+                              </span>
+                            )}
+                          </TD>
+
+                          {superAdmin && (
+                            <TD>
+                              <span className="text-xs text-ink-700">
+                                {staffNames.get(
+                                  onboarding.originatingStaffUserId,
+                                ) ??
+                                  onboarding.originatingStaffUserId}
+                              </span>
+                            </TD>
+                          )}
+
+                          {superAdmin && (
+                            <TD>
+                              <span className="text-xs text-ink-700">
+                                {staffNames.get(
+                                  onboarding.assignedStaffUserId,
+                                ) ??
+                                  onboarding.assignedStaffUserId}
+                              </span>
+                            </TD>
+                          )}
+
+                          <TD numeric>
+                            <span className="text-sm text-ink-800">
+                              {
+                                claimCount
+                              }
+                            </span>
+
+                            {claimReferences.length >
+                              0 && (
+                              <span
+                                className="mt-0.5 block max-w-28 truncate font-mono text-2xs text-ink-400"
+                                title={
+                                  claimReferences.join(
+                                    ", ",
+                                  )
+                                }
+                              >
+                                {
+                                  claimReferences.join(
+                                    ", ",
+                                  )
+                                }
+                              </span>
+                            )}
+                          </TD>
+
+                          <TD>
+                            <Badge
+                              tone={
+                                onboardingStatusTone(
+                                  onboardingStatus,
+                                )
+                              }
+                            >
+                              {
+                                onboardingStatusLabel(
+                                  onboardingStatus,
+                                )
+                              }
+                            </Badge>
+                          </TD>
+                        </TR>
+                      );
+                    },
+                  )}
                 </TBody>
               </Table>
             </TableRegion>
@@ -515,92 +945,200 @@ export default async function ProClaimantsPage() {
 
           <div className="lg:hidden">
             <RecordList>
-              {claimants.map((record) => {
-                const { onboarding, onboardingStatus, claimCount } = record;
-
-                const claimant = onboarding.claimant;
-
-                const email = primaryEmail(onboarding);
-
-                const facts = [
-                  {
-                    label: "Onboarding",
-
-                    value: onboardingStatusLabel(onboardingStatus),
-                  },
-                  {
-                    label: "Claims",
-
-                    value: String(claimCount),
-                  },
-                  {
-                    label: "Contact",
-
-                    value: email?.value ?? "Not recorded",
-                  },
-                  {
-                    label: "Consent",
-
-                    value: claimant.consentRecordedAt
-                      ? formatDate(claimant.consentRecordedAt)
-                      : "Not recorded",
-                  },
-                ];
-
-                if (
-                  superAdmin
-                ) {
-                  facts.push(
-                    {
-                      label:
-                        "Brought by",
-
-                      value:
-                        staffNames.get(
-                          onboarding.originatingStaffUserId,
-                        ) ??
-                        onboarding.originatingStaffUserId,
-                    },
-                    {
-                      label:
-                        "Managed by",
-
-                      value:
-                        staffNames.get(
-                          onboarding.assignedStaffUserId,
-                        ) ??
-                        onboarding.assignedStaffUserId,
-                    },
-                  );
-                }
-
-                return (
+              {preClaimClaimants.map(
+                (
+                  record,
+                ) => (
                   <RecordListItem
-                    key={claimant.id}
-                    href={`/pro/claimants/${claimant.id}`}
-                    title={claimant.legalName}
-                    subtitle={claimant.reference}
+                    key={`preclaim-${record.claimantId}`}
+                    href={`/pro/claimants/workcases/${record.claimantId}`}
+                    title={
+                      record.legalName
+                    }
+                    subtitle={
+                      record.claimantReference
+                    }
                     status={
-                      <StatusBadge
-                        status={IDENTITY_STATUS[claimant.identityVerification]}
-                      />
+                      <Badge
+                        tone={
+                          preClaimIdentityTone(
+                            record,
+                          )
+                        }
+                      >
+                        {
+                          preClaimIdentityLabel(
+                            record,
+                          )
+                        }
+                      </Badge>
                     }
                     tone={
-                      onboardingStatus !== "complete" ? "caution" : undefined
+                      record.identityVerification !==
+                      "verified"
+                        ? "caution"
+                        : undefined
                     }
-                    facts={facts}
+                    facts={[
+                      {
+                        label:
+                          "Stage",
+
+                        value:
+                          "Pre-Claim",
+                      },
+                      {
+                        label:
+                          "Claims",
+
+                        value:
+                          "0",
+                      },
+                      {
+                        label:
+                          "Contact",
+
+                        value:
+                          record.email,
+                      },
+                      {
+                        label:
+                          "Portal",
+
+                        value:
+                          record.portalAccountActive
+                            ? "Active"
+                            : "Pending",
+                      },
+                    ]}
                   />
-                );
-              })}
+                ),
+              )}
+
+              {claimants.map(
+                (
+                  record,
+                ) => {
+                  const {
+                    onboarding,
+                    onboardingStatus,
+                    claimCount,
+                  } =
+                    record;
+
+                  const claimant =
+                    onboarding.claimant;
+
+                  const email =
+                    primaryEmail(
+                      onboarding,
+                    );
+
+                  const facts = [
+                    {
+                      label:
+                        "Stage",
+
+                      value:
+                        "Official Claim",
+                    },
+                    {
+                      label:
+                        "Onboarding",
+
+                      value:
+                        onboardingStatusLabel(
+                          onboardingStatus,
+                        ),
+                    },
+                    {
+                      label:
+                        "Claims",
+
+                      value:
+                        String(
+                          claimCount,
+                        ),
+                    },
+                    {
+                      label:
+                        "Contact",
+
+                      value:
+                        email?.value ??
+                        "Not recorded",
+                    },
+                  ];
+
+                  if (
+                    superAdmin
+                  ) {
+                    facts.push(
+                      {
+                        label:
+                          "Brought by",
+
+                        value:
+                          staffNames.get(
+                            onboarding.originatingStaffUserId,
+                          ) ??
+                          onboarding.originatingStaffUserId,
+                      },
+                      {
+                        label:
+                          "Managed by",
+
+                        value:
+                          staffNames.get(
+                            onboarding.assignedStaffUserId,
+                          ) ??
+                          onboarding.assignedStaffUserId,
+                      },
+                    );
+                  }
+
+                  return (
+                    <RecordListItem
+                      key={`claim-${claimant.id}`}
+                      href={`/pro/claimants/${claimant.id}`}
+                      title={
+                        claimant.legalName
+                      }
+                      subtitle={
+                        claimant.reference
+                      }
+                      status={
+                        <StatusBadge
+                          status={
+                            IDENTITY_STATUS[
+                              claimant.identityVerification
+                            ]
+                          }
+                        />
+                      }
+                      tone={
+                        onboardingStatus !==
+                        "complete"
+                          ? "caution"
+                          : undefined
+                      }
+                      facts={
+                        facts
+                      }
+                    />
+                  );
+                },
+              )}
             </RecordList>
           </div>
         </Card>
       )}
 
       <p className="text-xs leading-relaxed text-ink-500">
-        Sensitive identifiers and identity-document contents are deliberately
-        absent from this register. Claimant staff attribution is operational
-        metadata and does not alter claimant ownership of any recovery rights.
+        A pre-Claim claimant workcase is an operational recovery record only.
+        It does not create an Opportunity, official Claim, jurisdiction
+        approval, filing route, fee agreement or entitlement to recovery
+        proceeds.
       </p>
     </div>
   );

@@ -22,28 +22,40 @@ import {
 /**
  * CLAIMANT INTAKE DISCOVERY SEARCH
  *
- * This service extends staff claimant-intake lookup backward into the
- * discovered-record layer.
+ * Staff-facing lookup for recovery leads that still live in the confidential
+ * Discovery layer.
  *
- * SECURITY BOUNDARY:
+ * SECURITY MODEL
  *
- * - Super Admin / Administrator may search all accessible recovery records.
- * - Ordinary staff may search ONLY discovered records actively assigned to
- *   their own staff account.
+ * Administrator / Super Admin
+ *   May inspect the broader Discovery workflow subject to normal permissions
+ *   and state clearance.
  *
- * County/state clearance remains a separate compliance gate. An employee can
- * be nationally cleared without receiving national lead visibility.
+ * Ordinary staff
+ *   May see only exact active lead assignments made to their own persisted
+ *   staff UUID.
  *
- * This service is READ ONLY.
+ * ADMIN ASSIGNMENT AUTHORIZATION
  *
- * It does not:
+ * Stage 27 establishes a separate immutable work authorization for every
+ * administrator-created lead assignment.
  *
- * - promote a discovered record;
- * - create an Opportunity;
- * - create a Claim;
- * - create a claimant;
- * - change jurisdiction routing;
- * - bypass enrichment/review gates.
+ * For ordinary staff:
+ *
+ *   active assignment
+ *       +
+ *   Stage 27 work authorization
+ *       =
+ *   authorized staff work
+ *
+ * Once both exist, internal Discovery review, enrichment and jurisdiction
+ * research are not presented as staff-work blockers.
+ *
+ * Those controls remain available to the Administrator in the confidential
+ * back-office workflow and still govern later legal filing, commercial,
+ * payment, attorney and submission decisions.
+ *
+ * This service remains read-only.
  */
 
 /* ========================================================================== */
@@ -55,12 +67,14 @@ export type ClaimantIntakeDiscoveryStage =
   | "discovered_reviewed";
 
 export type ClaimantIntakeDiscoveryPromotionState =
+  | "admin_assigned_ready"
   | "review_required"
   | "enrichment_required"
   | "route_blocked"
   | "ready_for_promotion";
 
 export type ClaimantIntakeDiscoveryRouteCode =
+  | "READY"
   | "DCR"
   | "MRR"
   | "ATTY"
@@ -95,6 +109,15 @@ export interface ClaimantIntakeDiscoveryCandidate {
 
   promotionState:
     ClaimantIntakeDiscoveryPromotionState;
+
+  /**
+   * True only for an ordinary staff member whose exact active assignment also
+   * carries the immutable Stage 27 administrator work authorization.
+   *
+   * Administrator global access does not use this flag.
+   */
+  staffWorkAuthorized:
+    boolean;
 
   formerOwnerName:
     string;
@@ -144,6 +167,11 @@ export interface ClaimantIntakeDiscoveryCandidate {
   route:
     ClaimantIntakeDiscoveryRoute;
 
+  /**
+   * Administrator-facing internal preparation deficits.
+   *
+   * This is intentionally empty for assignment-authorized ordinary staff.
+   */
   promotionMissing:
     string[];
 }
@@ -505,6 +533,22 @@ function candidateScore(
   return 50;
 }
 
+function isDistributionAdmin(
+  session:
+    StaffSession,
+): boolean {
+  return (
+    session.user.role ===
+      "super_admin" ||
+    session.user.role ===
+      "administrator"
+  );
+}
+
+/* ========================================================================== */
+/* Administrator jurisdiction route                                            */
+/* ========================================================================== */
+
 function currentPackageForRecord({
   record,
   packages,
@@ -633,7 +677,7 @@ function routeForPackage(
         false,
 
       reason:
-        "One or more current jurisdiction, submission, fee or payment gates do not permit ordinary DueQuity intake.",
+        "One or more current jurisdiction, submission, fee or payment controls do not permit ordinary administrative processing.",
 
       filingPartyLabel:
         "Not cleared",
@@ -725,6 +769,93 @@ function routeForPackage(
 }
 
 /* ========================================================================== */
+/* Assignment-authorized staff route                                           */
+/* ========================================================================== */
+
+function assignedStaffWorkRoute():
+  ClaimantIntakeDiscoveryRoute {
+  return {
+    code:
+      "READY",
+
+    label:
+      "Admin assigned · Ready for work",
+
+    intakeCleared:
+      true,
+
+    reason:
+      "DueQuity Admin assigned this exact recovery lead to your staff account. The assignment authorizes you to contact the lead, verify the claimant and property connection, record voluntary interest and continue the staff workflow.",
+
+    filingPartyLabel:
+      "Controlled later by DueQuity",
+
+    paymentRouteLabel:
+      "Controlled later by DueQuity",
+  };
+}
+
+/* ========================================================================== */
+/* Stage 27 work authorization                                                 */
+/* ========================================================================== */
+
+async function hasActiveLeadWorkAuthorization({
+  session,
+  discoveredRecordId,
+}: {
+  session:
+    StaffSession;
+
+  discoveredRecordId:
+    string;
+}): Promise<boolean> {
+  /*
+   * Administrator global access does not depend on an ordinary lead
+   * assignment.
+   */
+  if (
+    isDistributionAdmin(
+      session,
+    )
+  ) {
+    return false;
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await admin.rpc(
+      "staff_has_active_lead_work_authorization",
+      {
+        p_staff_user_id:
+          session.user.id,
+
+        p_discovered_record_id:
+          discoveredRecordId,
+
+        p_opportunity_id:
+          null,
+
+        p_claim_id:
+          null,
+      },
+    );
+
+  if (error) {
+    throw new Error(
+      `Unable to verify administrator lead-work authorization: ${error.message}`,
+    );
+  }
+
+  return data ===
+    true;
+}
+
+/* ========================================================================== */
 /* Search                                                                      */
 /* ========================================================================== */
 
@@ -784,20 +915,15 @@ export async function searchClaimantIntakeDiscoveryCandidates({
   }
 
   /*
-   * Assignment is the visibility boundary.
+   * Assignment remains the visibility boundary.
    *
-   * State clearance answers "may this employee work in this state?"
-   * Assignment answers "may this employee see this particular lead?"
+   * Ordinary staff never receive the national Discovery result set.
    */
   const leadScope =
     await resolveStaffLeadAccessScope(
       session,
     );
 
-  /*
-   * Ordinary staff with no assigned Discovery leads receive an empty result
-   * immediately. We do not load national Discovery data and hide it later.
-   */
   if (
     !leadScope.globalAccess &&
     leadScope.discoveredRecordIds.size ===
@@ -943,16 +1069,28 @@ export async function searchClaimantIntakeDiscoveryCandidates({
     ) as unknown as
       JurisdictionPackageRow[];
 
+  /*
+   * IMPORTANT
+   *
+   * State clearance remains an Administrator research / global-access control.
+   *
+   * For ordinary staff, Admin already selected the exact employee and exact
+   * lead. Stage 27 work authorization is therefore the operational clearance.
+   * We do not re-block the staff member with the old state/jurisdiction gate
+   * after Admin has assigned the work.
+   */
   const matchedRows =
     discoveredRows
       .filter(
         (
           row,
         ) =>
-          clearedForState(
-            session,
-            row.state_code,
-          ),
+          leadScope.globalAccess
+            ? clearedForState(
+                session,
+                row.state_code,
+              )
+            : true,
       )
       .filter(
         (
@@ -982,12 +1120,122 @@ export async function searchClaimantIntakeDiscoveryCandidates({
         25,
       );
 
-  const candidates =
+  const candidateResults =
     await Promise.all(
       matchedRows.map(
         async (
           row,
-        ): Promise<ClaimantIntakeDiscoveryCandidate> => {
+        ): Promise<
+          ClaimantIntakeDiscoveryCandidate | undefined
+        > => {
+          /*
+           * Ordinary staff require the immutable Stage 27 authorization.
+           *
+           * If an old/corrupt assignment somehow lacks the authorization,
+           * fail closed by not returning the record at all.
+           */
+          if (
+            !leadScope.globalAccess
+          ) {
+            const workAuthorized =
+              await hasActiveLeadWorkAuthorization({
+                session,
+
+                discoveredRecordId:
+                  row.id,
+              });
+
+            if (
+              !workAuthorized
+            ) {
+              return undefined;
+            }
+
+            return {
+              discoveredRecordId:
+                row.id,
+
+              stage:
+                row.status ===
+                  "reviewed"
+                  ? "discovered_reviewed"
+                  : "discovered_new",
+
+              promotionState:
+                "admin_assigned_ready",
+
+              staffWorkAuthorized:
+                true,
+
+              formerOwnerName:
+                row.former_owner_name,
+
+              propertyAddress:
+                propertyAddress(
+                  row,
+                ),
+
+              addressLine1:
+                row.address_line1,
+
+              city:
+                row.city,
+
+              county:
+                row.county,
+
+              state:
+                row.state_code,
+
+              postalCode:
+                row.postal_code ??
+                undefined,
+
+              parcelNumber:
+                row.parcel_number ??
+                undefined,
+
+              caseNumber:
+                row.case_number ??
+                undefined,
+
+              sourceReference:
+                row.source_reference,
+
+              sourceName:
+                row.source_name,
+
+              saleType:
+                row.sale_type,
+
+              saleDate:
+                row.sale_date ??
+                undefined,
+
+              sourceListedBalanceCents:
+                centsFromDatabase(
+                  row.source_listed_balance_cents,
+                ),
+
+              reviewedAt:
+                row.reviewed_at ??
+                undefined,
+
+              route:
+                assignedStaffWorkRoute(),
+
+              /*
+               * Do not expose Admin research deficits as staff-work blockers.
+               */
+              promotionMissing:
+                [],
+            };
+          }
+
+          /*
+           * Administrator path keeps the real internal Discovery, enrichment
+           * and jurisdiction state.
+           */
           const enrichment =
             await getDiscoveredRecordEnrichment(
               row.id,
@@ -1073,6 +1321,9 @@ export async function searchClaimantIntakeDiscoveryCandidates({
 
             promotionState,
 
+            staffWorkAuthorized:
+              false,
+
             formerOwnerName:
               row.former_owner_name,
 
@@ -1138,6 +1389,17 @@ export async function searchClaimantIntakeDiscoveryCandidates({
           };
         },
       ),
+    );
+
+  const candidates =
+    candidateResults.filter(
+      (
+        candidate,
+      ): candidate is
+        ClaimantIntakeDiscoveryCandidate =>
+        Boolean(
+          candidate,
+        ),
     );
 
   return {

@@ -18,7 +18,7 @@ import type {
 } from "@/lib/session";
 
 /* ========================================================================== */
-/* Types                                                                       */
+/* Public types                                                                */
 /* ========================================================================== */
 
 export type ClaimantMailboxFolder =
@@ -32,56 +32,84 @@ export type ClaimantMailboxEntryKind =
   | "claimant";
 
 export interface ClaimantMailboxCounts {
-  inboxTotal: number;
+  inboxTotal:
+    number;
 
-  inboxUnread: number;
+  inboxUnread:
+    number;
 
-  sentTotal: number;
+  sentTotal:
+    number;
 
-  attachmentsTotal: number;
+  attachmentsTotal:
+    number;
 }
 
 export interface ClaimantMailboxEntry {
   kind:
     ClaimantMailboxEntryKind;
 
-  id: string;
+  id:
+    string;
 
-  claimantId: string;
+  claimantId:
+    string;
 
-  claimantReference: string;
+  claimantReference:
+    string;
 
-  legalName: string;
+  legalName:
+    string;
 
-  claimId: string;
+  claimId:
+    string;
 
-  claimReference: string;
+  claimReference:
+    string;
 
-  threadId?: string;
+  threadId?:
+    string;
 
-  messageId?: string;
+  messageId?:
+    string;
 
   direction?:
     | "inbound"
     | "outbound";
 
-  senderName?: string;
+  senderName?:
+    string;
 
-  bodyPreview?: string;
+  subject?:
+    string;
 
-  sentAt?: string;
+  bodyPreview?:
+    string;
 
-  unread?: boolean;
+  sentAt?:
+    string;
 
-  attachmentCount?: number;
+  unread?:
+    boolean;
 
-  attachmentId?: string;
+  attachmentCount?:
+    number;
 
-  fileName?: string;
+  attachmentId?:
+    string;
 
-  mimeType?: string;
+  fileName?:
+    string;
 
-  sizeBytes?: number;
+  mimeType?:
+    string;
+
+  sizeBytes?:
+    number;
+
+  recordKind?:
+    | "claim"
+    | "assigned_lead";
 }
 
 export interface ClaimantMailboxResult {
@@ -94,35 +122,232 @@ export interface ClaimantMailboxResult {
   counts:
     ClaimantMailboxCounts;
 
-  query?: string;
+  query?:
+    string;
 }
 
 /* ========================================================================== */
-/* Rows                                                                        */
+/* Unified repository rows                                                     */
 /* ========================================================================== */
 
-interface ClaimantRow {
-  claim_id: string;
+interface RepositoryClaimant {
+  recordKind:
+    | "claim"
+    | "assigned_lead";
 
-  claim_reference: string;
+  recoveryId:
+    string;
 
-  claimant_id: string;
+  recoveryReference:
+    string;
 
-  claimant_reference: string;
+  claimantId:
+    string;
 
-  legal_name: string;
+  claimantReference:
+    string;
 
-  originating_staff_user_id: string;
+  legalName:
+    string;
 
-  assigned_staff_user_id: string;
+  originatingStaffUserId:
+    string;
+
+  assignedStaffUserId:
+    string;
 }
 
-interface ThreadRow {
-  id: string;
+interface RepositoryThread {
+  recordKind:
+    | "claim"
+    | "assigned_lead";
 
-  claim_id: string;
+  id:
+    string;
 
-  status: string;
+  recoveryId:
+    string;
+
+  status:
+    string;
+
+  lastMessageAt:
+    | string
+    | null;
+}
+
+interface RepositoryMessage {
+  recordKind:
+    | "claim"
+    | "assigned_lead";
+
+  id:
+    string;
+
+  threadId:
+    string;
+
+  senderType:
+    | "staff"
+    | "claimant";
+
+  senderStaffUserId:
+    | string
+    | null;
+
+  subject:
+    string | null;
+
+  bodyText:
+    string;
+
+  state:
+    string;
+
+  sentAt:
+    | string
+    | null;
+
+  claimantReadAt:
+    | string
+    | null;
+
+  staffReadAt:
+    | string
+    | null;
+
+  createdAt:
+    string;
+}
+
+interface RepositoryAttachment {
+  recordKind:
+    | "claim"
+    | "assigned_lead";
+
+  id:
+    string;
+
+  messageId:
+    string;
+
+  fileName:
+    string;
+
+  mimeType:
+    string;
+
+  sizeBytes:
+    number;
+
+  createdAt:
+    string;
+}
+
+interface RepositorySnapshot {
+  claimants:
+    RepositoryClaimant[];
+
+  threads:
+    RepositoryThread[];
+
+  messages:
+    RepositoryMessage[];
+
+  attachments:
+    RepositoryAttachment[];
+
+  staffNames:
+    Map<
+      string,
+      string
+    >;
+}
+
+/* ========================================================================== */
+/* Raw database rows                                                           */
+/* ========================================================================== */
+
+interface ClaimBackedClaimantRow {
+  claim_id:
+    string;
+
+  claim_reference:
+    string;
+
+  claimant_id:
+    string;
+
+  claimant_reference:
+    string;
+
+  legal_name:
+    string;
+
+  originating_staff_user_id:
+    string;
+
+  assigned_staff_user_id:
+    string;
+}
+
+interface AssignedLeadClaimantRow {
+  id:
+    string;
+
+  claimant_id:
+    string;
+
+  claimant_reference:
+    string;
+
+  legal_first_name:
+    string;
+
+  legal_last_name:
+    string;
+
+  originating_staff_user_id:
+    string;
+
+  assigned_staff_user_id:
+    string;
+
+  status:
+    string;
+
+  linked_claim_id:
+    | string
+    | null;
+}
+
+interface ClaimThreadRow {
+  id:
+    string;
+
+  claim_id:
+    string;
+
+  status:
+    string;
+
+  last_message_at:
+    | string
+    | null;
+}
+
+interface AssignedLeadThreadRow {
+  id:
+    string;
+
+  workcase_id:
+    string;
+
+  claimant_id:
+    string;
+
+  status:
+    string;
 
   last_message_at:
     | string
@@ -130,9 +355,11 @@ interface ThreadRow {
 }
 
 interface MessageRow {
-  id: string;
+  id:
+    string;
 
-  thread_id: string;
+  thread_id:
+    string;
 
   sender_type:
     | "staff"
@@ -142,9 +369,15 @@ interface MessageRow {
     | string
     | null;
 
-  body_text: string;
+  subject:
+    string
+    | null;
 
-  state: string;
+  body_text:
+    string;
+
+  state:
+    string;
 
   sent_at:
     | string
@@ -158,49 +391,37 @@ interface MessageRow {
     | string
     | null;
 
-  created_at: string;
+  created_at:
+    string;
 }
 
 interface AttachmentRow {
-  id: string;
+  id:
+    string;
 
-  message_id: string;
+  message_id:
+    string;
 
-  file_name: string;
+  file_name:
+    string;
 
-  mime_type: string;
+  mime_type:
+    string;
 
   size_bytes:
-    | number
+    number
     | string;
 
-  created_at: string;
+  created_at:
+    string;
 }
 
 interface StaffRow {
-  id: string;
+  id:
+    string;
 
-  name: string;
-}
-
-interface RepositorySnapshot {
-  claimants:
-    ClaimantRow[];
-
-  threads:
-    ThreadRow[];
-
-  messages:
-    MessageRow[];
-
-  attachments:
-    AttachmentRow[];
-
-  staffNames:
-    Map<
-      string,
-      string
-    >;
+  name:
+    string;
 }
 
 /* ========================================================================== */
@@ -208,7 +429,8 @@ interface RepositorySnapshot {
 /* ========================================================================== */
 
 function normalizedQuery(
-  value: string,
+  value:
+    string,
 ): string {
   return value
     .trim()
@@ -220,7 +442,8 @@ function normalizedQuery(
 }
 
 function preview(
-  value: string,
+  value:
+    string,
 ): string {
   return value
     .trim()
@@ -234,11 +457,50 @@ function preview(
     );
 }
 
+function messagePreview(
+  subject:
+    string | null,
+  bodyText:
+    string,
+): string {
+  const normalizedSubject =
+    subject
+      ?.trim();
+
+  const normalizedBody =
+    preview(
+      bodyText,
+    );
+
+  if (
+    normalizedSubject &&
+    normalizedBody
+  ) {
+    return `${normalizedSubject} — ${normalizedBody}`.slice(
+      0,
+      160,
+    );
+  }
+
+  if (
+    normalizedSubject
+  ) {
+    return normalizedSubject.slice(
+      0,
+      160,
+    );
+  }
+
+  return normalizedBody;
+}
+
 function includesQuery(
-  query: string,
-  values: Array<
-    string | undefined
-  >,
+  query:
+    string,
+  values:
+    Array<
+      string | undefined
+    >,
 ): boolean {
   return values.some(
     (
@@ -254,9 +516,12 @@ function includesQuery(
 }
 
 function timeValue(
-  value: string | undefined,
+  value:
+    string | undefined,
 ): number {
-  if (!value) {
+  if (
+    !value
+  ) {
     return 0;
   }
 
@@ -272,13 +537,19 @@ function timeValue(
     : date.getTime();
 }
 
-function isSuperAdmin(
+/* ========================================================================== */
+/* Staff authorization                                                        */
+/* ========================================================================== */
+
+function hasGlobalClaimantAccess(
   session:
     StaffSession,
 ): boolean {
   return (
     session.user.role ===
-    "super_admin"
+      "super_admin" ||
+    session.user.role ===
+      "administrator"
   );
 }
 
@@ -288,7 +559,9 @@ async function requireStaffSession(): Promise<
   const session =
     await resolveStaffSession();
 
-  if (!session) {
+  if (
+    !session
+  ) {
     throw new Error(
       "Staff authentication is required.",
     );
@@ -298,19 +571,19 @@ async function requireStaffSession(): Promise<
 }
 
 /* ========================================================================== */
-/* Repository snapshot                                                         */
+/* Claim-backed repository                                                     */
 /* ========================================================================== */
 
-async function loadRepositorySnapshot(
+async function loadClaimBackedClaimants(
   session:
     StaffSession,
 ): Promise<
-  RepositorySnapshot
+  RepositoryClaimant[]
 > {
   const admin =
     getSupabaseAdmin();
 
-  let claimantQuery =
+  let query =
     admin
       .from(
         "claimant_onboarding",
@@ -320,199 +593,612 @@ async function loadRepositorySnapshot(
       );
 
   if (
-    !isSuperAdmin(
+    !hasGlobalClaimantAccess(
       session,
     )
   ) {
-    claimantQuery =
-      claimantQuery.eq(
+    query =
+      query.eq(
         "assigned_staff_user_id",
         session.user.id,
       );
   }
 
   const {
-    data:
-      claimantData,
-    error:
-      claimantError,
+    data,
+    error,
   } =
-    await claimantQuery;
+    await query;
 
   if (
-    claimantError
+    error
   ) {
     throw new Error(
-      `Unable to load claimant message identities: ${claimantError.message}`,
+      `Unable to load Claim-backed claimant message identities: ${error.message}`,
     );
   }
 
-  const claimants =
+  return (
+    data ??
+    []
+  ).map(
     (
-      claimantData ??
-      []
-    ) as ClaimantRow[];
+      rawRow,
+    ) => {
+      const row =
+        rawRow as
+          ClaimBackedClaimantRow;
 
-  if (
-    claimants.length ===
-    0
-  ) {
-    return {
-      claimants:
-        [],
+      return {
+        recordKind:
+          "claim",
 
-      threads:
-        [],
+        recoveryId:
+          row.claim_id,
 
-      messages:
-        [],
+        recoveryReference:
+          row.claim_reference,
 
-      attachments:
-        [],
+        claimantId:
+          row.claimant_id,
 
-      staffNames:
-        new Map(),
-    };
-  }
+        claimantReference:
+          row.claimant_reference,
 
-  const claimIds =
-    [
-      ...new Set(
-        claimants.map(
-          (
-            claimant,
-          ) =>
-            claimant.claim_id,
-        ),
-      ),
-    ];
+        legalName:
+          row.legal_name,
 
-  const {
-    data:
-      threadData,
-    error:
-      threadError,
-  } =
-    await admin
+        originatingStaffUserId:
+          row.originating_staff_user_id,
+
+        assignedStaffUserId:
+          row.assigned_staff_user_id,
+      };
+    },
+  );
+}
+
+/* ========================================================================== */
+/* Assigned-lead repository                                                    */
+/* ========================================================================== */
+
+async function loadAssignedLeadClaimants(
+  session:
+    StaffSession,
+): Promise<
+  RepositoryClaimant[]
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  let query =
+    admin
       .from(
-        "claimant_message_threads",
+        "assigned_lead_claimant_workcases",
       )
       .select(
-        "id, claim_id, status, last_message_at",
-      )
-      .in(
-        "claim_id",
-        claimIds,
-      );
-
-  if (
-    threadError
-  ) {
-    throw new Error(
-      `Unable to load claimant message threads: ${threadError.message}`,
-    );
-  }
-
-  const threads =
-    (
-      threadData ??
-      []
-    ) as ThreadRow[];
-
-  if (
-    threads.length ===
-    0
-  ) {
-    return {
-      claimants,
-
-      threads:
-        [],
-
-      messages:
-        [],
-
-      attachments:
-        [],
-
-      staffNames:
-        new Map(),
-    };
-  }
-
-  const threadIds =
-    [
-      ...new Set(
-        threads.map(
-          (
-            thread,
-          ) =>
-            thread.id,
-        ),
-      ),
-    ];
-
-  const {
-    data:
-      messageData,
-    error:
-      messageError,
-  } =
-    await admin
-      .from(
-        "claimant_messages",
-      )
-      .select(
-        "id, thread_id, sender_type, sender_staff_user_id, body_text, state, sent_at, claimant_read_at, staff_read_at, created_at",
-      )
-      .in(
-        "thread_id",
-        threadIds,
+        "id, claimant_id, claimant_reference, legal_first_name, legal_last_name, originating_staff_user_id, assigned_staff_user_id, status, linked_claim_id",
       )
       .eq(
-        "state",
-        "sent",
+        "status",
+        "activated",
+      )
+      .is(
+        "linked_claim_id",
+        null,
       );
 
   if (
-    messageError
+    !hasGlobalClaimantAccess(
+      session,
+    )
+  ) {
+    query =
+      query.eq(
+        "assigned_staff_user_id",
+        session.user.id,
+      );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await query;
+
+  if (
+    error
   ) {
     throw new Error(
-      `Unable to load claimant messages: ${messageError.message}`,
+      `Unable to load assigned claimant message identities: ${error.message}`,
     );
   }
 
-  const messages =
+  return (
+    data ??
+    []
+  ).map(
     (
-      messageData ??
-      []
-    ) as MessageRow[];
+      rawRow,
+    ) => {
+      const row =
+        rawRow as
+          AssignedLeadClaimantRow;
 
-  const messageIds =
-    [
-      ...new Set(
-        messages.map(
-          (
-            message,
-          ) =>
-            message.id,
-        ),
-      ),
-    ];
+      const legalName =
+        [
+          row.legal_first_name,
+          row.legal_last_name,
+        ]
+          .filter(
+            Boolean,
+          )
+          .join(
+            " ",
+          );
 
-  let attachments:
-    AttachmentRow[] =
+      return {
+        recordKind:
+          "assigned_lead",
+
+        recoveryId:
+          row.id,
+
+        recoveryReference:
+          row.claimant_reference,
+
+        claimantId:
+          row.claimant_id,
+
+        claimantReference:
+          row.claimant_reference,
+
+        legalName,
+
+        originatingStaffUserId:
+          row.originating_staff_user_id,
+
+        assignedStaffUserId:
+          row.assigned_staff_user_id,
+      };
+    },
+  );
+}
+
+/* ========================================================================== */
+/* Threads                                                                     */
+/* ========================================================================== */
+
+async function loadThreads(
+  claimants:
+    RepositoryClaimant[],
+): Promise<
+  RepositoryThread[]
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  const claimRecoveryIds =
+    claimants
+      .filter(
+        (
+          claimant,
+        ) =>
+          claimant.recordKind ===
+          "claim",
+      )
+      .map(
+        (
+          claimant,
+        ) =>
+          claimant.recoveryId,
+      );
+
+  const assignedRecoveryIds =
+    claimants
+      .filter(
+        (
+          claimant,
+        ) =>
+          claimant.recordKind ===
+          "assigned_lead",
+      )
+      .map(
+        (
+          claimant,
+        ) =>
+          claimant.recoveryId,
+      );
+
+  const threads:
+    RepositoryThread[] =
     [];
 
   if (
-    messageIds.length >
+    claimRecoveryIds.length >
     0
   ) {
     const {
-      data:
-        attachmentData,
-      error:
-        attachmentError,
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_message_threads",
+        )
+        .select(
+          "id, claim_id, status, last_message_at",
+        )
+        .in(
+          "claim_id",
+          claimRecoveryIds,
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to load Claim-backed claimant message threads: ${error.message}`,
+      );
+    }
+
+    for (
+      const rawRow of
+        data ??
+        []
+    ) {
+      const row =
+        rawRow as
+          ClaimThreadRow;
+
+      threads.push({
+        recordKind:
+          "claim",
+
+        id:
+          row.id,
+
+        recoveryId:
+          row.claim_id,
+
+        status:
+          row.status,
+
+        lastMessageAt:
+          row.last_message_at,
+      });
+    }
+  }
+
+  if (
+    assignedRecoveryIds.length >
+    0
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "assigned_lead_claimant_message_threads",
+        )
+        .select(
+          "id, workcase_id, claimant_id, status, last_message_at",
+        )
+        .in(
+          "workcase_id",
+          assignedRecoveryIds,
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to load assigned claimant message threads: ${error.message}`,
+      );
+    }
+
+    for (
+      const rawRow of
+        data ??
+        []
+    ) {
+      const row =
+        rawRow as
+          AssignedLeadThreadRow;
+
+      threads.push({
+        recordKind:
+          "assigned_lead",
+
+        id:
+          row.id,
+
+        recoveryId:
+          row.workcase_id,
+
+        status:
+          row.status,
+
+        lastMessageAt:
+          row.last_message_at,
+      });
+    }
+  }
+
+  return threads;
+}
+
+/* ========================================================================== */
+/* Messages                                                                    */
+/* ========================================================================== */
+
+async function loadMessages(
+  threads:
+    RepositoryThread[],
+): Promise<
+  RepositoryMessage[]
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  const claimThreadIds =
+    threads
+      .filter(
+        (
+          thread,
+        ) =>
+          thread.recordKind ===
+          "claim",
+      )
+      .map(
+        (
+          thread,
+        ) =>
+          thread.id,
+      );
+
+  const assignedThreadIds =
+    threads
+      .filter(
+        (
+          thread,
+        ) =>
+          thread.recordKind ===
+          "assigned_lead",
+      )
+      .map(
+        (
+          thread,
+        ) =>
+          thread.id,
+      );
+
+  const messages:
+    RepositoryMessage[] =
+    [];
+
+  if (
+    claimThreadIds.length >
+    0
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_messages",
+        )
+        .select(
+          "id, thread_id, sender_type, sender_staff_user_id, subject, body_text, state, sent_at, claimant_read_at, staff_read_at, created_at",
+        )
+        .in(
+          "thread_id",
+          claimThreadIds,
+        )
+        .eq(
+          "state",
+          "sent",
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to load Claim-backed claimant messages: ${error.message}`,
+      );
+    }
+
+    for (
+      const rawRow of
+        data ??
+        []
+    ) {
+      const row =
+        rawRow as
+          MessageRow;
+
+      messages.push({
+        recordKind:
+          "claim",
+
+        id:
+          row.id,
+
+        threadId:
+          row.thread_id,
+
+        senderType:
+          row.sender_type,
+
+        senderStaffUserId:
+          row.sender_staff_user_id,
+
+        subject:
+          row.subject,
+
+        bodyText:
+          row.body_text,
+
+        state:
+          row.state,
+
+        sentAt:
+          row.sent_at,
+
+        claimantReadAt:
+          row.claimant_read_at,
+
+        staffReadAt:
+          row.staff_read_at,
+
+        createdAt:
+          row.created_at,
+      });
+    }
+  }
+
+  if (
+    assignedThreadIds.length >
+    0
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "assigned_lead_claimant_messages",
+        )
+        .select(
+          "id, thread_id, sender_type, sender_staff_user_id, subject, body_text, state, sent_at, claimant_read_at, staff_read_at, created_at",
+        )
+        .in(
+          "thread_id",
+          assignedThreadIds,
+        )
+        .eq(
+          "state",
+          "sent",
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to load assigned claimant messages: ${error.message}`,
+      );
+    }
+
+    for (
+      const rawRow of
+        data ??
+        []
+    ) {
+      const row =
+        rawRow as
+          MessageRow;
+
+      messages.push({
+        recordKind:
+          "assigned_lead",
+
+        id:
+          row.id,
+
+        threadId:
+          row.thread_id,
+
+        senderType:
+          row.sender_type,
+
+        senderStaffUserId:
+          row.sender_staff_user_id,
+
+        subject:
+          row.subject,
+
+        bodyText:
+          row.body_text,
+
+        state:
+          row.state,
+
+        sentAt:
+          row.sent_at,
+
+        claimantReadAt:
+          row.claimant_read_at,
+
+        staffReadAt:
+          row.staff_read_at,
+
+        createdAt:
+          row.created_at,
+      });
+    }
+  }
+
+  return messages;
+}
+
+/* ========================================================================== */
+/* Attachments                                                                 */
+/* ========================================================================== */
+
+async function loadAttachments(
+  messages:
+    RepositoryMessage[],
+): Promise<
+  RepositoryAttachment[]
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  const claimMessageIds =
+    messages
+      .filter(
+        (
+          message,
+        ) =>
+          message.recordKind ===
+          "claim",
+      )
+      .map(
+        (
+          message,
+        ) =>
+          message.id,
+      );
+
+  const assignedMessageIds =
+    messages
+      .filter(
+        (
+          message,
+        ) =>
+          message.recordKind ===
+          "assigned_lead",
+      )
+      .map(
+        (
+          message,
+        ) =>
+          message.id,
+      );
+
+  const attachments:
+    RepositoryAttachment[] =
+    [];
+
+  if (
+    claimMessageIds.length >
+    0
+  ) {
+    const {
+      data,
+      error,
     } =
       await admin
         .from(
@@ -523,69 +1209,14 @@ async function loadRepositorySnapshot(
         )
         .in(
           "message_id",
-          messageIds,
+          claimMessageIds,
         );
 
     if (
-      attachmentError
+      error
     ) {
       throw new Error(
-        `Unable to load claimant message attachments: ${attachmentError.message}`,
-      );
-    }
-
-    attachments =
-      (
-        attachmentData ??
-        []
-      ) as AttachmentRow[];
-  }
-
-  const staffIds =
-    [
-      ...new Set(
-        messages.flatMap(
-          (
-            message,
-          ) =>
-            message.sender_staff_user_id
-              ? [
-                  message.sender_staff_user_id,
-                ]
-              : [],
-        ),
-      ),
-    ];
-
-  const staffNames =
-    new Map<
-      string,
-      string
-    >();
-
-  if (
-    staffIds.length >
-    0
-  ) {
-    const {
-      data,
-      error,
-    } =
-      await admin
-        .from(
-          "staff_users",
-        )
-        .select(
-          "id, name",
-        )
-        .in(
-          "id",
-          staffIds,
-        );
-
-    if (error) {
-      throw new Error(
-        `Unable to load claimant-message staff names: ${error.message}`,
+        `Unable to load Claim-backed claimant message attachments: ${error.message}`,
       );
     }
 
@@ -595,14 +1226,243 @@ async function loadRepositorySnapshot(
         []
     ) {
       const row =
-        rawRow as StaffRow;
+        rawRow as
+          AttachmentRow;
 
-      staffNames.set(
-        row.id,
-        row.name,
-      );
+      attachments.push({
+        recordKind:
+          "claim",
+
+        id:
+          row.id,
+
+        messageId:
+          row.message_id,
+
+        fileName:
+          row.file_name,
+
+        mimeType:
+          row.mime_type,
+
+        sizeBytes:
+          Number(
+            row.size_bytes,
+          ),
+
+        createdAt:
+          row.created_at,
+      });
     }
   }
+
+  if (
+    assignedMessageIds.length >
+    0
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "assigned_lead_claimant_message_attachments",
+        )
+        .select(
+          "id, message_id, file_name, mime_type, size_bytes, created_at",
+        )
+        .in(
+          "message_id",
+          assignedMessageIds,
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to load assigned claimant message attachments: ${error.message}`,
+      );
+    }
+
+    for (
+      const rawRow of
+        data ??
+        []
+    ) {
+      const row =
+        rawRow as
+          AttachmentRow;
+
+      attachments.push({
+        recordKind:
+          "assigned_lead",
+
+        id:
+          row.id,
+
+        messageId:
+          row.message_id,
+
+        fileName:
+          row.file_name,
+
+        mimeType:
+          row.mime_type,
+
+        sizeBytes:
+          Number(
+            row.size_bytes,
+          ),
+
+        createdAt:
+          row.created_at,
+      });
+    }
+  }
+
+  return attachments;
+}
+
+/* ========================================================================== */
+/* Staff directory                                                             */
+/* ========================================================================== */
+
+async function loadStaffNames(
+  messages:
+    RepositoryMessage[],
+): Promise<
+  Map<
+    string,
+    string
+  >
+> {
+  const ids =
+    [
+      ...new Set(
+        messages.flatMap(
+          (
+            message,
+          ) =>
+            message.senderStaffUserId
+              ? [
+                  message.senderStaffUserId,
+                ]
+              : [],
+        ),
+      ),
+    ];
+
+  const names =
+    new Map<
+      string,
+      string
+    >();
+
+  if (
+    ids.length ===
+    0
+  ) {
+    return names;
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "staff_users",
+      )
+      .select(
+        "id, name",
+      )
+      .in(
+        "id",
+        ids,
+      );
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to load claimant-message staff names: ${error.message}`,
+    );
+  }
+
+  for (
+    const rawRow of
+      data ??
+      []
+  ) {
+    const row =
+      rawRow as
+        StaffRow;
+
+    names.set(
+      row.id,
+      row.name,
+    );
+  }
+
+  return names;
+}
+
+/* ========================================================================== */
+/* Snapshot                                                                    */
+/* ========================================================================== */
+
+async function loadRepositorySnapshot(
+  session:
+    StaffSession,
+): Promise<
+  RepositorySnapshot
+> {
+  const [
+    claimBackedClaimants,
+    assignedLeadClaimants,
+  ] =
+    await Promise.all([
+      loadClaimBackedClaimants(
+        session,
+      ),
+
+      loadAssignedLeadClaimants(
+        session,
+      ),
+    ]);
+
+  const claimants =
+    [
+      ...claimBackedClaimants,
+      ...assignedLeadClaimants,
+    ];
+
+  const threads =
+    await loadThreads(
+      claimants,
+    );
+
+  const messages =
+    await loadMessages(
+      threads,
+    );
+
+  const [
+    attachments,
+    staffNames,
+  ] =
+    await Promise.all([
+      loadAttachments(
+        messages,
+      ),
+
+      loadStaffNames(
+        messages,
+      ),
+    ]);
 
   return {
     claimants,
@@ -621,19 +1481,19 @@ async function loadRepositorySnapshot(
 /* Indexes                                                                     */
 /* ========================================================================== */
 
-function claimantByClaimId(
+function claimantByRecoveryId(
   snapshot:
     RepositorySnapshot,
 ): Map<
   string,
-  ClaimantRow
+  RepositoryClaimant
 > {
   return new Map(
     snapshot.claimants.map(
       (
         claimant,
       ) => [
-        claimant.claim_id,
+        `${claimant.recordKind}:${claimant.recoveryId}`,
         claimant,
       ],
     ),
@@ -645,7 +1505,7 @@ function threadById(
     RepositorySnapshot,
 ): Map<
   string,
-  ThreadRow
+  RepositoryThread
 > {
   return new Map(
     snapshot.threads.map(
@@ -659,19 +1519,19 @@ function threadById(
   );
 }
 
-function threadByClaimId(
+function threadByRecoveryId(
   snapshot:
     RepositorySnapshot,
 ): Map<
   string,
-  ThreadRow
+  RepositoryThread
 > {
   return new Map(
     snapshot.threads.map(
       (
         thread,
       ) => [
-        thread.claim_id,
+        `${thread.recordKind}:${thread.recoveryId}`,
         thread,
       ],
     ),
@@ -683,7 +1543,7 @@ function messageById(
     RepositorySnapshot,
 ): Map<
   string,
-  MessageRow
+  RepositoryMessage
 > {
   return new Map(
     snapshot.messages.map(
@@ -702,12 +1562,12 @@ function attachmentsByMessageId(
     RepositorySnapshot,
 ): Map<
   string,
-  AttachmentRow[]
+  RepositoryAttachment[]
 > {
   const result =
     new Map<
       string,
-      AttachmentRow[]
+      RepositoryAttachment[]
     >();
 
   for (
@@ -716,7 +1576,7 @@ function attachmentsByMessageId(
   ) {
     const current =
       result.get(
-        attachment.message_id,
+        attachment.messageId,
       ) ??
       [];
 
@@ -725,7 +1585,7 @@ function attachmentsByMessageId(
     );
 
     result.set(
-      attachment.message_id,
+      attachment.messageId,
       current,
     );
   }
@@ -734,7 +1594,7 @@ function attachmentsByMessageId(
 }
 
 /* ========================================================================== */
-/* Entries                                                                     */
+/* Message entries                                                            */
 /* ========================================================================== */
 
 function messageEntries(
@@ -742,7 +1602,7 @@ function messageEntries(
     RepositorySnapshot,
 ): ClaimantMailboxEntry[] {
   const claimants =
-    claimantByClaimId(
+    claimantByRecoveryId(
       snapshot,
     );
 
@@ -766,24 +1626,28 @@ function messageEntries(
   ) {
     const thread =
       threads.get(
-        message.thread_id,
+        message.threadId,
       );
 
-    if (!thread) {
+    if (
+      !thread
+    ) {
       continue;
     }
 
     const claimant =
       claimants.get(
-        thread.claim_id,
+        `${thread.recordKind}:${thread.recoveryId}`,
       );
 
-    if (!claimant) {
+    if (
+      !claimant
+    ) {
       continue;
     }
 
     const inbound =
-      message.sender_type ===
+      message.senderType ===
       "claimant";
 
     entries.push({
@@ -800,19 +1664,19 @@ function messageEntries(
         thread.id,
 
       claimantId:
-        claimant.claimant_id,
+        claimant.claimantId,
 
       claimantReference:
-        claimant.claimant_reference,
+        claimant.claimantReference,
 
       legalName:
-        claimant.legal_name,
+        claimant.legalName,
 
       claimId:
-        claimant.claim_id,
+        claimant.recoveryId,
 
       claimReference:
-        claimant.claim_reference,
+        claimant.recoveryReference,
 
       direction:
         inbound
@@ -821,46 +1685,58 @@ function messageEntries(
 
       senderName:
         inbound
-          ? claimant.legal_name
+          ? claimant.legalName
           : (
-              message.sender_staff_user_id
+              message.senderStaffUserId
                 ? snapshot.staffNames.get(
-                    message.sender_staff_user_id,
+                    message.senderStaffUserId,
                   )
                 : undefined
             ) ??
             "DueQuity staff",
 
+      subject:
+        message.subject ??
+        undefined,
+
       bodyPreview:
-        preview(
-          message.body_text,
+        messagePreview(
+          message.subject,
+          message.bodyText,
         ),
 
       sentAt:
-        message.sent_at ??
-        message.created_at,
+        message.sentAt ??
+        message.createdAt,
 
       unread:
         inbound &&
-        !message.staff_read_at,
+        !message.staffReadAt,
 
       attachmentCount:
         attachments.get(
           message.id,
         )?.length ??
         0,
+
+      recordKind:
+        claimant.recordKind,
     });
   }
 
   return entries;
 }
 
+/* ========================================================================== */
+/* Attachment entries                                                         */
+/* ========================================================================== */
+
 function attachmentEntries(
   snapshot:
     RepositorySnapshot,
 ): ClaimantMailboxEntry[] {
   const claimants =
-    claimantByClaimId(
+    claimantByRecoveryId(
       snapshot,
     );
 
@@ -884,28 +1760,34 @@ function attachmentEntries(
   ) {
     const message =
       messages.get(
-        attachment.message_id,
+        attachment.messageId,
       );
 
-    if (!message) {
+    if (
+      !message
+    ) {
       continue;
     }
 
     const thread =
       threads.get(
-        message.thread_id,
+        message.threadId,
       );
 
-    if (!thread) {
+    if (
+      !thread
+    ) {
       continue;
     }
 
     const claimant =
       claimants.get(
-        thread.claim_id,
+        `${thread.recordKind}:${thread.recoveryId}`,
       );
 
-    if (!claimant) {
+    if (
+      !claimant
+    ) {
       continue;
     }
 
@@ -926,77 +1808,87 @@ function attachmentEntries(
         thread.id,
 
       claimantId:
-        claimant.claimant_id,
+        claimant.claimantId,
 
       claimantReference:
-        claimant.claimant_reference,
+        claimant.claimantReference,
 
       legalName:
-        claimant.legal_name,
+        claimant.legalName,
 
       claimId:
-        claimant.claim_id,
+        claimant.recoveryId,
 
       claimReference:
-        claimant.claim_reference,
+        claimant.recoveryReference,
 
       direction:
-        message.sender_type ===
-        "claimant"
+        message.senderType ===
+          "claimant"
           ? "inbound"
           : "outbound",
 
       senderName:
-        message.sender_type ===
-        "claimant"
-          ? claimant.legal_name
+        message.senderType ===
+          "claimant"
+          ? claimant.legalName
           : (
-              message.sender_staff_user_id
+              message.senderStaffUserId
                 ? snapshot.staffNames.get(
-                    message.sender_staff_user_id,
+                    message.senderStaffUserId,
                   )
                 : undefined
             ) ??
             "DueQuity staff",
 
+      subject:
+        message.subject ??
+        undefined,
+
       bodyPreview:
-        preview(
-          message.body_text,
+        messagePreview(
+          message.subject,
+          message.bodyText,
         ),
 
       sentAt:
-        attachment.created_at,
+        attachment.createdAt,
 
       unread:
-        message.sender_type ===
+        message.senderType ===
           "claimant" &&
-        !message.staff_read_at,
+        !message.staffReadAt,
 
       attachmentCount:
         1,
 
       fileName:
-        attachment.file_name,
+        attachment.fileName,
 
       mimeType:
-        attachment.mime_type,
+        attachment.mimeType,
 
       sizeBytes:
-        Number(
-          attachment.size_bytes,
-        ),
+        attachment.sizeBytes,
+
+      recordKind:
+        claimant.recordKind,
     });
   }
 
   return entries;
 }
 
+/* ========================================================================== */
+/* Claimant entries                                                           */
+/* ========================================================================== */
+
 function claimantEntries(
   snapshot:
     RepositorySnapshot,
 ): ClaimantMailboxEntry[] {
   const threads =
-    threadByClaimId(
+    threadByRecoveryId(
       snapshot,
     );
 
@@ -1006,7 +1898,7 @@ function claimantEntries(
     ) => {
       const thread =
         threads.get(
-          claimant.claim_id,
+          `${claimant.recordKind}:${claimant.recoveryId}`,
         );
 
       return {
@@ -1014,25 +1906,28 @@ function claimantEntries(
           "claimant",
 
         id:
-          claimant.claimant_id,
+          claimant.claimantId,
 
         claimantId:
-          claimant.claimant_id,
+          claimant.claimantId,
 
         claimantReference:
-          claimant.claimant_reference,
+          claimant.claimantReference,
 
         legalName:
-          claimant.legal_name,
+          claimant.legalName,
 
         claimId:
-          claimant.claim_id,
+          claimant.recoveryId,
 
         claimReference:
-          claimant.claim_reference,
+          claimant.recoveryReference,
 
         threadId:
           thread?.id,
+
+        recordKind:
+          claimant.recordKind,
       };
     },
   );
@@ -1051,7 +1946,7 @@ function countsForSnapshot(
       (
         message,
       ) =>
-        message.sender_type ===
+        message.senderType ===
         "claimant",
     );
 
@@ -1064,7 +1959,7 @@ function countsForSnapshot(
         (
           message,
         ) =>
-          !message.staff_read_at,
+          !message.staffReadAt,
       ).length,
 
     sentTotal:
@@ -1072,7 +1967,7 @@ function countsForSnapshot(
         (
           message,
         ) =>
-          message.sender_type ===
+          message.senderType ===
           "staff",
       ).length,
 
@@ -1111,7 +2006,7 @@ export async function listClaimantMessageMailbox(
 
   const entries =
     folder ===
-    "inbox"
+      "inbox"
       ? messages.filter(
           (
             entry,
@@ -1156,7 +2051,7 @@ export async function listClaimantMessageMailbox(
 }
 
 /* ========================================================================== */
-/* Repository search                                                           */
+/* Search                                                                      */
 /* ========================================================================== */
 
 export async function searchClaimantMessageMailbox(
@@ -1170,7 +2065,9 @@ export async function searchClaimantMessageMailbox(
       rawQuery,
     );
 
-  if (!query) {
+  if (
+    !query
+  ) {
     return listClaimantMessageMailbox(
       "inbox",
     );
@@ -1228,10 +2125,11 @@ export async function searchClaimantMessageMailbox(
             entry.legalName,
             entry.claimReference,
             entry.senderName,
+            entry.subject,
             entry.bodyPreview,
             entry.direction,
             entry.direction ===
-            "inbound"
+              "inbound"
               ? "inbox"
               : "sent",
           ],
@@ -1250,6 +2148,7 @@ export async function searchClaimantMessageMailbox(
             entry.legalName,
             entry.claimReference,
             entry.senderName,
+            entry.subject,
             entry.bodyPreview,
             entry.fileName,
             entry.mimeType,
@@ -1342,7 +2241,9 @@ export async function getClaimantMailboxAttachmentDownload(
   const normalized =
     attachmentId.trim();
 
-  if (!normalized) {
+  if (
+    !normalized
+  ) {
     throw new Error(
       "Attachment ID is required.",
     );
@@ -1365,7 +2266,9 @@ export async function getClaimantMailboxAttachmentDownload(
         normalized,
     );
 
-  if (!attachment) {
+  if (
+    !attachment
+  ) {
     throw new Error(
       "Claimant message attachment was not found.",
     );
@@ -1377,10 +2280,12 @@ export async function getClaimantMailboxAttachmentDownload(
         item,
       ) =>
         item.id ===
-        attachment.message_id,
+        attachment.messageId,
     );
 
-  if (!message) {
+  if (
+    !message
+  ) {
     throw new Error(
       "Claimant attachment message could not be resolved.",
     );
@@ -1392,10 +2297,12 @@ export async function getClaimantMailboxAttachmentDownload(
         item,
       ) =>
         item.id ===
-        message.thread_id,
+        message.threadId,
     );
 
-  if (!thread) {
+  if (
+    !thread
+  ) {
     throw new Error(
       "Claimant attachment conversation could not be resolved.",
     );
@@ -1406,11 +2313,15 @@ export async function getClaimantMailboxAttachmentDownload(
       (
         item,
       ) =>
-        item.claim_id ===
-        thread.claim_id,
+        item.recordKind ===
+          thread.recordKind &&
+        item.recoveryId ===
+          thread.recoveryId,
     );
 
-  if (!claimant) {
+  if (
+    !claimant
+  ) {
     throw new Error(
       "Claimant attachment identity could not be resolved.",
     );
@@ -1418,7 +2329,7 @@ export async function getClaimantMailboxAttachmentDownload(
 
   return getClaimantMessageAttachmentDownloadForStaff(
     session,
-    claimant.claimant_id,
+    claimant.claimantId,
     normalized,
   );
 }

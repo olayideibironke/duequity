@@ -60,8 +60,13 @@ export type ClaimantIdentitySafetyStatus =
   | "rejected"
   | "unsafe";
 
+export type ClaimantIdentityRecordKind =
+  | "claim"
+  | "assigned_lead";
+
 export interface ClaimantIdentityDocumentView {
-  id: string;
+  id:
+    string;
 
   governmentIdType:
     GovernmentIdType;
@@ -69,11 +74,14 @@ export interface ClaimantIdentityDocumentView {
   governmentIdTypeLabel:
     string;
 
-  originalFileName?: string;
+  originalFileName?:
+    string;
 
-  mimeType: string;
+  mimeType:
+    string;
 
-  byteSize: number;
+  byteSize:
+    number;
 
   status:
     ClaimantIdentityDocumentStatus;
@@ -81,31 +89,47 @@ export interface ClaimantIdentityDocumentView {
   safetyStatus:
     ClaimantIdentitySafetyStatus;
 
-  uploadedAt: string;
+  uploadedAt:
+    string;
 
-  reviewedAt?: string;
+  reviewedAt?:
+    string;
 
-  rejectionReason?: string;
+  rejectionReason?:
+    string;
 }
 
 export interface ClaimantIdentityDocumentState {
-  claimantId: string;
+  claimantId:
+    string;
 
-  claimantReference: string;
+  claimantReference:
+    string;
 
-  claimId: string;
+  claimId:
+    string;
 
-  claimReference: string;
+  claimReference:
+    string;
 
-  legalName: string;
+  legalName:
+    string;
+
+  recordKind?:
+    ClaimantIdentityRecordKind;
+
+  workcaseId?:
+    string;
 
   identityVerification:
     ClaimantIdentityVerificationStatus;
 
-  identityVerifiedAt?: string;
+  identityVerifiedAt?:
+    string;
 
   request: {
-    id: string;
+    id:
+      string;
 
     status:
       | "outstanding"
@@ -114,9 +138,11 @@ export interface ClaimantIdentityDocumentState {
       | "waived"
       | "overdue";
 
-    required: boolean;
+    required:
+      boolean;
 
-    guidance?: string;
+    guidance?:
+      string;
   } | null;
 
   documents:
@@ -133,32 +159,41 @@ export interface ClaimantIdentityDocumentState {
 }
 
 export interface UploadClaimantGovernmentIdInput {
-  claimantId: string;
+  claimantId:
+    string;
 
   governmentIdType:
     GovernmentIdType;
 
-  originalFileName: string;
+  originalFileName:
+    string;
 
-  mimeType: string;
+  mimeType:
+    string;
 
-  buffer: Buffer;
+  buffer:
+    Buffer;
 }
 
 /* ========================================================================== */
-/* Database rows                                                               */
+/* Legacy Claim database rows                                                  */
 /* ========================================================================== */
 
 interface ClaimantIdentityRow {
-  claim_id: string;
+  claim_id:
+    string;
 
-  claim_reference: string;
+  claim_reference:
+    string;
 
-  claimant_id: string;
+  claimant_id:
+    string;
 
-  claimant_reference: string;
+  claimant_reference:
+    string;
 
-  legal_name: string;
+  legal_name:
+    string;
 
   identity_verification:
     ClaimantIdentityVerificationStatus;
@@ -168,7 +203,8 @@ interface ClaimantIdentityRow {
 }
 
 interface GovernmentIdRequestRow {
-  id: string;
+  id:
+    string;
 
   status:
     | "outstanding"
@@ -177,7 +213,8 @@ interface GovernmentIdRequestRow {
     | "waived"
     | "overdue";
 
-  required: boolean;
+  required:
+    boolean;
 
   requested_from_claimant_id:
     string | null;
@@ -187,7 +224,8 @@ interface GovernmentIdRequestRow {
 }
 
 interface GovernmentIdDocumentRow {
-  id: string;
+  id:
+    string;
 
   government_id_type:
     GovernmentIdType;
@@ -195,7 +233,8 @@ interface GovernmentIdDocumentRow {
   original_file_name:
     string | null;
 
-  mime_type: string;
+  mime_type:
+    string;
 
   byte_size:
     number | string;
@@ -206,7 +245,8 @@ interface GovernmentIdDocumentRow {
   malware_scan_status:
     ClaimantIdentitySafetyStatus;
 
-  uploaded_at: string;
+  uploaded_at:
+    string;
 
   reviewed_at:
     string | null;
@@ -214,6 +254,159 @@ interface GovernmentIdDocumentRow {
   rejection_reason:
     string | null;
 }
+
+/* ========================================================================== */
+/* Assigned-lead pre-Claim database rows                                       */
+/* ========================================================================== */
+
+interface AssignedLeadWorkcaseRow {
+  id:
+    string;
+
+  claimant_id:
+    string;
+
+  claimant_reference:
+    string;
+
+  legal_first_name:
+    string;
+
+  legal_last_name:
+    string;
+
+  auth_user_id:
+    string | null;
+
+  status:
+    string;
+
+  linked_claim_id:
+    string | null;
+}
+
+interface AssignedLeadIdentityProfileRow {
+  workcase_id:
+    string;
+
+  claimant_id:
+    string;
+
+  identity_verification:
+    ClaimantIdentityVerificationStatus;
+
+  identity_verified_at:
+    string | null;
+}
+
+interface AssignedLeadDocumentRequestRow {
+  id:
+    string;
+
+  status:
+    | "outstanding"
+    | "received"
+    | "accepted"
+    | "overdue";
+
+  required:
+    boolean;
+
+  guidance:
+    string | null;
+}
+
+interface AssignedLeadDocumentRow {
+  id:
+    string;
+
+  government_id_type:
+    GovernmentIdType;
+
+  original_file_name:
+    string | null;
+
+  mime_type:
+    string;
+
+  byte_size:
+    number | string;
+
+  status:
+    ClaimantIdentityDocumentStatus;
+
+  malware_scan_status:
+    ClaimantIdentitySafetyStatus;
+
+  uploaded_at:
+    string;
+
+  reviewed_at:
+    string | null;
+
+  rejection_reason:
+    string | null;
+}
+
+/* ========================================================================== */
+/* Internal identity context                                                   */
+/* ========================================================================== */
+
+interface ClaimBackedIdentityContext {
+  kind:
+    "claim";
+
+  claimantId:
+    string;
+
+  claimantReference:
+    string;
+
+  claimId:
+    string;
+
+  claimReference:
+    string;
+
+  legalName:
+    string;
+
+  identityVerification:
+    ClaimantIdentityVerificationStatus;
+
+  identityVerifiedAt:
+    string | null;
+}
+
+interface AssignedLeadIdentityContext {
+  kind:
+    "assigned_lead";
+
+  claimantId:
+    string;
+
+  claimantReference:
+    string;
+
+  workcaseId:
+    string;
+
+  legalName:
+    string;
+
+  authUserId:
+    string;
+
+  identityVerification:
+    ClaimantIdentityVerificationStatus;
+
+  identityVerifiedAt:
+    string | null;
+}
+
+type ClaimantIdentityContext =
+  | ClaimBackedIdentityContext
+  | AssignedLeadIdentityContext;
 
 /* ========================================================================== */
 /* Labels                                                                      */
@@ -424,7 +617,7 @@ function contentMatchesMimeType(
 /* Mapping                                                                     */
 /* ========================================================================== */
 
-function documentFromRow(
+function documentFromLegacyRow(
   row:
     GovernmentIdDocumentRow,
 ): ClaimantIdentityDocumentView {
@@ -471,15 +664,62 @@ function documentFromRow(
   };
 }
 
+function documentFromAssignedLeadRow(
+  row:
+    AssignedLeadDocumentRow,
+): ClaimantIdentityDocumentView {
+  return {
+    id:
+      row.id,
+
+    governmentIdType:
+      row.government_id_type,
+
+    governmentIdTypeLabel:
+      governmentIdTypeLabel(
+        row.government_id_type,
+      ),
+
+    originalFileName:
+      row.original_file_name ??
+      undefined,
+
+    mimeType:
+      row.mime_type,
+
+    byteSize:
+      Number(
+        row.byte_size,
+      ),
+
+    status:
+      row.status,
+
+    safetyStatus:
+      row.malware_scan_status,
+
+    uploadedAt:
+      row.uploaded_at,
+
+    reviewedAt:
+      row.reviewed_at ??
+      undefined,
+
+    rejectionReason:
+      row.rejection_reason ??
+      undefined,
+  };
+}
+
 /* ========================================================================== */
-/* Claimant                                                                    */
+/* Identity context resolution                                                 */
 /* ========================================================================== */
 
-async function requireClaimantIdentityRow(
+async function resolveClaimBackedIdentity(
   claimantId:
     string,
 ): Promise<
-  ClaimantIdentityRow
+  ClaimBackedIdentityContext | null
 > {
   const admin =
     getSupabaseAdmin();
@@ -502,32 +742,368 @@ async function requireClaimantIdentityRow(
       .maybeSingle();
 
   if (
-    error ||
-    !data
+    error
   ) {
     throw new Error(
-      "The claimant identity record could not be resolved.",
+      `Unable to resolve the claimant identity record: ${error.message}`,
     );
   }
 
-  return data as ClaimantIdentityRow;
+  if (
+    !data
+  ) {
+    return null;
+  }
+
+  const row =
+    data as
+      ClaimantIdentityRow;
+
+  return {
+    kind:
+      "claim",
+
+    claimantId:
+      row.claimant_id,
+
+    claimantReference:
+      row.claimant_reference,
+
+    claimId:
+      row.claim_id,
+
+    claimReference:
+      row.claim_reference,
+
+    legalName:
+      row.legal_name,
+
+    identityVerification:
+      row.identity_verification,
+
+    identityVerifiedAt:
+      row.identity_verified_at,
+  };
 }
 
-/* ========================================================================== */
-/* State                                                                       */
-/* ========================================================================== */
-
-export async function getClaimantIdentityDocumentState(
+async function resolveAssignedLeadIdentity(
   claimantId:
     string,
 ): Promise<
-  ClaimantIdentityDocumentState
+  AssignedLeadIdentityContext | null
 > {
-  const claimant =
-    await requireClaimantIdentityRow(
-      claimantId,
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data:
+      workcaseData,
+    error:
+      workcaseError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_workcases",
+      )
+      .select(
+        "id, claimant_id, claimant_reference, legal_first_name, legal_last_name, auth_user_id, status, linked_claim_id",
+      )
+      .eq(
+        "claimant_id",
+        claimantId,
+      )
+      .maybeSingle();
+
+  if (
+    workcaseError
+  ) {
+    throw new Error(
+      `Unable to resolve the assigned claimant recovery: ${workcaseError.message}`,
+    );
+  }
+
+  if (
+    !workcaseData
+  ) {
+    return null;
+  }
+
+  const workcase =
+    workcaseData as
+      AssignedLeadWorkcaseRow;
+
+  /*
+   * Once bound to an official Claim, claimant_onboarding must become the
+   * authoritative identity source. If that binding exists but the Claim-backed
+   * claimant record cannot be resolved, fail closed rather than silently
+   * continuing to use the pre-Claim identity repository.
+   */
+  if (
+    workcase.status ===
+      "bound_to_claim" ||
+    workcase.linked_claim_id
+  ) {
+    throw new Error(
+      "The claimant recovery is linked to an official Claim, but the Claim-backed identity record could not be resolved.",
+    );
+  }
+
+  if (
+    workcase.status !==
+      "activated"
+  ) {
+    return null;
+  }
+
+  if (
+    !workcase.auth_user_id
+  ) {
+    throw new Error(
+      "The activated claimant recovery does not have a bound authentication identity.",
+    );
+  }
+
+  const {
+    data:
+      profileData,
+    error:
+      profileError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_identity_profiles",
+      )
+      .select(
+        "workcase_id, claimant_id, identity_verification, identity_verified_at",
+      )
+      .eq(
+        "workcase_id",
+        workcase.id,
+      )
+      .eq(
+        "claimant_id",
+        claimantId,
+      )
+      .maybeSingle();
+
+  if (
+    profileError
+  ) {
+    throw new Error(
+      `Unable to resolve the claimant identity profile: ${profileError.message}`,
+    );
+  }
+
+  if (
+    !profileData
+  ) {
+    throw new Error(
+      "The claimant identity profile has not been initialized.",
+    );
+  }
+
+  const profile =
+    profileData as
+      AssignedLeadIdentityProfileRow;
+
+  return {
+    kind:
+      "assigned_lead",
+
+    claimantId:
+      workcase.claimant_id,
+
+    claimantReference:
+      workcase.claimant_reference,
+
+    workcaseId:
+      workcase.id,
+
+    legalName:
+      [
+        workcase.legal_first_name,
+        workcase.legal_last_name,
+      ]
+        .filter(
+          Boolean,
+        )
+        .join(
+          " ",
+        ),
+
+    authUserId:
+      workcase.auth_user_id,
+
+    identityVerification:
+      profile.identity_verification,
+
+    identityVerifiedAt:
+      profile.identity_verified_at,
+  };
+}
+
+async function requireClaimantIdentityContext(
+  claimantId:
+    string,
+): Promise<
+  ClaimantIdentityContext
+> {
+  const normalizedClaimantId =
+    claimantId.trim();
+
+  if (
+    !normalizedClaimantId
+  ) {
+    throw new Error(
+      "Claimant identity is required.",
+    );
+  }
+
+  const claimBacked =
+    await resolveClaimBackedIdentity(
+      normalizedClaimantId,
     );
 
+  if (
+    claimBacked
+  ) {
+    return claimBacked;
+  }
+
+  const assignedLead =
+    await resolveAssignedLeadIdentity(
+      normalizedClaimantId,
+    );
+
+  if (
+    assignedLead
+  ) {
+    return assignedLead;
+  }
+
+  throw new Error(
+    "The claimant identity record could not be resolved.",
+  );
+}
+
+/* ========================================================================== */
+/* Upload eligibility                                                          */
+/* ========================================================================== */
+
+function resolveUploadEligibility(
+  input: {
+    requestExists:
+      boolean;
+
+    requestRequired:
+      boolean;
+
+    requestBelongsToClaimant:
+      boolean;
+
+    identityVerification:
+      ClaimantIdentityVerificationStatus;
+
+    latestDocument?:
+      ClaimantIdentityDocumentView;
+  },
+): {
+  mayUpload:
+    boolean;
+
+  uploadBlockReason?:
+    string;
+} {
+  if (
+    !input.requestExists ||
+    !input.requestRequired
+  ) {
+    return {
+      mayUpload:
+        false,
+
+      uploadBlockReason:
+        "DueQuity has not issued a current government ID requirement for this recovery.",
+    };
+  }
+
+  if (
+    !input.requestBelongsToClaimant
+  ) {
+    return {
+      mayUpload:
+        false,
+
+      uploadBlockReason:
+        "This government ID requirement is not assigned to your claimant account.",
+    };
+  }
+
+  if (
+    input.identityVerification ===
+      "verified"
+  ) {
+    return {
+      mayUpload:
+        false,
+
+      uploadBlockReason:
+        "Your identity has already been verified.",
+    };
+  }
+
+  const latestDocument =
+    input.latestDocument;
+
+  if (
+    latestDocument &&
+    (
+      latestDocument.status ===
+        "uploaded" ||
+      latestDocument.status ===
+        "scanning" ||
+      latestDocument.status ===
+        "under_review"
+    )
+  ) {
+    return {
+      mayUpload:
+        false,
+
+      uploadBlockReason:
+        "Your current government ID is already being processed. A replacement is not needed unless DueQuity rejects the current file.",
+    };
+  }
+
+  if (
+    latestDocument?.status ===
+      "accepted"
+  ) {
+    return {
+      mayUpload:
+        false,
+
+      uploadBlockReason:
+        "Your government ID has already been accepted.",
+    };
+  }
+
+  return {
+    mayUpload:
+      true,
+  };
+}
+
+/* ========================================================================== */
+/* Legacy Claim identity state                                                 */
+/* ========================================================================== */
+
+async function getClaimBackedIdentityState(
+  context:
+    ClaimBackedIdentityContext,
+): Promise<
+  ClaimantIdentityDocumentState
+> {
   const admin =
     getSupabaseAdmin();
 
@@ -545,7 +1121,7 @@ export async function getClaimantIdentityDocumentState(
         )
         .eq(
           "claim_id",
-          claimant.claim_id,
+          context.claimId,
         )
         .eq(
           "kind",
@@ -562,11 +1138,11 @@ export async function getClaimantIdentityDocumentState(
         )
         .eq(
           "claim_id",
-          claimant.claim_id,
+          context.claimId,
         )
         .eq(
           "claimant_id",
-          claimant.claimant_id,
+          context.claimantId,
         )
         .eq(
           "kind",
@@ -599,7 +1175,8 @@ export async function getClaimantIdentityDocumentState(
 
   const request =
     requestResult.data
-      ? requestResult.data as GovernmentIdRequestRow
+      ? requestResult.data as
+          GovernmentIdRequestRow
       : null;
 
   const documents =
@@ -610,96 +1187,62 @@ export async function getClaimantIdentityDocumentState(
       (
         row,
       ) =>
-        documentFromRow(
-          row as GovernmentIdDocumentRow,
+        documentFromLegacyRow(
+          row as
+            GovernmentIdDocumentRow,
         ),
     );
 
   const latestDocument =
     documents[0];
 
-  let mayUpload =
-    true;
+  const eligibility =
+    resolveUploadEligibility({
+      requestExists:
+        Boolean(
+          request,
+        ),
 
-  let uploadBlockReason:
-    string | undefined;
+      requestRequired:
+        request?.required ===
+          true,
 
-  if (
-    !request ||
-    !request.required
-  ) {
-    mayUpload =
-      false;
+      requestBelongsToClaimant:
+        !request
+          ?.requested_from_claimant_id ||
+        request.requested_from_claimant_id ===
+          context.claimantId,
 
-    uploadBlockReason =
-      "DueQuity has not issued a current government ID requirement for this recovery.";
-  } else if (
-    request.requested_from_claimant_id &&
-    request.requested_from_claimant_id !==
-      claimant.claimant_id
-  ) {
-    mayUpload =
-      false;
+      identityVerification:
+        context.identityVerification,
 
-    uploadBlockReason =
-      "This government ID requirement is not assigned to your claimant account.";
-  } else if (
-    claimant.identity_verification ===
-      "verified"
-  ) {
-    mayUpload =
-      false;
-
-    uploadBlockReason =
-      "Your identity has already been verified.";
-  } else if (
-    latestDocument &&
-    (
-      latestDocument.status ===
-        "uploaded" ||
-      latestDocument.status ===
-        "scanning" ||
-      latestDocument.status ===
-        "under_review"
-    )
-  ) {
-    mayUpload =
-      false;
-
-    uploadBlockReason =
-      "Your current government ID is already being processed. A replacement is not needed unless DueQuity rejects the current file.";
-  } else if (
-    latestDocument?.status ===
-      "accepted"
-  ) {
-    mayUpload =
-      false;
-
-    uploadBlockReason =
-      "Your government ID has already been accepted.";
-  }
+      latestDocument,
+    });
 
   return {
     claimantId:
-      claimant.claimant_id,
+      context.claimantId,
 
     claimantReference:
-      claimant.claimant_reference,
+      context.claimantReference,
 
     claimId:
-      claimant.claim_id,
+      context.claimId,
 
     claimReference:
-      claimant.claim_reference,
+      context.claimReference,
 
     legalName:
-      claimant.legal_name,
+      context.legalName,
+
+    recordKind:
+      "claim",
 
     identityVerification:
-      claimant.identity_verification,
+      context.identityVerification,
 
     identityVerifiedAt:
-      claimant.identity_verified_at ??
+      context.identityVerifiedAt ??
       undefined,
 
     request:
@@ -724,14 +1267,837 @@ export async function getClaimantIdentityDocumentState(
 
     latestDocument,
 
-    mayUpload,
+    mayUpload:
+      eligibility.mayUpload,
 
-    uploadBlockReason,
+    uploadBlockReason:
+      eligibility.uploadBlockReason,
   };
 }
 
 /* ========================================================================== */
-/* Upload                                                                      */
+/* Assigned-lead pre-Claim identity state                                      */
+/* ========================================================================== */
+
+async function getAssignedLeadIdentityState(
+  context:
+    AssignedLeadIdentityContext,
+): Promise<
+  ClaimantIdentityDocumentState
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  const [
+    requestResult,
+    documentResult,
+  ] =
+    await Promise.all([
+      admin
+        .from(
+          "assigned_lead_claimant_document_requests",
+        )
+        .select(
+          "id, status, required, guidance",
+        )
+        .eq(
+          "workcase_id",
+          context.workcaseId,
+        )
+        .eq(
+          "claimant_id",
+          context.claimantId,
+        )
+        .eq(
+          "kind",
+          "government_id",
+        )
+        .maybeSingle(),
+
+      admin
+        .from(
+          "assigned_lead_claimant_documents",
+        )
+        .select(
+          "id, government_id_type, original_file_name, mime_type, byte_size, status, malware_scan_status, uploaded_at, reviewed_at, rejection_reason",
+        )
+        .eq(
+          "workcase_id",
+          context.workcaseId,
+        )
+        .eq(
+          "claimant_id",
+          context.claimantId,
+        )
+        .eq(
+          "kind",
+          "government_id",
+        )
+        .order(
+          "uploaded_at",
+          {
+            ascending:
+              false,
+          },
+        ),
+    ]);
+
+  if (
+    requestResult.error
+  ) {
+    throw new Error(
+      `Unable to load the government ID requirement: ${requestResult.error.message}`,
+    );
+  }
+
+  if (
+    documentResult.error
+  ) {
+    throw new Error(
+      `Unable to load government ID uploads: ${documentResult.error.message}`,
+    );
+  }
+
+  const request =
+    requestResult.data
+      ? requestResult.data as
+          AssignedLeadDocumentRequestRow
+      : null;
+
+  const documents =
+    (
+      documentResult.data ??
+      []
+    ).map(
+      (
+        row,
+      ) =>
+        documentFromAssignedLeadRow(
+          row as
+            AssignedLeadDocumentRow,
+        ),
+    );
+
+  const latestDocument =
+    documents[0];
+
+  const eligibility =
+    resolveUploadEligibility({
+      requestExists:
+        Boolean(
+          request,
+        ),
+
+      requestRequired:
+        request?.required ===
+          true,
+
+      requestBelongsToClaimant:
+        true,
+
+      identityVerification:
+        context.identityVerification,
+
+      latestDocument,
+    });
+
+  /*
+   * The existing claimant UI contract contains claimId and claimReference.
+   * A pre-Claim recovery intentionally has no official Claim yet.
+   *
+   * The workcase UUID is therefore supplied only as the internal record ID,
+   * while the existing DQC claimant reference remains the human-facing
+   * recovery reference. No fake DQ Claim reference is created.
+   */
+  return {
+    claimantId:
+      context.claimantId,
+
+    claimantReference:
+      context.claimantReference,
+
+    claimId:
+      context.workcaseId,
+
+    claimReference:
+      context.claimantReference,
+
+    legalName:
+      context.legalName,
+
+    recordKind:
+      "assigned_lead",
+
+    workcaseId:
+      context.workcaseId,
+
+    identityVerification:
+      context.identityVerification,
+
+    identityVerifiedAt:
+      context.identityVerifiedAt ??
+      undefined,
+
+    request:
+      request
+        ? {
+            id:
+              request.id,
+
+            status:
+              request.status,
+
+            required:
+              request.required,
+
+            guidance:
+              request.guidance ??
+              undefined,
+          }
+        : null,
+
+    documents,
+
+    latestDocument,
+
+    mayUpload:
+      eligibility.mayUpload,
+
+    uploadBlockReason:
+      eligibility.uploadBlockReason,
+  };
+}
+
+/* ========================================================================== */
+/* Public state resolver                                                       */
+/* ========================================================================== */
+
+export async function getClaimantIdentityDocumentState(
+  claimantId:
+    string,
+): Promise<
+  ClaimantIdentityDocumentState
+> {
+  const context =
+    await requireClaimantIdentityContext(
+      claimantId,
+    );
+
+  if (
+    context.kind ===
+      "claim"
+  ) {
+    return getClaimBackedIdentityState(
+      context,
+    );
+  }
+
+  return getAssignedLeadIdentityState(
+    context,
+  );
+}
+
+/* ========================================================================== */
+/* Legacy Claim upload                                                         */
+/* ========================================================================== */
+
+async function uploadClaimBackedGovernmentId(
+  context:
+    ClaimBackedIdentityContext,
+  currentState:
+    ClaimantIdentityDocumentState,
+  input:
+    UploadClaimantGovernmentIdInput,
+  mimeType:
+    string,
+  originalFileName:
+    string,
+): Promise<
+  ClaimantIdentityDocumentState
+> {
+  if (
+    !currentState.request
+  ) {
+    throw new Error(
+      "A government ID requirement must exist before an ID can be uploaded.",
+    );
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const documentId =
+    [
+      "doc",
+      safePathPart(
+        context.claimId,
+      ),
+      randomUUID(),
+    ].join(
+      "-",
+    );
+
+  const extension =
+    extensionForMimeType(
+      mimeType,
+    );
+
+  const storageKey =
+    [
+      safePathPart(
+        context.claimId,
+      ),
+      "government-id",
+      `${randomUUID()}${extension}`,
+    ].join(
+      "/",
+    );
+
+  const uploadedAt =
+    new Date().toISOString();
+
+  const {
+    error:
+      storageError,
+  } =
+    await admin.storage
+      .from(
+        CLAIMANT_IDENTITY_STORAGE_BUCKET,
+      )
+      .upload(
+        storageKey,
+        input.buffer,
+        {
+          contentType:
+            mimeType,
+
+          upsert:
+            false,
+
+          cacheControl:
+            "0",
+        },
+      );
+
+  if (
+    storageError
+  ) {
+    throw new Error(
+      `Unable to securely store the government ID: ${storageError.message}`,
+    );
+  }
+
+  const {
+    error:
+      insertError,
+  } =
+    await admin
+      .from(
+        "claim_documents",
+      )
+      .insert({
+        id:
+          documentId,
+
+        claim_id:
+          context.claimId,
+
+        opportunity_id:
+          null,
+
+        claimant_id:
+          context.claimantId,
+
+        kind:
+          "government_id",
+
+        government_id_type:
+          input.governmentIdType,
+
+        title:
+          governmentIdTypeLabel(
+            input.governmentIdType,
+          ),
+
+        original_file_name:
+          originalFileName,
+
+        mime_type:
+          mimeType,
+
+        byte_size:
+          input.buffer.length,
+
+        sensitivity:
+          "restricted",
+
+        status:
+          "uploaded",
+
+        storage_bucket:
+          CLAIMANT_IDENTITY_STORAGE_BUCKET,
+
+        storage_key:
+          storageKey,
+
+        malware_scan_status:
+          "pending",
+
+        malware_scanned_at:
+          null,
+
+        malware_scan_detail:
+          null,
+
+        uploaded_by_user_id:
+          null,
+
+        uploaded_by_claimant_id:
+          context.claimantId,
+
+        uploaded_at:
+          uploadedAt,
+
+        reviewed_by_user_id:
+          null,
+
+        reviewed_at:
+          null,
+
+        rejection_reason:
+          null,
+
+        page_count:
+          null,
+
+        expires_at:
+          null,
+
+        row_version:
+          1,
+      });
+
+  if (
+    insertError
+  ) {
+    await admin.storage
+      .from(
+        CLAIMANT_IDENTITY_STORAGE_BUCKET,
+      )
+      .remove([
+        storageKey,
+      ]);
+
+    throw new Error(
+      `Unable to register the government ID upload: ${insertError.message}`,
+    );
+  }
+
+  /*
+   * The existing Claim document trigger updates claimant_onboarding and the
+   * government-ID request when a document enters uploaded/review states.
+   *
+   * The explicit request update below is retained for compatibility with the
+   * established Claim-backed workflow.
+   */
+  const {
+    error:
+      requestError,
+  } =
+    await admin
+      .from(
+        "claim_document_requests",
+      )
+      .update({
+        required:
+          true,
+
+        status:
+          "received",
+
+        fulfilled_by_document_id:
+          null,
+
+        waived_reason:
+          null,
+      })
+      .eq(
+        "id",
+        currentState.request.id,
+      )
+      .neq(
+        "status",
+        "accepted",
+      );
+
+  if (
+    requestError
+  ) {
+    await admin
+      .from(
+        "claim_documents",
+      )
+      .delete()
+      .eq(
+        "id",
+        documentId,
+      );
+
+    await admin.storage
+      .from(
+        CLAIMANT_IDENTITY_STORAGE_BUCKET,
+      )
+      .remove([
+        storageKey,
+      ]);
+
+    await admin
+      .from(
+        "claimant_onboarding",
+      )
+      .update({
+        identity_verification:
+          "documents_requested",
+
+        identity_verified_at:
+          null,
+
+        identity_provider_ref:
+          null,
+      })
+      .eq(
+        "claimant_id",
+        context.claimantId,
+      )
+      .neq(
+        "identity_verification",
+        "verified",
+      );
+
+    throw new Error(
+      `Unable to update the government ID requirement: ${requestError.message}`,
+    );
+  }
+
+  const {
+    error:
+      auditError,
+  } =
+    await admin
+      .from(
+        "claim_document_audit",
+      )
+      .insert({
+        id:
+          randomUUID(),
+
+        claim_id:
+          context.claimId,
+
+        document_id:
+          documentId,
+
+        request_id:
+          currentState.request.id,
+
+        action:
+          "document_uploaded",
+
+        actor_user_id:
+          context.claimantId,
+
+        occurred_at:
+          uploadedAt,
+
+        detail:
+          `${governmentIdTypeLabel(
+            input.governmentIdType,
+          )} uploaded by the authenticated claimant through the restricted government ID workflow. Safety review remains pending.`,
+      });
+
+  if (
+    auditError
+  ) {
+    throw new Error(
+      `Government ID was stored but its audit record could not be written: ${auditError.message}`,
+    );
+  }
+
+  return getClaimantIdentityDocumentState(
+    context.claimantId,
+  );
+}
+
+/* ========================================================================== */
+/* Assigned-lead pre-Claim upload                                              */
+/* ========================================================================== */
+
+async function uploadAssignedLeadGovernmentId(
+  context:
+    AssignedLeadIdentityContext,
+  currentState:
+    ClaimantIdentityDocumentState,
+  input:
+    UploadClaimantGovernmentIdInput,
+  mimeType:
+    string,
+  originalFileName:
+    string,
+): Promise<
+  ClaimantIdentityDocumentState
+> {
+  if (
+    !currentState.request
+  ) {
+    throw new Error(
+      "A government ID requirement must exist before an ID can be uploaded.",
+    );
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const documentId =
+    randomUUID();
+
+  const extension =
+    extensionForMimeType(
+      mimeType,
+    );
+
+  /*
+   * Pre-Claim identity evidence remains in the same private claim-documents
+   * bucket but has its own isolated object path. It is never attached to a
+   * fabricated Claim.
+   */
+  const storageKey =
+    [
+      "preclaim",
+      safePathPart(
+        context.workcaseId,
+      ),
+      "government-id",
+      `${randomUUID()}${extension}`,
+    ].join(
+      "/",
+    );
+
+  const uploadedAt =
+    new Date().toISOString();
+
+  const {
+    error:
+      storageError,
+  } =
+    await admin.storage
+      .from(
+        CLAIMANT_IDENTITY_STORAGE_BUCKET,
+      )
+      .upload(
+        storageKey,
+        input.buffer,
+        {
+          contentType:
+            mimeType,
+
+          upsert:
+            false,
+
+          cacheControl:
+            "0",
+        },
+      );
+
+  if (
+    storageError
+  ) {
+    throw new Error(
+      `Unable to securely store the government ID: ${storageError.message}`,
+    );
+  }
+
+  const {
+    error:
+      insertError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_documents",
+      )
+      .insert({
+        id:
+          documentId,
+
+        workcase_id:
+          context.workcaseId,
+
+        claimant_id:
+          context.claimantId,
+
+        kind:
+          "government_id",
+
+        government_id_type:
+          input.governmentIdType,
+
+        title:
+          governmentIdTypeLabel(
+            input.governmentIdType,
+          ),
+
+        original_file_name:
+          originalFileName,
+
+        mime_type:
+          mimeType,
+
+        byte_size:
+          input.buffer.length,
+
+        sensitivity:
+          "restricted",
+
+        status:
+          "uploaded",
+
+        storage_bucket:
+          CLAIMANT_IDENTITY_STORAGE_BUCKET,
+
+        storage_key:
+          storageKey,
+
+        malware_scan_status:
+          "pending",
+
+        malware_scanned_at:
+          null,
+
+        malware_scan_detail:
+          null,
+
+        uploaded_by_claimant_auth_user_id:
+          context.authUserId,
+
+        uploaded_at:
+          uploadedAt,
+
+        reviewed_by_staff_user_id:
+          null,
+
+        reviewed_at:
+          null,
+
+        rejection_reason:
+          null,
+
+        row_version:
+          1,
+      });
+
+  if (
+    insertError
+  ) {
+    await admin.storage
+      .from(
+        CLAIMANT_IDENTITY_STORAGE_BUCKET,
+      )
+      .remove([
+        storageKey,
+      ]);
+
+    throw new Error(
+      `Unable to register the government ID upload: ${insertError.message}`,
+    );
+  }
+
+  /*
+   * Stage 32 owns the state transition transactionally.
+   *
+   * Inserting the document automatically:
+   *
+   * - moves the pre-Claim identity profile to under_review;
+   * - moves the required government-ID request to received.
+   *
+   * Application code must not duplicate those state mutations.
+   */
+  const {
+    error:
+      auditError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_document_audit",
+      )
+      .insert({
+        id:
+          randomUUID(),
+
+        workcase_id:
+          context.workcaseId,
+
+        claimant_id:
+          context.claimantId,
+
+        document_id:
+          documentId,
+
+        request_id:
+          currentState.request.id,
+
+        action:
+          "document_uploaded",
+
+        actor_type:
+          "claimant",
+
+        actor_staff_user_id:
+          null,
+
+        actor_claimant_auth_user_id:
+          context.authUserId,
+
+        occurred_at:
+          uploadedAt,
+
+        detail: {
+          governmentIdType:
+            input.governmentIdType,
+
+          governmentIdTypeLabel:
+            governmentIdTypeLabel(
+              input.governmentIdType,
+            ),
+
+          originalFileName,
+
+          mimeType,
+
+          byteSize:
+            input.buffer.length,
+
+          safetyStatus:
+            "pending",
+
+          source:
+            "my_duequity_identity_portal",
+        },
+      });
+
+  if (
+    auditError
+  ) {
+    throw new Error(
+      `Government ID was stored but its audit record could not be written: ${auditError.message}`,
+    );
+  }
+
+  return getClaimantIdentityDocumentState(
+    context.claimantId,
+  );
+}
+
+/* ========================================================================== */
+/* Public upload                                                               */
 /* ========================================================================== */
 
 export async function uploadClaimantGovernmentId(
@@ -805,10 +2171,20 @@ export async function uploadClaimantGovernmentId(
     );
   }
 
-  const currentState =
-    await getClaimantIdentityDocumentState(
+  const context =
+    await requireClaimantIdentityContext(
       claimantId,
     );
+
+  const currentState =
+    context.kind ===
+      "claim"
+      ? await getClaimBackedIdentityState(
+          context,
+        )
+      : await getAssignedLeadIdentityState(
+          context,
+        );
 
   if (
     !currentState.mayUpload
@@ -819,313 +2195,29 @@ export async function uploadClaimantGovernmentId(
     );
   }
 
-  if (
-    !currentState.request
-  ) {
-    throw new Error(
-      "A government ID requirement must exist before an ID can be uploaded.",
-    );
-  }
-
-  const admin =
-    getSupabaseAdmin();
-
-  const documentId =
-    [
-      "doc",
-      safePathPart(
-        currentState.claimId,
-      ),
-      randomUUID(),
-    ].join(
-      "-",
-    );
-
-  const extension =
-    extensionForMimeType(
-      mimeType,
-    );
-
-  const storageKey =
-    [
-      safePathPart(
-        currentState.claimId,
-      ),
-      "government-id",
-      `${randomUUID()}${extension}`,
-    ].join(
-      "/",
-    );
-
   const originalFileName =
     safeOriginalFileName(
       input.originalFileName,
     );
 
-  const uploadedAt =
-    new Date().toISOString();
-
-  const {
-    error:
-      storageError,
-  } =
-    await admin.storage
-      .from(
-        CLAIMANT_IDENTITY_STORAGE_BUCKET,
-      )
-      .upload(
-        storageKey,
-        input.buffer,
-        {
-          contentType:
-            mimeType,
-
-          upsert:
-            false,
-
-          cacheControl:
-            "0",
-        },
-      );
-
   if (
-    storageError
+    context.kind ===
+      "claim"
   ) {
-    throw new Error(
-      `Unable to securely store the government ID: ${storageError.message}`,
+    return uploadClaimBackedGovernmentId(
+      context,
+      currentState,
+      input,
+      mimeType,
+      originalFileName,
     );
   }
 
-  const {
-    error:
-      insertError,
-  } =
-    await admin
-      .from(
-        "claim_documents",
-      )
-      .insert({
-        id:
-          documentId,
-
-        claim_id:
-          currentState.claimId,
-
-        opportunity_id:
-          null,
-
-        claimant_id:
-          claimantId,
-
-        kind:
-          "government_id",
-
-        government_id_type:
-          input.governmentIdType,
-
-        title:
-          governmentIdTypeLabel(
-            input.governmentIdType,
-          ),
-
-        original_file_name:
-          originalFileName,
-
-        mime_type:
-          mimeType,
-
-        byte_size:
-          input.buffer.length,
-
-        sensitivity:
-          "restricted",
-
-        status:
-          "uploaded",
-
-        storage_bucket:
-          CLAIMANT_IDENTITY_STORAGE_BUCKET,
-
-        storage_key:
-          storageKey,
-
-        malware_scan_status:
-          "pending",
-
-        malware_scanned_at:
-          null,
-
-        malware_scan_detail:
-          null,
-
-        uploaded_by_user_id:
-          null,
-
-        uploaded_by_claimant_id:
-          claimantId,
-
-        uploaded_at:
-          uploadedAt,
-
-        reviewed_by_user_id:
-          null,
-
-        reviewed_at:
-          null,
-
-        rejection_reason:
-          null,
-
-        page_count:
-          null,
-
-        expires_at:
-          null,
-
-        row_version:
-          1,
-      });
-
-  if (
-    insertError
-  ) {
-    await admin.storage
-      .from(
-        CLAIMANT_IDENTITY_STORAGE_BUCKET,
-      )
-      .remove([
-        storageKey,
-      ]);
-
-    throw new Error(
-      `Unable to register the government ID upload: ${insertError.message}`,
-    );
-  }
-
-  const {
-    error:
-      requestError,
-  } =
-    await admin
-      .from(
-        "claim_document_requests",
-      )
-      .update({
-        required:
-          true,
-
-        status:
-          "received",
-
-        fulfilled_by_document_id:
-          null,
-
-        waived_reason:
-          null,
-      })
-      .eq(
-        "id",
-        currentState.request.id,
-      )
-      .neq(
-        "status",
-        "accepted",
-      );
-
-  if (
-    requestError
-  ) {
-    await admin
-      .from(
-        "claim_documents",
-      )
-      .delete()
-      .eq(
-        "id",
-        documentId,
-      );
-
-    await admin.storage
-      .from(
-        CLAIMANT_IDENTITY_STORAGE_BUCKET,
-      )
-      .remove([
-        storageKey,
-      ]);
-
-    await admin
-      .from(
-        "claimant_onboarding",
-      )
-      .update({
-        identity_verification:
-          "documents_requested",
-
-        identity_verified_at:
-          null,
-
-        identity_provider_ref:
-          null,
-      })
-      .eq(
-        "claimant_id",
-        claimantId,
-      )
-      .neq(
-        "identity_verification",
-        "verified",
-      );
-
-    throw new Error(
-      `Unable to update the government ID requirement: ${requestError.message}`,
-    );
-  }
-
-  const {
-    error:
-      auditError,
-  } =
-    await admin
-      .from(
-        "claim_document_audit",
-      )
-      .insert({
-        id:
-          randomUUID(),
-
-        claim_id:
-          currentState.claimId,
-
-        document_id:
-          documentId,
-
-        request_id:
-          currentState.request.id,
-
-        action:
-          "document_uploaded",
-
-        actor_user_id:
-          claimantId,
-
-        occurred_at:
-          uploadedAt,
-
-        detail:
-          `${governmentIdTypeLabel(
-            input.governmentIdType,
-          )} uploaded by the authenticated claimant through the restricted government ID workflow. Safety review remains pending.`,
-      });
-
-  if (
-    auditError
-  ) {
-    throw new Error(
-      `Government ID was stored but its audit record could not be written: ${auditError.message}`,
-    );
-  }
-
-  return getClaimantIdentityDocumentState(
-    claimantId,
+  return uploadAssignedLeadGovernmentId(
+    context,
+    currentState,
+    input,
+    mimeType,
+    originalFileName,
   );
 }

@@ -18,17 +18,37 @@ import {
 /* ========================================================================== */
 
 interface ClaimantOnboardingAuthRow {
-  claimant_id: string;
+  claimant_id:
+    string;
 }
 
 interface ClaimantInvitationSessionRow {
-  claimant_id: string;
+  claimant_id:
+    string;
 
-  status: string;
+  status:
+    string;
+}
+
+interface AssignedLeadClaimantAuthRow {
+  claimant_id:
+    string;
+
+  status:
+    string;
+}
+
+interface AssignedLeadInvitationSessionRow {
+  claimant_id:
+    string;
+
+  status:
+    string;
 }
 
 interface SupabaseClaimantResolution {
-  authenticatedIdentity: boolean;
+  authenticatedIdentity:
+    boolean;
 
   session:
     ClaimantSession | null;
@@ -70,9 +90,15 @@ async function resolveSupabaseClaimantSession(): Promise<
   const admin =
     getSupabaseAdmin();
 
+  /* ======================================================================== */
+  /* Existing Claim-backed claimant                                           */
+  /* ======================================================================== */
+
   const {
-    data,
-    error,
+    data:
+      claimantData,
+    error:
+      claimantError,
   } =
     await admin
       .from(
@@ -87,13 +113,141 @@ async function resolveSupabaseClaimantSession(): Promise<
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    claimantError
+  ) {
     throw new Error(
-      `Unable to resolve claimant profile: ${error.message}`,
+      `Unable to resolve claimant profile: ${claimantError.message}`,
     );
   }
 
-  if (!data) {
+  if (
+    claimantData
+  ) {
+    const row =
+      claimantData as
+        ClaimantOnboardingAuthRow;
+
+    const {
+      data:
+        invitationData,
+      error:
+        invitationError,
+    } =
+      await admin
+        .from(
+          "claimant_activation_invitations",
+        )
+        .select(
+          "claimant_id, status",
+        )
+        .eq(
+          "auth_user_id",
+          authUser.id,
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          },
+        )
+        .limit(
+          1,
+        );
+
+    if (
+      invitationError
+    ) {
+      throw new Error(
+        `Unable to verify claimant activation state: ${invitationError.message}`,
+      );
+    }
+
+    const invitations =
+      (
+        invitationData ??
+        []
+      ) as
+        ClaimantInvitationSessionRow[];
+
+    if (
+      invitations.length >
+      0
+    ) {
+      const invitation =
+        invitations[0];
+
+      if (
+        invitation.claimant_id !==
+          row.claimant_id ||
+        invitation.status !==
+          "activated"
+      ) {
+        return {
+          authenticatedIdentity:
+            true,
+
+          session:
+            null,
+        };
+      }
+    }
+
+    return {
+      authenticatedIdentity:
+        true,
+
+      session: {
+        claimantId:
+          row.claimant_id,
+
+        provider:
+          "supabase",
+      },
+    };
+  }
+
+  /* ======================================================================== */
+  /* Admin-assigned pre-Claim claimant                                        */
+  /* ======================================================================== */
+
+  const {
+    data:
+      assignedWorkcase,
+    error:
+      assignedWorkcaseError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_workcases",
+      )
+      .select(
+        "claimant_id, status",
+      )
+      .eq(
+        "auth_user_id",
+        authUser.id,
+      )
+      .maybeSingle();
+
+  if (
+    assignedWorkcaseError
+  ) {
+    throw new Error(
+      `Unable to resolve assigned claimant profile: ${assignedWorkcaseError.message}`,
+    );
+  }
+
+  if (
+    !assignedWorkcase
+  ) {
+    /*
+     * A real Supabase identity exists, but it does not belong to a recognized
+     * DueQuity claimant profile.
+     *
+     * Fail closed and never fall through to the local development claimant.
+     */
     return {
       authenticatedIdentity:
         true,
@@ -103,25 +257,32 @@ async function resolveSupabaseClaimantSession(): Promise<
     };
   }
 
-  const row =
-    data as ClaimantOnboardingAuthRow;
+  const workcase =
+    assignedWorkcase as
+      AssignedLeadClaimantAuthRow;
 
-  /*
-   * Invitation-backed claimant identities must finish activation before portal
-   * access is granted.
-   *
-   * Legacy claimant Auth identities created before controlled invitations were
-   * introduced have no invitation rows and remain valid.
-   */
+  if (
+    workcase.status !==
+      "activated"
+  ) {
+    return {
+      authenticatedIdentity:
+        true,
+
+      session:
+        null,
+    };
+  }
+
   const {
     data:
-      invitationData,
+      assignedInvitationData,
     error:
-      invitationError,
+      assignedInvitationError,
   } =
     await admin
       .from(
-        "claimant_activation_invitations",
+        "assigned_lead_claimant_activation_invitations",
       )
       .select(
         "claimant_id, status",
@@ -142,40 +303,37 @@ async function resolveSupabaseClaimantSession(): Promise<
       );
 
   if (
-    invitationError
+    assignedInvitationError
   ) {
     throw new Error(
-      `Unable to verify claimant activation state: ${invitationError.message}`,
+      `Unable to verify assigned claimant activation state: ${assignedInvitationError.message}`,
     );
   }
 
-  const invitations =
+  const assignedInvitations =
     (
-      invitationData ??
+      assignedInvitationData ??
       []
-    ) as ClaimantInvitationSessionRow[];
+    ) as
+      AssignedLeadInvitationSessionRow[];
 
   if (
-    invitations.length >
-    0
+    assignedInvitations.length ===
+      0 ||
+    assignedInvitations[0]
+      .claimant_id !==
+      workcase.claimant_id ||
+    assignedInvitations[0]
+      .status !==
+      "activated"
   ) {
-    const invitation =
-      invitations[0];
+    return {
+      authenticatedIdentity:
+        true,
 
-    if (
-      invitation.claimant_id !==
-        row.claimant_id ||
-      invitation.status !==
-        "activated"
-    ) {
-      return {
-        authenticatedIdentity:
-          true,
-
-        session:
-          null,
-      };
-    }
+      session:
+        null,
+    };
   }
 
   return {
@@ -184,7 +342,7 @@ async function resolveSupabaseClaimantSession(): Promise<
 
     session: {
       claimantId:
-        row.claimant_id,
+        workcase.claimant_id,
 
       provider:
         "supabase",
@@ -196,13 +354,6 @@ async function resolveSupabaseClaimantSession(): Promise<
 /* Unified resolver                                                            */
 /* ========================================================================== */
 
-/**
- * A real Supabase identity always takes precedence.
- *
- * This matters during local invitation testing: a pending real claimant invite
- * must never fall through to the development claimant adapter and accidentally
- * receive portal access.
- */
 export async function resolveClaimantSession(): Promise<
   ClaimantSession | null
 > {

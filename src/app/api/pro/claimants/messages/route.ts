@@ -4,9 +4,9 @@ import {
 } from "next/server";
 
 import {
-  getClaimantMessageThreadForStaff,
-  sendStaffClaimantMessage,
-} from "@/server/claimant-message-store";
+  getStaffClaimantMailboxThread,
+  sendStaffClaimantMailboxMessage,
+} from "@/server/staff-claimant-mailbox-message-service";
 
 import {
   listClaimantMessageMailbox,
@@ -23,6 +23,10 @@ export const runtime =
 
 export const dynamic =
   "force-dynamic";
+
+/* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
 
 function errorResponse(
   message:
@@ -63,6 +67,10 @@ function normalizeFolder(
       return "inbox";
   }
 }
+
+/* ========================================================================== */
+/* GET                                                                         */
+/* ========================================================================== */
 
 export async function GET(
   request:
@@ -125,7 +133,7 @@ export async function GET(
     const thread =
       threadId &&
       claimantId
-        ? await getClaimantMessageThreadForStaff(
+        ? await getStaffClaimantMailboxThread(
             claimantId,
             threadId,
           )
@@ -156,6 +164,10 @@ export async function GET(
   }
 }
 
+/* ========================================================================== */
+/* POST                                                                        */
+/* ========================================================================== */
+
 export async function POST(
   request:
     NextRequest,
@@ -182,6 +194,11 @@ export async function POST(
     const claimantIdValue =
       formData.get(
         "claimantId",
+      );
+
+    const subjectValue =
+      formData.get(
+        "subject",
       );
 
     const bodyValue =
@@ -213,26 +230,30 @@ export async function POST(
           (
             value,
           ): value is File =>
-            value instanceof File,
+            value instanceof
+            File,
         );
 
     const thread =
-      await sendStaffClaimantMessage({
-        actor:
-          session.user,
-
+      await sendStaffClaimantMailboxMessage({
         claimantId:
           claimantIdValue,
 
+        subject:
+          typeof subjectValue ===
+            "string"
+            ? subjectValue
+            : "",
+
         bodyText:
           typeof bodyValue ===
-          "string"
+            "string"
             ? bodyValue
             : "",
 
         replyToMessageId:
           typeof replyValue ===
-          "string"
+            "string"
             ? replyValue
             : undefined,
 

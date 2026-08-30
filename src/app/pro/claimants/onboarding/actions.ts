@@ -9,6 +9,10 @@ import {
 } from "next/navigation";
 
 import {
+  inviteAssignedLeadClaimantUser,
+} from "@/server/assigned-lead-claimant-activation-service";
+
+import {
   assertClaimantActivationPrerequisites,
   createClaimantFromConfirmedCall,
 } from "@/server/claimant-intake-create-service";
@@ -278,7 +282,7 @@ function creationFailureStatus(
 }
 
 /* ========================================================================== */
-/* Invitation error routing                                                    */
+/* Existing Claim invitation error routing                                     */
 /* ========================================================================== */
 
 function invitationFailureStatus(
@@ -403,6 +407,89 @@ function invitationFailureStatus(
     )
   ) {
     return "not-authorized";
+  }
+
+  return "unavailable";
+}
+
+/* ========================================================================== */
+/* Assigned-lead invitation error routing                                      */
+/* ========================================================================== */
+
+function assignedInvitationFailureStatus(
+  failure:
+    unknown,
+): string {
+  if (!(failure instanceof Error)) {
+    return "unavailable";
+  }
+
+  const message =
+    failure.message
+      .trim()
+      .toLowerCase();
+
+  if (
+    message.includes(
+      "already has an active activation invitation",
+    )
+  ) {
+    return "open-invitation";
+  }
+
+  if (
+    message.includes(
+      "staff auth identity cannot be used as a claimant identity",
+    )
+  ) {
+    return "auth-collision";
+  }
+
+  if (
+    message.includes(
+      "saved assigned claimant contact information is incomplete",
+    ) ||
+    message.includes(
+      "assigned claimant workcase is incomplete for activation",
+    )
+  ) {
+    return "claimant-record-incomplete";
+  }
+
+  if (
+    message.includes(
+      "assigned claimant workcase not found",
+    )
+  ) {
+    return "claimant-not-found";
+  }
+
+  if (
+    message.includes(
+      "not assigned to this staff account",
+    ) ||
+    message.includes(
+      "not authorized to create claimant activation invitations",
+    ) ||
+    message.includes(
+      "active administrator-authorized lead assignment not found",
+    ) ||
+    message.includes(
+      "activation invitation is not owned by this staff account",
+    )
+  ) {
+    return "not-authorized";
+  }
+
+  if (
+    message.includes(
+      "assigned claimant workcase is not ready for activation",
+    ) ||
+    message.includes(
+      "assigned claimant workcase is no longer ready for activation",
+    )
+  ) {
+    return "open-invitation";
   }
 
   return "unavailable";
@@ -534,13 +621,6 @@ export async function createClaimantFromConfirmedCallAction(
     );
   }
 
-  /*
-   * redirect() intentionally lives outside the try/catch.
-   *
-   * Next.js implements redirect by throwing a framework-controlled signal.
-   * Keeping it outside prevents our service-error catch from accidentally
-   * converting a successful redirect into a failure status.
-   */
   redirect(
     onboardingLocation({
       status:
@@ -555,7 +635,7 @@ export async function createClaimantFromConfirmedCallAction(
 }
 
 /* ========================================================================== */
-/* Send invitation                                                             */
+/* Existing Claim-backed invitation                                            */
 /* ========================================================================== */
 
 export async function sendClaimantActivationInvitation(
@@ -664,5 +744,98 @@ export async function sendClaimantActivationInvitation(
 
   redirect(
     `${ONBOARDING_PATH}?status=sent`,
+  );
+}
+
+/* ========================================================================== */
+/* Admin-assigned pre-Claim invitation                                         */
+/* ========================================================================== */
+
+export async function sendAssignedLeadClaimantActivationInvitation(
+  formData:
+    FormData,
+) {
+  const session =
+    await resolveStaffSession();
+
+  if (!session) {
+    redirect(
+      "/staff/sign-in",
+    );
+  }
+
+  const workcaseId =
+    readFormValue(
+      formData,
+      "workcaseId",
+    );
+
+  const query =
+    readFormValue(
+      formData,
+      "q",
+    );
+
+  const confirmation =
+    readFormValue(
+      formData,
+      "confirmation",
+    );
+
+  if (
+    !workcaseId ||
+    confirmation !==
+      "confirmed"
+  ) {
+    redirect(
+      onboardingLocation({
+        status:
+          "invalid",
+
+        query,
+      }),
+    );
+  }
+
+  const origin =
+    await resolveRequestOrigin();
+
+  try {
+    await inviteAssignedLeadClaimantUser({
+      session,
+
+      workcaseId,
+
+      redirectTo:
+        `${origin}/auth/claimant-invite/callback`,
+    });
+  } catch (
+    failure
+  ) {
+    const status =
+      assignedInvitationFailureStatus(
+        failure,
+      );
+
+    redirect(
+      onboardingLocation({
+        status,
+
+        query,
+      }),
+    );
+  }
+
+  /*
+   * The same success status is intentionally shared with the established
+   * Claim-backed invitation path.
+   */
+  redirect(
+    onboardingLocation({
+      status:
+        "sent",
+
+      query,
+    }),
   );
 }

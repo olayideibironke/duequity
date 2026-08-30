@@ -203,6 +203,10 @@ export function PortalShell({
         Skip to main content
       </a>
 
+      {/* ==================================================================== */}
+      {/* Top header                                                           */}
+      {/* ==================================================================== */}
+
       <header className="sticky top-0 z-30 border-b border-ink-800 bg-ink-950">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:h-16 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -264,6 +268,10 @@ export function PortalShell({
             </button>
           </div>
         </div>
+
+        {/* ================================================================== */}
+        {/* Account menu                                                       */}
+        {/* ================================================================== */}
 
         {menuOpen && (
           <div
@@ -328,6 +336,10 @@ export function PortalShell({
                   Return to duequity.com
                 </Link>
 
+                {/*
+                 * Keep Sign out in the account menu for small screens and as a
+                 * secondary account action.
+                 */}
                 <form
                   action="/auth/sign-out"
                   method="post"
@@ -346,69 +358,106 @@ export function PortalShell({
         )}
       </header>
 
+      {/* ==================================================================== */}
+      {/* Main portal                                                          */}
+      {/* ==================================================================== */}
+
       <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 py-6 sm:px-6 lg:py-8">
+        {/* ================================================================== */}
+        {/* Desktop navigation                                                 */}
+        {/* ================================================================== */}
+
         <nav
           aria-label="Portal"
           className="hidden w-52 shrink-0 lg:block"
         >
-          <ul className="sticky top-24 space-y-0.5">
-            {NAV.map(
-              (
-                item,
-              ) => {
-                const active =
-                  isActive(
-                    item.href,
-                    item.exact,
-                  );
+          <div className="sticky top-24">
+            <ul className="space-y-0.5">
+              {NAV.map(
+                (
+                  item,
+                ) => {
+                  const active =
+                    isActive(
+                      item.href,
+                      item.exact,
+                    );
 
-                const Icon =
-                  item.icon;
+                  const Icon =
+                    item.icon;
 
-                return (
-                  <li
-                    key={
-                      item.href
-                    }
-                  >
-                    <Link
-                      href={
+                  return (
+                    <li
+                      key={
                         item.href
                       }
-                      aria-current={
-                        active
-                          ? "page"
-                          : undefined
-                      }
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-md px-3 py-2 text-base font-medium transition-colors",
-                        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500",
-
-                        active
-                          ? "bg-ink-900 text-white"
-                          : "text-ink-600 hover:bg-ink-100 hover:text-ink-900",
-                      )}
                     >
-                      <Icon
-                        size={18}
-                        className={
+                      <Link
+                        href={
+                          item.href
+                        }
+                        aria-current={
                           active
-                            ? "text-accent-300"
+                            ? "page"
                             : undefined
                         }
-                      />
+                        className={cn(
+                          "flex items-center gap-2.5 rounded-md px-3 py-2 text-base font-medium transition-colors",
+                          "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500",
 
-                      <span className="flex-1">
-                        {
-                          item.label
-                        }
-                      </span>
-                    </Link>
-                  </li>
-                );
-              },
-            )}
-          </ul>
+                          active
+                            ? "bg-ink-900 text-white"
+                            : "text-ink-600 hover:bg-ink-100 hover:text-ink-900",
+                        )}
+                      >
+                        <Icon
+                          size={18}
+                          className={
+                            active
+                              ? "text-accent-300"
+                              : undefined
+                          }
+                        />
+
+                        <span className="flex-1">
+                          {
+                            item.label
+                          }
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                },
+              )}
+            </ul>
+
+            {/* ============================================================ */}
+            {/* Permanent claimant sign out                                  */}
+            {/* ============================================================ */}
+
+            <div className="mt-1 border-t border-line pt-1">
+              <form
+                action="/auth/sign-out"
+                method="post"
+              >
+                <button
+                  type="submit"
+                  className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-base font-medium text-ink-600 transition-colors hover:bg-critical-50 hover:text-critical-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="inline-flex size-[18px] items-center justify-center font-semibold"
+                  >
+                    ↪
+                  </span>
+
+                  <span className="flex-1">
+                    Sign out
+                  </span>
+                </button>
+              </form>
+            </div>
+          </div>
         </nav>
 
         <main
@@ -420,6 +469,10 @@ export function PortalShell({
           }
         </main>
       </div>
+
+      {/* ==================================================================== */}
+      {/* Mobile navigation                                                    */}
+      {/* ==================================================================== */}
 
       <nav
         aria-label="Portal"

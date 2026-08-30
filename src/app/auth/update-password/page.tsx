@@ -1,4 +1,7 @@
-import type { Metadata } from "next";
+import type {
+  Metadata,
+} from "next";
+
 import Link from "next/link";
 
 import {
@@ -7,13 +10,20 @@ import {
   CardBody,
 } from "@/components/ui/surface";
 
-import { updatePassword } from "./actions";
+import {
+  updatePassword,
+} from "./actions";
 
 export const metadata: Metadata = {
-  title: "Set New Password | DueQuity",
+  title:
+    "Set New Password | DueQuity",
+
   robots: {
-    index: false,
-    follow: false,
+    index:
+      false,
+
+    follow:
+      false,
   },
 };
 
@@ -23,18 +33,31 @@ type AuthAudience =
 
 interface UpdatePasswordPageProps {
   searchParams: Promise<{
-    audience?: string;
-    status?: string;
+    audience?:
+      string;
+
+    status?:
+      string;
   }>;
 }
 
+/* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
+
 function resolveAudience(
-  value: string | undefined,
+  value:
+    string | undefined,
 ): AuthAudience {
-  return value === "staff"
+  return value ===
+    "staff"
     ? "staff"
     : "claimant";
 }
+
+/* ========================================================================== */
+/* Page                                                                        */
+/* ========================================================================== */
 
 export default async function UpdatePasswordPage({
   searchParams,
@@ -51,7 +74,8 @@ export default async function UpdatePasswordPage({
     params.status;
 
   const signInPath =
-    audience === "staff"
+    audience ===
+      "staff"
       ? "/staff/sign-in"
       : "/claimant/sign-in";
 
@@ -60,12 +84,14 @@ export default async function UpdatePasswordPage({
       <div
         className="w-full space-y-5"
         style={{
-          maxWidth: "460px",
+          maxWidth:
+            "460px",
         }}
       >
         <div>
           <p className="eyebrow text-ink-500">
-            {audience === "staff"
+            {audience ===
+            "staff"
               ? "DueQuity Operations"
               : "My DueQuity"}
           </p>
@@ -75,11 +101,17 @@ export default async function UpdatePasswordPage({
           </h1>
 
           <p className="mt-2 text-sm leading-relaxed text-ink-600">
-            Choose a new password with at least 12 characters.
+            Choose a new password with at least 12 characters. It must be
+            different from your current password.
           </p>
         </div>
 
-        {status === "invalid" ? (
+        {/* ================================================================= */}
+        {/* Validation                                                        */}
+        {/* ================================================================= */}
+
+        {status ===
+        "invalid" ? (
           <Callout
             tone="critical"
             role="alert"
@@ -90,7 +122,20 @@ export default async function UpdatePasswordPage({
           </Callout>
         ) : null}
 
-        {status === "expired" ? (
+        {status ===
+        "password-reused" ? (
+          <Callout
+            tone="critical"
+            role="alert"
+            title="Choose a different password"
+          >
+            For your security, your new password cannot be the same as your
+            current password. Choose a different password and try again.
+          </Callout>
+        ) : null}
+
+        {status ===
+        "expired" ? (
           <Callout
             tone="critical"
             role="alert"
@@ -101,7 +146,8 @@ export default async function UpdatePasswordPage({
           </Callout>
         ) : null}
 
-        {status === "failed" ? (
+        {status ===
+        "failed" ? (
           <Callout
             tone="critical"
             role="alert"
@@ -111,7 +157,8 @@ export default async function UpdatePasswordPage({
           </Callout>
         ) : null}
 
-        {status === "updated" ? (
+        {status ===
+        "updated" ? (
           <Callout
             tone="positive"
             role="status"
@@ -122,17 +169,26 @@ export default async function UpdatePasswordPage({
           </Callout>
         ) : null}
 
-        {status !== "updated" ? (
+        {/* ================================================================= */}
+        {/* Password form                                                      */}
+        {/* ================================================================= */}
+
+        {status !==
+        "updated" ? (
           <Card>
             <CardBody>
               <form
-                action={updatePassword}
+                action={
+                  updatePassword
+                }
                 className="space-y-5"
               >
                 <input
                   type="hidden"
                   name="audience"
-                  value={audience}
+                  value={
+                    audience
+                  }
                 />
 
                 <div className="space-y-2">
@@ -148,7 +204,9 @@ export default async function UpdatePasswordPage({
                     name="password"
                     type="password"
                     autoComplete="new-password"
-                    minLength={12}
+                    minLength={
+                      12
+                    }
                     required
                     className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
                   />
@@ -167,7 +225,9 @@ export default async function UpdatePasswordPage({
                     name="confirmPassword"
                     type="password"
                     autoComplete="new-password"
-                    minLength={12}
+                    minLength={
+                      12
+                    }
                     required
                     className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
                   />
@@ -186,10 +246,12 @@ export default async function UpdatePasswordPage({
 
         <div className="text-center">
           <Link
-            href={signInPath}
+            href={
+              signInPath
+            }
             className="text-sm font-medium text-ink-700 underline underline-offset-4"
           >
-            Back to sign in
+            Return to sign in
           </Link>
         </div>
       </div>

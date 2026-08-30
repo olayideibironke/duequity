@@ -59,85 +59,126 @@ const ALLOWED_MIME_TYPES =
 /* Public types                                                                */
 /* ========================================================================== */
 
+export type ClaimantMessagingRecordKind =
+  | "claim"
+  | "assigned_lead";
+
 export interface ClaimantMessagingProfile {
-  claimantId: string;
+  claimantId:
+    string;
 
-  claimantReference: string;
+  claimantReference:
+    string;
 
-  legalName: string;
+  legalName:
+    string;
 
-  claimId: string;
+  claimId:
+    string;
 
-  claimReference: string;
+  claimReference:
+    string;
 
-  claimantAuthUserId?: string;
+  claimantAuthUserId?:
+    string;
 
-  originatingStaffUserId: string;
+  originatingStaffUserId:
+    string;
 
-  assignedStaffUserId: string;
+  assignedStaffUserId:
+    string;
+
+  recordKind:
+    ClaimantMessagingRecordKind;
+
+  workcaseId?:
+    string;
 }
 
 export interface ClaimantMessageAttachment {
-  id: string;
+  id:
+    string;
 
-  messageId: string;
+  messageId:
+    string;
 
-  fileName: string;
+  fileName:
+    string;
 
-  mimeType: string;
+  mimeType:
+    string;
 
-  sizeBytes: number;
+  sizeBytes:
+    number;
 
-  createdAt: string;
+  createdAt:
+    string;
 }
 
 export interface ClaimantMessageItem {
-  id: string;
+  id:
+    string;
 
-  threadId: string;
+  threadId:
+    string;
 
-  replyToMessageId?: string;
+  replyToMessageId?:
+    string;
 
   senderType:
     | "staff"
     | "claimant";
 
-  senderName: string;
+  senderName:
+    string;
 
-  bodyText: string;
+  bodyText:
+    string;
 
-  sentAt: string;
+  sentAt:
+    string;
 
-  claimantReadAt?: string;
+  claimantReadAt?:
+    string;
 
-  staffReadAt?: string;
+  staffReadAt?:
+    string;
 
   attachments:
     ClaimantMessageAttachment[];
 }
 
 export interface ClaimantMessageThreadSummary {
-  id: string;
+  id:
+    string;
 
-  claimId: string;
+  claimId:
+    string;
 
-  claimReference: string;
+  claimReference:
+    string;
 
-  claimantId: string;
+  claimantId:
+    string;
 
-  claimantReference: string;
+  claimantReference:
+    string;
 
-  legalName: string;
+  legalName:
+    string;
 
   status:
     | "active"
     | "closed";
 
-  lastMessageAt?: string;
+  lastMessageAt?:
+    string;
 
-  lastMessagePreview: string;
+  lastMessagePreview:
+    string;
 
-  unreadCount: number;
+  unreadCount:
+    number;
 }
 
 export interface ClaimantMessageThreadView
@@ -147,13 +188,17 @@ export interface ClaimantMessageThreadView
 }
 
 export interface ClaimantMessageAttachmentDownload {
-  url: string;
+  url:
+    string;
 
-  fileName: string;
+  fileName:
+    string;
 
-  mimeType: string;
+  mimeType:
+    string;
 
-  expiresInSeconds: number;
+  expiresInSeconds:
+    number;
 }
 
 /* ========================================================================== */
@@ -161,31 +206,72 @@ export interface ClaimantMessageAttachmentDownload {
 /* ========================================================================== */
 
 interface ClaimantOnboardingMessageRow {
-  claim_id: string;
+  claim_id:
+    string;
 
-  claim_reference: string;
+  claim_reference:
+    string;
 
-  claimant_id: string;
+  claimant_id:
+    string;
 
-  claimant_reference: string;
+  claimant_reference:
+    string;
 
   claimant_auth_user_id:
     | string
     | null;
 
-  legal_name: string;
+  legal_name:
+    string;
 
-  originating_staff_user_id: string;
+  originating_staff_user_id:
+    string;
 
-  assigned_staff_user_id: string;
+  assigned_staff_user_id:
+    string;
+}
+
+interface AssignedLeadWorkcaseMessageRow {
+  id:
+    string;
+
+  claimant_id:
+    string;
+
+  claimant_reference:
+    string;
+
+  legal_first_name:
+    string;
+
+  legal_last_name:
+    string;
+
+  auth_user_id:
+    | string
+    | null;
+
+  originating_staff_user_id:
+    string;
+
+  assigned_staff_user_id:
+    string;
+
+  status:
+    string;
+
+  linked_claim_id:
+    | string
+    | null;
 }
 
 interface ClaimantMessageThreadRow {
-  id: string;
+  id:
+    string;
 
-  claim_id: string;
-
-  created_by_staff_user_id: string;
+  created_by_staff_user_id:
+    string;
 
   status:
     | "active"
@@ -195,15 +281,19 @@ interface ClaimantMessageThreadRow {
     | string
     | null;
 
-  created_at: string;
+  created_at:
+    string;
 
-  updated_at: string;
+  updated_at:
+    string;
 }
 
 interface ClaimantMessageRow {
-  id: string;
+  id:
+    string;
 
-  thread_id: string;
+  thread_id:
+    string;
 
   reply_to_message_id:
     | string
@@ -221,7 +311,8 @@ interface ClaimantMessageRow {
     | string
     | null;
 
-  body_text: string;
+  body_text:
+    string;
 
   state:
     | "draft"
@@ -239,15 +330,19 @@ interface ClaimantMessageRow {
     | string
     | null;
 
-  created_at: string;
+  created_at:
+    string;
 
-  updated_at: string;
+  updated_at:
+    string;
 }
 
 interface ClaimantMessageAttachmentRow {
-  id: string;
+  id:
+    string;
 
-  message_id: string;
+  message_id:
+    string;
 
   uploader_type:
     | "staff"
@@ -261,23 +356,29 @@ interface ClaimantMessageAttachmentRow {
     | string
     | null;
 
-  storage_path: string;
+  storage_path:
+    string;
 
-  file_name: string;
+  file_name:
+    string;
 
-  mime_type: string;
+  mime_type:
+    string;
 
   size_bytes:
     | number
     | string;
 
-  created_at: string;
+  created_at:
+    string;
 }
 
 interface StaffDirectoryRow {
-  id: string;
+  id:
+    string;
 
-  name: string;
+  name:
+    string;
 }
 
 /* ========================================================================== */
@@ -285,13 +386,17 @@ interface StaffDirectoryRow {
 /* ========================================================================== */
 
 function requireNonEmpty(
-  value: string,
-  label: string,
+  value:
+    string,
+  label:
+    string,
 ): string {
   const normalized =
     value.trim();
 
-  if (!normalized) {
+  if (
+    !normalized
+  ) {
     throw new Error(
       `${label} is required.`,
     );
@@ -301,7 +406,8 @@ function requireNonEmpty(
 }
 
 function normalizeBodyText(
-  value: string,
+  value:
+    string,
 ): string {
   const normalized =
     value.trim();
@@ -319,7 +425,8 @@ function normalizeBodyText(
 }
 
 function safeFileName(
-  value: string,
+  value:
+    string,
 ): string {
   const normalized =
     value
@@ -337,8 +444,10 @@ function safeFileName(
         180,
       );
 
-  return normalized ||
-    "attachment";
+  return (
+    normalized ||
+    "attachment"
+  );
 }
 
 function validateFiles(
@@ -417,7 +526,9 @@ async function requireCurrentStaffSession(
   const session =
     await resolveStaffSession();
 
-  if (!session) {
+  if (
+    !session
+  ) {
     throw new Error(
       "Staff authentication is required.",
     );
@@ -437,10 +548,10 @@ async function requireCurrentStaffSession(
 }
 
 /* ========================================================================== */
-/* Profile                                                                     */
+/* Profile mapping                                                             */
 /* ========================================================================== */
 
-function profileFromRow(
+function legacyProfileFromRow(
   row:
     ClaimantOnboardingMessageRow,
 ): ClaimantMessagingProfile {
@@ -469,20 +580,79 @@ function profileFromRow(
 
     assignedStaffUserId:
       row.assigned_staff_user_id,
+
+    recordKind:
+      "claim",
   };
 }
 
-async function getClaimantMessagingProfileUnscoped(
-  claimantId: string,
+function assignedLeadProfileFromRow(
+  row:
+    AssignedLeadWorkcaseMessageRow,
+): ClaimantMessagingProfile {
+  const legalName =
+    [
+      row.legal_first_name,
+      row.legal_last_name,
+    ]
+      .filter(
+        Boolean,
+      )
+      .join(
+        " ",
+      );
+
+  return {
+    claimantId:
+      row.claimant_id,
+
+    claimantReference:
+      row.claimant_reference,
+
+    legalName,
+
+    /*
+     * The conversation workspace requires a stable recovery ID/reference.
+     * A pre-Claim claimant intentionally has no official Claim yet.
+     *
+     * The workcase UUID is used internally as the recovery record ID, while
+     * the existing DQC claimant reference is shown to the claimant. No fake
+     * DQ Claim reference is created.
+     */
+    claimId:
+      row.id,
+
+    claimReference:
+      row.claimant_reference,
+
+    claimantAuthUserId:
+      row.auth_user_id ??
+      undefined,
+
+    originatingStaffUserId:
+      row.originating_staff_user_id,
+
+    assignedStaffUserId:
+      row.assigned_staff_user_id,
+
+    recordKind:
+      "assigned_lead",
+
+    workcaseId:
+      row.id,
+  };
+}
+
+/* ========================================================================== */
+/* Profiles                                                                    */
+/* ========================================================================== */
+
+async function getLegacyMessagingProfile(
+  claimantId:
+    string,
 ): Promise<
   ClaimantMessagingProfile | undefined
 > {
-  const normalized =
-    requireNonEmpty(
-      claimantId,
-      "Claimant ID",
-    );
-
   const admin =
     getSupabaseAdmin();
 
@@ -499,31 +669,142 @@ async function getClaimantMessagingProfileUnscoped(
       )
       .eq(
         "claimant_id",
-        normalized,
+        claimantId,
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to resolve claimant messaging profile: ${error.message}`,
     );
   }
 
   return data
-    ? profileFromRow(
-        data as ClaimantOnboardingMessageRow,
+    ? legacyProfileFromRow(
+        data as
+          ClaimantOnboardingMessageRow,
       )
     : undefined;
+}
+
+async function getAssignedLeadMessagingProfile(
+  claimantId:
+    string,
+): Promise<
+  ClaimantMessagingProfile | undefined
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_workcases",
+      )
+      .select(
+        "id, claimant_id, claimant_reference, legal_first_name, legal_last_name, auth_user_id, originating_staff_user_id, assigned_staff_user_id, status, linked_claim_id",
+      )
+      .eq(
+        "claimant_id",
+        claimantId,
+      )
+      .maybeSingle();
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to resolve assigned claimant messaging profile: ${error.message}`,
+    );
+  }
+
+  if (
+    !data
+  ) {
+    return undefined;
+  }
+
+  const row =
+    data as
+      AssignedLeadWorkcaseMessageRow;
+
+  /*
+   * Once this recovery becomes a real Claim, claimant_onboarding must become
+   * authoritative. Never silently continue against the pre-Claim repository
+   * when a Claim binding exists.
+   */
+  if (
+    row.linked_claim_id ||
+    row.status ===
+      "bound_to_claim"
+  ) {
+    throw new Error(
+      "This claimant recovery is linked to an official Claim, but its Claim-backed messaging profile could not be resolved.",
+    );
+  }
+
+  if (
+    row.status !==
+      "activated"
+  ) {
+    return undefined;
+  }
+
+  if (
+    !row.auth_user_id
+  ) {
+    throw new Error(
+      "The activated claimant recovery does not have a bound authentication identity.",
+    );
+  }
+
+  return assignedLeadProfileFromRow(
+    row,
+  );
+}
+
+async function getClaimantMessagingProfileUnscoped(
+  claimantId:
+    string,
+): Promise<
+  ClaimantMessagingProfile | undefined
+> {
+  const normalized =
+    requireNonEmpty(
+      claimantId,
+      "Claimant ID",
+    );
+
+  const legacy =
+    await getLegacyMessagingProfile(
+      normalized,
+    );
+
+  if (
+    legacy
+  ) {
+    return legacy;
+  }
+
+  return getAssignedLeadMessagingProfile(
+    normalized,
+  );
 }
 
 /**
  * Unscoped profile read retained for claimant-self services.
  *
- * Staff-facing message operations do not trust this function alone. They call
- * the staff-scoped authorization helpers below.
+ * The claimant API authenticates the current claimant before calling these
+ * functions. Staff operations perform a second assignment-scope check.
  */
 export async function getClaimantMessagingProfile(
-  claimantId: string,
+  claimantId:
+    string,
 ): Promise<
   ClaimantMessagingProfile | undefined
 > {
@@ -558,89 +839,142 @@ async function getClaimantMessagingProfileForStaff(
   return profile;
 }
 
-async function getClaimantMessagingProfileByClaimId(
-  claimId: string,
-): Promise<
-  ClaimantMessagingProfile | undefined
-> {
-  const admin =
-    getSupabaseAdmin();
-
-  const {
-    data,
-    error,
-  } =
-    await admin
-      .from(
-        "claimant_onboarding",
-      )
-      .select(
-        "claim_id, claim_reference, claimant_id, claimant_reference, claimant_auth_user_id, legal_name, originating_staff_user_id, assigned_staff_user_id",
-      )
-      .eq(
-        "claim_id",
-        claimId,
-      )
-      .maybeSingle();
-
-  if (error) {
-    throw new Error(
-      `Unable to resolve claimant messaging claim: ${error.message}`,
-    );
-  }
-
-  return data
-    ? profileFromRow(
-        data as ClaimantOnboardingMessageRow,
-      )
-    : undefined;
-}
-
 /* ========================================================================== */
-/* Threads                                                                     */
+/* Thread reads                                                                */
 /* ========================================================================== */
 
-async function getThreadRow(
-  threadId: string,
+async function getThreadRowForProfile(
+  profile:
+    ClaimantMessagingProfile,
+  threadId:
+    string,
 ): Promise<
   ClaimantMessageThreadRow | undefined
 > {
   const admin =
     getSupabaseAdmin();
 
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_message_threads",
+        )
+        .select(
+          "id, created_by_staff_user_id, status, last_message_at, created_at, updated_at",
+        )
+        .eq(
+          "id",
+          threadId,
+        )
+        .eq(
+          "claim_id",
+          profile.claimId,
+        )
+        .maybeSingle();
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to read claimant message thread: ${error.message}`,
+      );
+    }
+
+    return data
+      ? data as
+          ClaimantMessageThreadRow
+      : undefined;
+  }
+
   const {
     data,
     error,
   } =
     await admin
       .from(
-        "claimant_message_threads",
+        "assigned_lead_claimant_message_threads",
       )
-      .select("*")
+      .select(
+        "id, created_by_staff_user_id, status, last_message_at, created_at, updated_at",
+      )
       .eq(
         "id",
         threadId,
       )
+      .eq(
+        "workcase_id",
+        profile.claimId,
+      )
+      .eq(
+        "claimant_id",
+        profile.claimantId,
+      )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
-      `Unable to read claimant message thread: ${error.message}`,
+      `Unable to read assigned claimant message thread: ${error.message}`,
     );
   }
 
   return data
-    ? data as ClaimantMessageThreadRow
+    ? data as
+        ClaimantMessageThreadRow
     : undefined;
 }
 
-async function getThreadForClaim(
-  claimId: string,
+async function getThreadForProfile(
+  profile:
+    ClaimantMessagingProfile,
 ): Promise<
   ClaimantMessageThreadRow | undefined
 > {
   const admin =
     getSupabaseAdmin();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_message_threads",
+        )
+        .select(
+          "id, created_by_staff_user_id, status, last_message_at, created_at, updated_at",
+        )
+        .eq(
+          "claim_id",
+          profile.claimId,
+        )
+        .maybeSingle();
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to read claimant conversation: ${error.message}`,
+      );
+    }
+
+    return data
+      ? data as
+          ClaimantMessageThreadRow
+      : undefined;
+  }
 
   const {
     data,
@@ -648,24 +982,127 @@ async function getThreadForClaim(
   } =
     await admin
       .from(
-        "claimant_message_threads",
+        "assigned_lead_claimant_message_threads",
       )
-      .select("*")
+      .select(
+        "id, created_by_staff_user_id, status, last_message_at, created_at, updated_at",
+      )
       .eq(
-        "claim_id",
-        claimId,
+        "workcase_id",
+        profile.claimId,
+      )
+      .eq(
+        "claimant_id",
+        profile.claimantId,
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
-      `Unable to read claimant conversation: ${error.message}`,
+      `Unable to read assigned claimant conversation: ${error.message}`,
     );
   }
 
   return data
-    ? data as ClaimantMessageThreadRow
+    ? data as
+        ClaimantMessageThreadRow
     : undefined;
+}
+
+/* ========================================================================== */
+/* Thread creation                                                             */
+/* ========================================================================== */
+
+async function reopenThread(
+  profile:
+    ClaimantMessagingProfile,
+  thread:
+    ClaimantMessageThreadRow,
+): Promise<
+  ClaimantMessageThreadRow
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  const now =
+    new Date().toISOString();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_message_threads",
+        )
+        .update({
+          status:
+            "active",
+
+          updated_at:
+            now,
+        })
+        .eq(
+          "id",
+          thread.id,
+        )
+        .select(
+          "id, created_by_staff_user_id, status, last_message_at, created_at, updated_at",
+        )
+        .single();
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to reopen claimant conversation: ${error.message}`,
+      );
+    }
+
+    return data as
+      ClaimantMessageThreadRow;
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_message_threads",
+      )
+      .update({
+        status:
+          "active",
+
+        updated_at:
+          now,
+      })
+      .eq(
+        "id",
+        thread.id,
+      )
+      .select(
+        "id, created_by_staff_user_id, status, last_message_at, created_at, updated_at",
+      )
+      .single();
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to reopen assigned claimant conversation: ${error.message}`,
+    );
+  }
+
+  return data as
+    ClaimantMessageThreadRow;
 }
 
 async function ensureStaffThread(
@@ -677,47 +1114,21 @@ async function ensureStaffThread(
   ClaimantMessageThreadRow
 > {
   const existing =
-    await getThreadForClaim(
-      profile.claimId,
+    await getThreadForProfile(
+      profile,
     );
 
-  if (existing) {
+  if (
+    existing
+  ) {
     if (
       existing.status ===
-      "closed"
+        "closed"
     ) {
-      const admin =
-        getSupabaseAdmin();
-
-      const {
-        data,
-        error,
-      } =
-        await admin
-          .from(
-            "claimant_message_threads",
-          )
-          .update({
-            status:
-              "active",
-
-            updated_at:
-              new Date().toISOString(),
-          })
-          .eq(
-            "id",
-            existing.id,
-          )
-          .select("*")
-          .single();
-
-      if (error) {
-        throw new Error(
-          `Unable to reopen claimant conversation: ${error.message}`,
-        );
-      }
-
-      return data as ClaimantMessageThreadRow;
+      return reopenThread(
+        profile,
+        existing,
+      );
     }
 
     return existing;
@@ -729,17 +1140,86 @@ async function ensureStaffThread(
   const now =
     new Date().toISOString();
 
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_message_threads",
+        )
+        .insert({
+          claim_id:
+            profile.claimId,
+
+          created_by_staff_user_id:
+            actor.id,
+
+          status:
+            "active",
+
+          created_at:
+            now,
+
+          updated_at:
+            now,
+        })
+        .select(
+          "id, created_by_staff_user_id, status, last_message_at, created_at, updated_at",
+        )
+        .single();
+
+    if (
+      error &&
+      error.code ===
+        "23505"
+    ) {
+      const raced =
+        await getThreadForProfile(
+          profile,
+        );
+
+      if (
+        raced
+      ) {
+        return raced;
+      }
+    }
+
+    if (
+      error ||
+      !data
+    ) {
+      throw new Error(
+        `Unable to create claimant conversation: ${
+          error?.message ??
+          "Unknown database error."
+        }`,
+      );
+    }
+
+    return data as
+      ClaimantMessageThreadRow;
+  }
+
   const {
     data,
     error,
   } =
     await admin
       .from(
-        "claimant_message_threads",
+        "assigned_lead_claimant_message_threads",
       )
       .insert({
-        claim_id:
+        workcase_id:
           profile.claimId,
+
+        claimant_id:
+          profile.claimantId,
 
         created_by_staff_user_id:
           actor.id,
@@ -753,7 +1233,9 @@ async function ensureStaffThread(
         updated_at:
           now,
       })
-      .select("*")
+      .select(
+        "id, created_by_staff_user_id, status, last_message_at, created_at, updated_at",
+      )
       .single();
 
   if (
@@ -762,11 +1244,13 @@ async function ensureStaffThread(
       "23505"
   ) {
     const raced =
-      await getThreadForClaim(
-        profile.claimId,
+      await getThreadForProfile(
+        profile,
       );
 
-    if (raced) {
+    if (
+      raced
+    ) {
       return raced;
     }
   }
@@ -776,18 +1260,19 @@ async function ensureStaffThread(
     !data
   ) {
     throw new Error(
-      `Unable to create claimant conversation: ${
+      `Unable to create assigned claimant conversation: ${
         error?.message ??
         "Unknown database error."
       }`,
     );
   }
 
-  return data as ClaimantMessageThreadRow;
+  return data as
+    ClaimantMessageThreadRow;
 }
 
 /* ========================================================================== */
-/* Attachments                                                                 */
+/* Attachment mapping                                                          */
 /* ========================================================================== */
 
 function attachmentFromRow(
@@ -818,6 +1303,8 @@ function attachmentFromRow(
 }
 
 async function attachmentsForMessages(
+  profile:
+    ClaimantMessagingProfile,
   messageIds:
     string[],
 ): Promise<
@@ -834,7 +1321,7 @@ async function attachmentsForMessages(
 
   if (
     messageIds.length ===
-    0
+      0
   ) {
     return result;
   }
@@ -842,41 +1329,95 @@ async function attachmentsForMessages(
   const admin =
     getSupabaseAdmin();
 
-  const {
-    data,
-    error,
-  } =
-    await admin
-      .from(
-        "claimant_message_attachments",
-      )
-      .select("*")
-      .in(
-        "message_id",
-        messageIds,
-      )
-      .order(
-        "created_at",
-        {
-          ascending:
-            true,
-        },
-      );
+  let rows:
+    ClaimantMessageAttachmentRow[] =
+    [];
 
-  if (error) {
-    throw new Error(
-      `Unable to read claimant message attachments: ${error.message}`,
-    );
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_message_attachments",
+        )
+        .select(
+          "*",
+        )
+        .in(
+          "message_id",
+          messageIds,
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              true,
+          },
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to read claimant message attachments: ${error.message}`,
+      );
+    }
+
+    rows =
+      (
+        data ??
+        []
+      ) as
+        ClaimantMessageAttachmentRow[];
+  } else {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "assigned_lead_claimant_message_attachments",
+        )
+        .select(
+          "*",
+        )
+        .in(
+          "message_id",
+          messageIds,
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              true,
+          },
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to read assigned claimant message attachments: ${error.message}`,
+      );
+    }
+
+    rows =
+      (
+        data ??
+        []
+      ) as
+        ClaimantMessageAttachmentRow[];
   }
 
   for (
-    const rawRow of
-      data ??
-      []
+    const row of
+      rows
   ) {
-    const row =
-      rawRow as ClaimantMessageAttachmentRow;
-
     const existing =
       result.get(
         row.message_id,
@@ -928,7 +1469,7 @@ async function staffNames(
 
   if (
     unique.length ===
-    0
+      0
   ) {
     return result;
   }
@@ -952,7 +1493,9 @@ async function staffNames(
         unique,
       );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
       `Unable to resolve claimant-message staff identities: ${error.message}`,
     );
@@ -964,7 +1507,8 @@ async function staffNames(
       []
   ) {
     const row =
-      rawRow as StaffDirectoryRow;
+      rawRow as
+        StaffDirectoryRow;
 
     result.set(
       row.id,
@@ -976,19 +1520,65 @@ async function staffNames(
 }
 
 /* ========================================================================== */
-/* Messages                                                                    */
+/* Message loading                                                             */
 /* ========================================================================== */
 
-async function loadMessages(
-  thread:
-    ClaimantMessageThreadRow,
+async function loadMessageRows(
   profile:
     ClaimantMessagingProfile,
+  threadId:
+    string,
 ): Promise<
-  ClaimantMessageItem[]
+  ClaimantMessageRow[]
 > {
   const admin =
     getSupabaseAdmin();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_messages",
+        )
+        .select(
+          "*",
+        )
+        .eq(
+          "thread_id",
+          threadId,
+        )
+        .eq(
+          "state",
+          "sent",
+        )
+        .order(
+          "sent_at",
+          {
+            ascending:
+              true,
+          },
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to read claimant messages: ${error.message}`,
+      );
+    }
+
+    return (
+      data ??
+      []
+    ) as
+      ClaimantMessageRow[];
+  }
 
   const {
     data,
@@ -996,12 +1586,14 @@ async function loadMessages(
   } =
     await admin
       .from(
-        "claimant_messages",
+        "assigned_lead_claimant_messages",
       )
-      .select("*")
+      .select(
+        "*",
+      )
       .eq(
         "thread_id",
-        thread.id,
+        threadId,
       )
       .eq(
         "state",
@@ -1015,20 +1607,38 @@ async function loadMessages(
         },
       );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
-      `Unable to read claimant messages: ${error.message}`,
+      `Unable to read assigned claimant messages: ${error.message}`,
     );
   }
 
+  return (
+    data ??
+    []
+  ) as
+    ClaimantMessageRow[];
+}
+
+async function loadMessages(
+  thread:
+    ClaimantMessageThreadRow,
+  profile:
+    ClaimantMessagingProfile,
+): Promise<
+  ClaimantMessageItem[]
+> {
   const rows =
-    (
-      data ??
-      []
-    ) as ClaimantMessageRow[];
+    await loadMessageRows(
+      profile,
+      thread.id,
+    );
 
   const attachments =
     await attachmentsForMessages(
+      profile,
       rows.map(
         (
           row,
@@ -1110,17 +1720,61 @@ async function loadMessages(
 /* ========================================================================== */
 
 async function markThreadReadForStaff(
-  threadId: string,
-): Promise<void> {
+  profile:
+    ClaimantMessagingProfile,
+  threadId:
+    string,
+): Promise<
+  void
+> {
   const admin =
     getSupabaseAdmin();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_messages",
+        )
+        .update({
+          staff_read_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "thread_id",
+          threadId,
+        )
+        .eq(
+          "sender_type",
+          "claimant",
+        )
+        .is(
+          "staff_read_at",
+          null,
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to mark claimant replies read: ${error.message}`,
+      );
+    }
+
+    return;
+  }
 
   const {
     error,
   } =
     await admin
       .from(
-        "claimant_messages",
+        "assigned_lead_claimant_messages",
       )
       .update({
         staff_read_at:
@@ -1139,25 +1793,71 @@ async function markThreadReadForStaff(
         null,
       );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
-      `Unable to mark claimant replies read: ${error.message}`,
+      `Unable to mark assigned claimant replies read: ${error.message}`,
     );
   }
 }
 
 async function markThreadReadForClaimant(
-  threadId: string,
-): Promise<void> {
+  profile:
+    ClaimantMessagingProfile,
+  threadId:
+    string,
+): Promise<
+  void
+> {
   const admin =
     getSupabaseAdmin();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_messages",
+        )
+        .update({
+          claimant_read_at:
+            new Date().toISOString(),
+        })
+        .eq(
+          "thread_id",
+          threadId,
+        )
+        .eq(
+          "sender_type",
+          "staff",
+        )
+        .is(
+          "claimant_read_at",
+          null,
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to mark DueQuity messages read: ${error.message}`,
+      );
+    }
+
+    return;
+  }
 
   const {
     error,
   } =
     await admin
       .from(
-        "claimant_messages",
+        "assigned_lead_claimant_messages",
       )
       .update({
         claimant_read_at:
@@ -1176,9 +1876,11 @@ async function markThreadReadForClaimant(
         null,
       );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
-      `Unable to mark DueQuity messages read: ${error.message}`,
+      `Unable to mark assigned DueQuity messages read: ${error.message}`,
     );
   }
 }
@@ -1187,59 +1889,84 @@ async function markThreadReadForClaimant(
 /* Summary                                                                     */
 /* ========================================================================== */
 
-async function buildThreadSummary(
-  thread:
-    ClaimantMessageThreadRow,
+async function loadSummaryRows(
   profile:
     ClaimantMessagingProfile,
-  viewer:
-    | "staff"
-    | "claimant",
+  threadId:
+    string,
 ): Promise<
-  ClaimantMessageThreadSummary
+  Array<{
+    body_text:
+      string;
+
+    sender_type:
+      | "staff"
+      | "claimant";
+
+    claimant_read_at:
+      | string
+      | null;
+
+    staff_read_at:
+      | string
+      | null;
+
+    sent_at:
+      | string
+      | null;
+
+    created_at:
+      string;
+  }>
 > {
   const admin =
     getSupabaseAdmin();
 
-  const {
-    data,
-    error,
-  } =
-    await admin
-      .from(
-        "claimant_messages",
-      )
-      .select(
-        "body_text, sender_type, claimant_read_at, staff_read_at, sent_at, created_at",
-      )
-      .eq(
-        "thread_id",
-        thread.id,
-      )
-      .eq(
-        "state",
-        "sent",
-      )
-      .order(
-        "sent_at",
-        {
-          ascending:
-            false,
-        },
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_messages",
+        )
+        .select(
+          "body_text, sender_type, claimant_read_at, staff_read_at, sent_at, created_at",
+        )
+        .eq(
+          "thread_id",
+          threadId,
+        )
+        .eq(
+          "state",
+          "sent",
+        )
+        .order(
+          "sent_at",
+          {
+            ascending:
+              false,
+          },
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to summarize claimant conversation: ${error.message}`,
       );
+    }
 
-  if (error) {
-    throw new Error(
-      `Unable to summarize claimant conversation: ${error.message}`,
-    );
-  }
-
-  const rows =
-    (
+    return (
       data ??
       []
     ) as Array<{
-      body_text: string;
+      body_text:
+        string;
 
       sender_type:
         | "staff"
@@ -1257,8 +1984,90 @@ async function buildThreadSummary(
         | string
         | null;
 
-      created_at: string;
+      created_at:
+        string;
     }>;
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_messages",
+      )
+      .select(
+        "body_text, sender_type, claimant_read_at, staff_read_at, sent_at, created_at",
+      )
+      .eq(
+        "thread_id",
+        threadId,
+      )
+      .eq(
+        "state",
+        "sent",
+      )
+      .order(
+        "sent_at",
+        {
+          ascending:
+            false,
+        },
+      );
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to summarize assigned claimant conversation: ${error.message}`,
+    );
+  }
+
+  return (
+    data ??
+    []
+  ) as Array<{
+    body_text:
+      string;
+
+    sender_type:
+      | "staff"
+      | "claimant";
+
+    claimant_read_at:
+      | string
+      | null;
+
+    staff_read_at:
+      | string
+      | null;
+
+    sent_at:
+      | string
+      | null;
+
+    created_at:
+      string;
+  }>;
+}
+
+async function buildThreadSummary(
+  thread:
+    ClaimantMessageThreadRow,
+  profile:
+    ClaimantMessagingProfile,
+  viewer:
+    | "staff"
+    | "claimant",
+): Promise<
+  ClaimantMessageThreadSummary
+> {
+  const rows =
+    await loadSummaryRows(
+      profile,
+      thread.id,
+    );
 
   const latest =
     rows[0];
@@ -1330,17 +2139,63 @@ async function buildThreadSummary(
   };
 }
 
-async function listThreads(
+/* ========================================================================== */
+/* Thread listing                                                              */
+/* ========================================================================== */
+
+async function loadThreadRows(
   profile:
     ClaimantMessagingProfile,
-  viewer:
-    | "staff"
-    | "claimant",
 ): Promise<
-  ClaimantMessageThreadSummary[]
+  ClaimantMessageThreadRow[]
 > {
   const admin =
     getSupabaseAdmin();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_message_threads",
+        )
+        .select(
+          "id, created_by_staff_user_id, status, last_message_at, created_at, updated_at",
+        )
+        .eq(
+          "claim_id",
+          profile.claimId,
+        )
+        .order(
+          "last_message_at",
+          {
+            ascending:
+              false,
+
+            nullsFirst:
+              false,
+          },
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to list claimant conversations: ${error.message}`,
+      );
+    }
+
+    return (
+      data ??
+      []
+    ) as
+      ClaimantMessageThreadRow[];
+  }
 
   const {
     data,
@@ -1348,12 +2203,18 @@ async function listThreads(
   } =
     await admin
       .from(
-        "claimant_message_threads",
+        "assigned_lead_claimant_message_threads",
       )
-      .select("*")
+      .select(
+        "id, created_by_staff_user_id, status, last_message_at, created_at, updated_at",
+      )
       .eq(
-        "claim_id",
+        "workcase_id",
         profile.claimId,
+      )
+      .eq(
+        "claimant_id",
+        profile.claimantId,
       )
       .order(
         "last_message_at",
@@ -1366,22 +2227,42 @@ async function listThreads(
         },
       );
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
-      `Unable to list claimant conversations: ${error.message}`,
+      `Unable to list assigned claimant conversations: ${error.message}`,
     );
   }
 
+  return (
+    data ??
+    []
+  ) as
+    ClaimantMessageThreadRow[];
+}
+
+async function listThreads(
+  profile:
+    ClaimantMessagingProfile,
+  viewer:
+    | "staff"
+    | "claimant",
+): Promise<
+  ClaimantMessageThreadSummary[]
+> {
+  const rows =
+    await loadThreadRows(
+      profile,
+    );
+
   return Promise.all(
-    (
-      data ??
-      []
-    ).map(
+    rows.map(
       (
         row,
       ) =>
         buildThreadSummary(
-          row as ClaimantMessageThreadRow,
+          row,
           profile,
           viewer,
         ),
@@ -1390,7 +2271,8 @@ async function listThreads(
 }
 
 export async function listClaimantMessageThreadsForStaff(
-  claimantId: string,
+  claimantId:
+    string,
 ): Promise<
   ClaimantMessageThreadSummary[]
 > {
@@ -1403,7 +2285,9 @@ export async function listClaimantMessageThreadsForStaff(
       claimantId,
     );
 
-  if (!profile) {
+  if (
+    !profile
+  ) {
     return [];
   }
 
@@ -1414,7 +2298,8 @@ export async function listClaimantMessageThreadsForStaff(
 }
 
 export async function listClaimantMessageThreadsForClaimant(
-  claimantId: string,
+  claimantId:
+    string,
 ): Promise<
   ClaimantMessageThreadSummary[]
 > {
@@ -1423,7 +2308,9 @@ export async function listClaimantMessageThreadsForClaimant(
       claimantId,
     );
 
-  if (!profile) {
+  if (
+    !profile
+  ) {
     return [];
   }
 
@@ -1438,8 +2325,10 @@ export async function listClaimantMessageThreadsForClaimant(
 /* ========================================================================== */
 
 async function authorizeThread(
-  claimantId: string,
-  threadId: string,
+  claimantId:
+    string,
+  threadId:
+    string,
 ): Promise<{
   thread:
     ClaimantMessageThreadRow;
@@ -1447,29 +2336,30 @@ async function authorizeThread(
   profile:
     ClaimantMessagingProfile;
 }> {
+  const profile =
+    await getClaimantMessagingProfileUnscoped(
+      claimantId,
+    );
+
+  if (
+    !profile
+  ) {
+    throw new Error(
+      "Claimant conversation was not found.",
+    );
+  }
+
   const thread =
-    await getThreadRow(
+    await getThreadRowForProfile(
+      profile,
       requireNonEmpty(
         threadId,
         "Thread ID",
       ),
     );
 
-  if (!thread) {
-    throw new Error(
-      "Claimant conversation was not found.",
-    );
-  }
-
-  const profile =
-    await getClaimantMessagingProfileByClaimId(
-      thread.claim_id,
-    );
-
   if (
-    !profile ||
-    profile.claimantId !==
-      claimantId
+    !thread
   ) {
     throw new Error(
       "You are not authorized to access this claimant conversation.",
@@ -1522,8 +2412,10 @@ async function authorizeStaffThread(
 /* ========================================================================== */
 
 export async function getClaimantMessageThreadForStaff(
-  claimantId: string,
-  threadId: string,
+  claimantId:
+    string,
+  threadId:
+    string,
   markRead =
     true,
 ): Promise<
@@ -1542,8 +2434,11 @@ export async function getClaimantMessageThreadForStaff(
       threadId,
     );
 
-  if (markRead) {
+  if (
+    markRead
+  ) {
     await markThreadReadForStaff(
+      profile,
       thread.id,
     );
   }
@@ -1573,8 +2468,10 @@ export async function getClaimantMessageThreadForStaff(
 }
 
 export async function getClaimantMessageThreadForClaimant(
-  claimantId: string,
-  threadId: string,
+  claimantId:
+    string,
+  threadId:
+    string,
   markRead =
     true,
 ): Promise<
@@ -1589,8 +2486,11 @@ export async function getClaimantMessageThreadForClaimant(
       threadId,
     );
 
-  if (markRead) {
+  if (
+    markRead
+  ) {
     await markThreadReadForClaimant(
+      profile,
       thread.id,
     );
   }
@@ -1624,7 +2524,10 @@ export async function getClaimantMessageThreadForClaimant(
 /* ========================================================================== */
 
 async function validateReplyTarget(
-  threadId: string,
+  profile:
+    ClaimantMessagingProfile,
+  threadId:
+    string,
   replyToMessageId:
     string | undefined,
 ): Promise<
@@ -1634,12 +2537,62 @@ async function validateReplyTarget(
     replyToMessageId
       ?.trim();
 
-  if (!normalized) {
+  if (
+    !normalized
+  ) {
     return null;
   }
 
   const admin =
     getSupabaseAdmin();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_messages",
+        )
+        .select(
+          "id",
+        )
+        .eq(
+          "id",
+          normalized,
+        )
+        .eq(
+          "thread_id",
+          threadId,
+        )
+        .eq(
+          "state",
+          "sent",
+        )
+        .maybeSingle();
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to validate reply target: ${error.message}`,
+      );
+    }
+
+    if (
+      !data
+    ) {
+      throw new Error(
+        "The message being replied to is not part of this claimant conversation.",
+      );
+    }
+
+    return normalized;
+  }
 
   const {
     data,
@@ -1647,7 +2600,7 @@ async function validateReplyTarget(
   } =
     await admin
       .from(
-        "claimant_messages",
+        "assigned_lead_claimant_messages",
       )
       .select(
         "id",
@@ -1666,19 +2619,300 @@ async function validateReplyTarget(
       )
       .maybeSingle();
 
-  if (error) {
+  if (
+    error
+  ) {
     throw new Error(
-      `Unable to validate reply target: ${error.message}`,
+      `Unable to validate assigned claimant reply target: ${error.message}`,
     );
   }
 
-  if (!data) {
+  if (
+    !data
+  ) {
     throw new Error(
       "The message being replied to is not part of this claimant conversation.",
     );
   }
 
   return normalized;
+}
+
+/* ========================================================================== */
+/* Message insertion helpers                                                   */
+/* ========================================================================== */
+
+async function insertMessageRow(
+  profile:
+    ClaimantMessagingProfile,
+  values:
+    Record<
+      string,
+      unknown
+    >,
+): Promise<
+  void
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_messages",
+        )
+        .insert(
+          values,
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to send claimant message: ${error.message}`,
+      );
+    }
+
+    return;
+  }
+
+  const {
+    error,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_messages",
+      )
+      .insert(
+        values,
+      );
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to send assigned claimant message: ${error.message}`,
+    );
+  }
+}
+
+async function insertAttachmentRows(
+  profile:
+    ClaimantMessagingProfile,
+  rows:
+    Array<
+      Record<
+        string,
+        unknown
+      >
+    >,
+): Promise<
+  void
+> {
+  if (
+    rows.length ===
+      0
+  ) {
+    return;
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_message_attachments",
+        )
+        .insert(
+          rows,
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to record claimant message attachments: ${error.message}`,
+      );
+    }
+
+    return;
+  }
+
+  const {
+    error,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_message_attachments",
+      )
+      .insert(
+        rows,
+      );
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to record assigned claimant message attachments: ${error.message}`,
+    );
+  }
+}
+
+async function updateThreadAfterSend(
+  profile:
+    ClaimantMessagingProfile,
+  threadId:
+    string,
+  now:
+    string,
+): Promise<
+  void
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    const {
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_message_threads",
+        )
+        .update({
+          status:
+            "active",
+
+          last_message_at:
+            now,
+
+          updated_at:
+            now,
+        })
+        .eq(
+          "id",
+          threadId,
+        );
+
+    if (
+      error
+    ) {
+      throw new Error(
+        `Unable to update claimant conversation: ${error.message}`,
+      );
+    }
+
+    return;
+  }
+
+  const {
+    error,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_message_threads",
+      )
+      .update({
+        status:
+          "active",
+
+        last_message_at:
+          now,
+
+        updated_at:
+          now,
+      })
+      .eq(
+        "id",
+        threadId,
+      );
+
+  if (
+    error
+  ) {
+    throw new Error(
+      `Unable to update assigned claimant conversation: ${error.message}`,
+    );
+  }
+}
+
+/* ========================================================================== */
+/* Cleanup                                                                     */
+/* ========================================================================== */
+
+async function cleanupFailedMessage(
+  profile:
+    ClaimantMessagingProfile,
+  messageId:
+    string,
+): Promise<
+  void
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  if (
+    profile.recordKind ===
+      "claim"
+  ) {
+    await admin
+      .from(
+        "claimant_message_attachments",
+      )
+      .delete()
+      .eq(
+        "message_id",
+        messageId,
+      );
+
+    await admin
+      .from(
+        "claimant_messages",
+      )
+      .delete()
+      .eq(
+        "id",
+        messageId,
+      );
+
+    return;
+  }
+
+  await admin
+    .from(
+      "assigned_lead_claimant_message_attachments",
+    )
+    .delete()
+    .eq(
+      "message_id",
+      messageId,
+    );
+
+  await admin
+    .from(
+      "assigned_lead_claimant_messages",
+    )
+    .delete()
+    .eq(
+      "id",
+      messageId,
+    );
 }
 
 /* ========================================================================== */
@@ -1743,6 +2977,7 @@ async function sendMessage({
 
   const replyTarget =
     await validateReplyTarget(
+      profile,
       thread.id,
       replyToMessageId,
     );
@@ -1761,8 +2996,16 @@ async function sendMessage({
     [];
 
   const attachmentRows:
-    Array<Record<string, unknown>> =
+    Array<
+      Record<
+        string,
+        unknown
+      >
+    > =
     [];
+
+  let messageInserted =
+    false;
 
   try {
     for (
@@ -1778,13 +3021,22 @@ async function sendMessage({
         );
 
       const storagePath =
-        `${profile.claimantReference}/${thread.id}/${messageId}/${attachmentId}-${fileName}`;
+        [
+          profile.recordKind,
+          profile.claimantReference,
+          thread.id,
+          messageId,
+          `${attachmentId}-${fileName}`,
+        ].join(
+          "/",
+        );
 
       const arrayBuffer =
         await file.arrayBuffer();
 
       const {
-        error: uploadError,
+        error:
+          uploadError,
       } =
         await admin.storage
           .from(
@@ -1804,7 +3056,9 @@ async function sendMessage({
             },
           );
 
-      if (uploadError) {
+      if (
+        uploadError
+      ) {
         throw new Error(
           `Unable to upload ${fileName}: ${uploadError.message}`,
         );
@@ -1855,135 +3109,88 @@ async function sendMessage({
       });
     }
 
-    const {
-      error: messageError,
-    } =
-      await admin
-        .from(
-          "claimant_messages",
-        )
-        .insert({
-          id:
-            messageId,
+    await insertMessageRow(
+      profile,
+      {
+        id:
+          messageId,
 
-          thread_id:
-            thread.id,
-
-          reply_to_message_id:
-            replyTarget,
-
-          sender_type:
-            senderType,
-
-          sender_staff_user_id:
-            senderType ===
-            "staff"
-              ? senderStaffUserId ??
-                null
-              : null,
-
-          sender_claimant_auth_user_id:
-            senderType ===
-            "claimant"
-              ? senderClaimantAuthUserId ??
-                null
-              : null,
-
-          body_text:
-            body,
-
-          state:
-            "sent",
-
-          sent_at:
-            now,
-
-          claimant_read_at:
-            null,
-
-          staff_read_at:
-            null,
-
-          created_at:
-            now,
-
-          updated_at:
-            now,
-        });
-
-    if (messageError) {
-      throw new Error(
-        `Unable to send claimant message: ${messageError.message}`,
-      );
-    }
-
-    if (
-      attachmentRows.length >
-      0
-    ) {
-      const {
-        error: attachmentError,
-      } =
-        await admin
-          .from(
-            "claimant_message_attachments",
-          )
-          .insert(
-            attachmentRows,
-          );
-
-      if (attachmentError) {
-        await admin
-          .from(
-            "claimant_messages",
-          )
-          .delete()
-          .eq(
-            "id",
-            messageId,
-          );
-
-        throw new Error(
-          `Unable to record claimant message attachments: ${attachmentError.message}`,
-        );
-      }
-    }
-
-    const {
-      error: threadError,
-    } =
-      await admin
-        .from(
-          "claimant_message_threads",
-        )
-        .update({
-          status:
-            "active",
-
-          last_message_at:
-            now,
-
-          updated_at:
-            now,
-        })
-        .eq(
-          "id",
+        thread_id:
           thread.id,
-        );
 
-    if (threadError) {
-      throw new Error(
-        `Unable to update claimant conversation: ${threadError.message}`,
-      );
-    }
+        reply_to_message_id:
+          replyTarget,
+
+        sender_type:
+          senderType,
+
+        sender_staff_user_id:
+          senderType ===
+          "staff"
+            ? senderStaffUserId ??
+              null
+            : null,
+
+        sender_claimant_auth_user_id:
+          senderType ===
+          "claimant"
+            ? senderClaimantAuthUserId ??
+              null
+            : null,
+
+        body_text:
+          body,
+
+        state:
+          "sent",
+
+        sent_at:
+          now,
+
+        claimant_read_at:
+          null,
+
+        staff_read_at:
+          null,
+
+        created_at:
+          now,
+
+        updated_at:
+          now,
+      },
+    );
+
+    messageInserted =
+      true;
+
+    await insertAttachmentRows(
+      profile,
+      attachmentRows,
+    );
+
+    await updateThreadAfterSend(
+      profile,
+      thread.id,
+      now,
+    );
 
     return messageId;
   } catch (
     error
   ) {
     if (
+      messageInserted
+    ) {
+      await cleanupFailedMessage(
+        profile,
+        messageId,
+      );
+    }
+
+    if (
       uploadedPaths.length >
-      0
+        0
     ) {
       await admin.storage
         .from(
@@ -1997,6 +3204,10 @@ async function sendMessage({
     throw error;
   }
 }
+
+/* ========================================================================== */
+/* Staff send                                                                  */
+/* ========================================================================== */
 
 export async function sendStaffClaimantMessage({
   actor,
@@ -2033,7 +3244,9 @@ export async function sendStaffClaimantMessage({
       claimantId,
     );
 
-  if (!profile) {
+  if (
+    !profile
+  ) {
     throw new Error(
       "Claimant record was not found.",
     );
@@ -2070,6 +3283,10 @@ export async function sendStaffClaimantMessage({
   );
 }
 
+/* ========================================================================== */
+/* Claimant send                                                               */
+/* ========================================================================== */
+
 export async function sendClaimantPortalMessage({
   claimantId,
   threadId,
@@ -2105,7 +3322,7 @@ export async function sendClaimantPortalMessage({
 
   if (
     thread.status !==
-    "active"
+      "active"
   ) {
     throw new Error(
       "This claimant conversation is currently closed.",
@@ -2146,31 +3363,33 @@ export async function sendClaimantPortalMessage({
 }
 
 /* ========================================================================== */
-/* Secure attachment downloads                                                 */
+/* Attachment authorization                                                    */
 /* ========================================================================== */
 
-async function resolveAttachmentAuthorization(
-  claimantId: string,
-  attachmentId: string,
-): Promise<{
-  attachment:
-    ClaimantMessageAttachmentRow;
-
+async function resolveLegacyAttachment(
   profile:
-    ClaimantMessagingProfile;
-}> {
+    ClaimantMessagingProfile,
+  attachmentId:
+    string,
+): Promise<
+  ClaimantMessageAttachmentRow | undefined
+> {
   const admin =
     getSupabaseAdmin();
 
   const {
-    data: attachmentData,
-    error: attachmentError,
+    data:
+      attachmentData,
+    error:
+      attachmentError,
   } =
     await admin
       .from(
         "claimant_message_attachments",
       )
-      .select("*")
+      .select(
+        "*",
+      )
       .eq(
         "id",
         attachmentId,
@@ -2181,17 +3400,18 @@ async function resolveAttachmentAuthorization(
     attachmentError ||
     !attachmentData
   ) {
-    throw new Error(
-      "Claimant message attachment was not found.",
-    );
+    return undefined;
   }
 
   const attachment =
-    attachmentData as ClaimantMessageAttachmentRow;
+    attachmentData as
+      ClaimantMessageAttachmentRow;
 
   const {
-    data: messageData,
-    error: messageError,
+    data:
+      messageData,
+    error:
+      messageError,
   } =
     await admin
       .from(
@@ -2210,20 +3430,152 @@ async function resolveAttachmentAuthorization(
     messageError ||
     !messageData
   ) {
-    throw new Error(
-      "The attachment's claimant message could not be resolved.",
-    );
+    return undefined;
   }
 
-  const {
-    profile,
-  } =
-    await authorizeThread(
-      claimantId,
+  const thread =
+    await getThreadRowForProfile(
+      profile,
       String(
         messageData.thread_id,
       ),
     );
+
+  return thread
+    ? attachment
+    : undefined;
+}
+
+async function resolveAssignedLeadAttachment(
+  profile:
+    ClaimantMessagingProfile,
+  attachmentId:
+    string,
+): Promise<
+  ClaimantMessageAttachmentRow | undefined
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data:
+      attachmentData,
+    error:
+      attachmentError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_message_attachments",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "id",
+        attachmentId,
+      )
+      .maybeSingle();
+
+  if (
+    attachmentError ||
+    !attachmentData
+  ) {
+    return undefined;
+  }
+
+  const attachment =
+    attachmentData as
+      ClaimantMessageAttachmentRow;
+
+  const {
+    data:
+      messageData,
+    error:
+      messageError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_messages",
+      )
+      .select(
+        "thread_id",
+      )
+      .eq(
+        "id",
+        attachment.message_id,
+      )
+      .maybeSingle();
+
+  if (
+    messageError ||
+    !messageData
+  ) {
+    return undefined;
+  }
+
+  const thread =
+    await getThreadRowForProfile(
+      profile,
+      String(
+        messageData.thread_id,
+      ),
+    );
+
+  return thread
+    ? attachment
+    : undefined;
+}
+
+async function resolveAttachmentAuthorization(
+  claimantId:
+    string,
+  attachmentId:
+    string,
+): Promise<{
+  attachment:
+    ClaimantMessageAttachmentRow;
+
+  profile:
+    ClaimantMessagingProfile;
+}> {
+  const profile =
+    await getClaimantMessagingProfileUnscoped(
+      claimantId,
+    );
+
+  if (
+    !profile
+  ) {
+    throw new Error(
+      "Claimant message attachment was not found.",
+    );
+  }
+
+  const normalizedAttachmentId =
+    requireNonEmpty(
+      attachmentId,
+      "Attachment ID",
+    );
+
+  const attachment =
+    profile.recordKind ===
+      "claim"
+      ? await resolveLegacyAttachment(
+          profile,
+          normalizedAttachmentId,
+        )
+      : await resolveAssignedLeadAttachment(
+          profile,
+          normalizedAttachmentId,
+        );
+
+  if (
+    !attachment
+  ) {
+    throw new Error(
+      "Claimant message attachment was not found.",
+    );
+  }
 
   return {
     attachment,
@@ -2231,6 +3583,10 @@ async function resolveAttachmentAuthorization(
     profile,
   };
 }
+
+/* ========================================================================== */
+/* Signed downloads                                                            */
+/* ========================================================================== */
 
 async function signedAttachmentDownload(
   attachment:
@@ -2283,13 +3639,12 @@ async function signedAttachmentDownload(
 
 /**
  * Claimant-self attachment broker.
- *
- * The claimant API route must continue to authenticate the claimant session
- * before calling this function.
  */
 export async function getClaimantMessageAttachmentDownload(
-  claimantId: string,
-  attachmentId: string,
+  claimantId:
+    string,
+  attachmentId:
+    string,
 ): Promise<
   ClaimantMessageAttachmentDownload
 > {
@@ -2309,8 +3664,8 @@ export async function getClaimantMessageAttachmentDownload(
 /**
  * Staff attachment broker.
  *
- * This is the staff-only counterpart and requires the claimant to be assigned
- * to the current staff member unless the current user is Super Admin.
+ * Ordinary staff may access only the claimant currently assigned to them.
+ * Super Admin retains global access.
  */
 export async function getClaimantMessageAttachmentDownloadForStaff(
   session:

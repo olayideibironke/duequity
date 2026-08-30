@@ -138,6 +138,41 @@ interface LeadNotificationPayload {
 }
 
 /* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
+
+function claimantRegisterLabel(
+  role:
+    UserRole,
+): string {
+  return role ===
+    "super_admin"
+    ? "All Claimants"
+    : "My Claimants";
+}
+
+function staffAccessScopeLabel(
+  role:
+    UserRole,
+): string {
+  switch (
+    role
+  ) {
+    case "communications_specialist":
+      return "Public communications access";
+
+    case "super_admin":
+      return "Full administrative access";
+
+    case "administrator":
+      return "Administrative work access";
+
+    default:
+      return "Assigned work access";
+  }
+}
+
+/* ========================================================================== */
 /* Component                                                                   */
 /* ========================================================================== */
 
@@ -291,6 +326,16 @@ export function ProShell({
       "administrator" ||
     operator.role ===
       "super_admin";
+
+  const claimantRegister =
+    claimantRegisterLabel(
+      operator.role,
+    );
+
+  const accessScope =
+    staffAccessScopeLabel(
+      operator.role,
+    );
 
   useEffect(
     () => {
@@ -796,7 +841,7 @@ export function ProShell({
                 "/pro/claimants",
 
               label:
-                "All Claimants",
+                claimantRegister,
 
               icon:
                 IconClaimant,
@@ -1374,10 +1419,9 @@ export function ProShell({
           </div>
 
           <p className="mt-2 text-2xs text-ink-600">
-            {operator.role ===
-            "communications_specialist"
-              ? "Public communications access"
-              : "National work access"}
+            {
+              accessScope
+            }
           </p>
 
           <Link
