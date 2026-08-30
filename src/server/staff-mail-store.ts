@@ -225,6 +225,7 @@ interface StaffMailMessageRow {
 
   sender_archived_at: string | null;
   sender_trashed_at: string | null;
+  sender_deleted_from_trash_at: string | null;
 
   created_at: string;
   updated_at: string;
@@ -241,6 +242,7 @@ interface StaffMailRecipientRow {
   read_at: string | null;
   archived_at: string | null;
   trashed_at: string | null;
+  deleted_from_trash_at: string | null;
   acknowledged_at: string | null;
 
   created_at: string;
@@ -1861,11 +1863,13 @@ function belongsInFolder(
           sender &&
           Boolean(
             message.sender_trashed_at,
-          )
+          ) &&
+          !message.sender_deleted_from_trash_at
         ) ||
         Boolean(
           recipient &&
           recipient.trashed_at &&
+          !recipient.deleted_from_trash_at &&
           message.state === "sent",
         )
       );
@@ -2368,23 +2372,47 @@ async function updateMailboxLocation(
 
         sender_trashed_at:
           null,
+
+        sender_deleted_from_trash_at:
+          null,
       };
     } else if (
       action === "trash"
     ) {
-      values = {
-        sender_archived_at:
-          null,
+      if (
+        message.sender_trashed_at
+      ) {
+        values = {
+          sender_archived_at:
+            null,
 
-        sender_trashed_at:
-          now,
-      };
+          sender_trashed_at:
+            message.sender_trashed_at,
+
+          sender_deleted_from_trash_at:
+            now,
+        };
+      } else {
+        values = {
+          sender_archived_at:
+            null,
+
+          sender_trashed_at:
+            now,
+
+          sender_deleted_from_trash_at:
+            null,
+        };
+      }
     } else {
       values = {
         sender_archived_at:
           null,
 
         sender_trashed_at:
+          null,
+
+        sender_deleted_from_trash_at:
           null,
       };
     }
@@ -2445,23 +2473,47 @@ async function updateMailboxLocation(
 
       trashed_at:
         null,
+
+      deleted_from_trash_at:
+        null,
     };
   } else if (
     action === "trash"
   ) {
-    recipientValues = {
-      archived_at:
-        null,
+    if (
+      recipient.trashed_at
+    ) {
+      recipientValues = {
+        archived_at:
+          null,
 
-      trashed_at:
-        now,
-    };
+        trashed_at:
+          recipient.trashed_at,
+
+        deleted_from_trash_at:
+          now,
+      };
+    } else {
+      recipientValues = {
+        archived_at:
+          null,
+
+        trashed_at:
+          now,
+
+        deleted_from_trash_at:
+          null,
+      };
+    }
   } else {
     recipientValues = {
       archived_at:
         null,
 
       trashed_at:
+        null,
+
+      deleted_from_trash_at:
         null,
     };
   }
@@ -2489,7 +2541,6 @@ async function updateMailboxLocation(
     );
   }
 }
-
 export async function archiveStaffMailMessage(
   actor: StaffUser,
   messageId: string,

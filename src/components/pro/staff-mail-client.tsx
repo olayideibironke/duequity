@@ -3572,20 +3572,37 @@ export function StaffMailClient() {
                   <div className="flex flex-wrap gap-2">
                     {effectiveSelectedFolder ===
                       "trash" ? (
-                      <button
-                        type="button"
-                        disabled={
-                          actionBusy
-                        }
-                        onClick={() => {
-                          void messageAction(
-                            "restore",
-                          );
-                        }}
-                        className="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-ink-700 transition hover:bg-inset disabled:opacity-50"
-                      >
-                        Restore
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          disabled={
+                            actionBusy
+                          }
+                          onClick={() => {
+                            void messageAction(
+                              "restore",
+                            );
+                          }}
+                          className="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-ink-700 transition hover:bg-inset disabled:opacity-50"
+                        >
+                          Restore
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={
+                            actionBusy
+                          }
+                          onClick={() => {
+                            void messageAction(
+                              "trash",
+                            );
+                          }}
+                          className="rounded-lg border border-critical-200 bg-critical-50 px-3 py-2 text-xs font-semibold text-critical-700 transition hover:bg-critical-100 disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </>
                     ) : (
                       <>
                         <button
@@ -3615,7 +3632,7 @@ export function StaffMailClient() {
                           }}
                           className="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-ink-700 transition hover:bg-critical-50 hover:text-critical-700 disabled:opacity-50"
                         >
-                          Trash
+                          Delete
                         </button>
                       </>
                     )}
