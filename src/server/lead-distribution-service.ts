@@ -1,4 +1,4 @@
-import "server-only";
+
 
 import type {
   StaffSession,
@@ -20,6 +20,8 @@ import {
  * Security model:
  *
  * - Super Admin / Administrator may distribute leads.
+ * - The Super Admin account is not an ordinary assignment target.
+ * - Active Administrator accounts may receive assigned lead work.
  * - Ordinary staff cannot call these operations.
  * - Assignment is to an exact recovery record, not an entire county.
  * - Staff state clearance is checked separately from assignment.
@@ -29,214 +31,105 @@ import {
  */
 
 /* ========================================================================== */
-/* Public types                                                                */
+/* Public types                                                               */
 /* ========================================================================== */
 
 export interface LeadDistributionStaffOption {
-  id:
-    string;
-
-  name:
-    string;
-
-  email:
-    string;
-
-  title:
-    string;
-
-  role:
-    string;
-
-  statesCleared:
-    string[];
+  id: string;
+  name: string;
+  email: string;
+  title: string;
+  role: string;
+  statesCleared: string[];
 }
 
 export interface LeadDistributionAssignment {
-  id:
-    string;
-
-  staffUserId:
-    string;
-
-  staffName:
-    string;
-
-  staffEmail:
-    string;
-
-  assignedAt:
-    string;
-
-  assignedByStaffUserId:
-    string;
+  id: string;
+  staffUserId: string;
+  staffName: string;
+  staffEmail: string;
+  assignedAt: string;
+  assignedByStaffUserId: string;
 }
 
 export interface LeadDistributionDiscoveryRecord {
-  id:
-    string;
-
-  status:
-    "new" | "reviewed";
-
-  formerOwnerName:
-    string;
-
-  addressLine1:
-    string;
-
-  city:
-    string;
-
-  county:
-    string;
-
-  stateCode:
-    string;
-
-  postalCode?:
-    string;
-
-  parcelNumber?:
-    string;
-
-  caseNumber?:
-    string;
-
-  sourceName:
-    string;
-
-  sourceListedBalanceCents?:
-    number;
-
-  activeAssignment?:
-    LeadDistributionAssignment;
+  id: string;
+  status: "new" | "reviewed";
+  formerOwnerName: string;
+  addressLine1: string;
+  city: string;
+  county: string;
+  stateCode: string;
+  postalCode?: string;
+  parcelNumber?: string;
+  caseNumber?: string;
+  sourceName: string;
+  sourceListedBalanceCents?: number;
+  activeAssignment?: LeadDistributionAssignment;
 }
 
 export interface LeadDistributionSearchResult {
-  query:
-    string;
-
-  totalMatches:
-    number;
-
-  records:
-    LeadDistributionDiscoveryRecord[];
+  query: string;
+  totalMatches: number;
+  records: LeadDistributionDiscoveryRecord[];
 }
 
 /* ========================================================================== */
-/* Database rows                                                               */
+/* Database rows                                                              */
 /* ========================================================================== */
 
 interface StaffUserRow {
-  id:
-    string;
-
-  name:
-    string;
-
-  email:
-    string;
-
-  title:
-    string;
-
-  role:
-    string;
-
-  states_cleared:
-    string[] | null;
-
-  status:
-    string;
+  id: string;
+  name: string;
+  email: string;
+  title: string;
+  role: string;
+  states_cleared: string[] | null;
+  status: string;
 }
 
 interface DiscoveredRecordRow {
-  id:
-    string;
-
-  status:
-    string;
-
-  former_owner_name:
-    string;
-
-  address_line1:
-    string;
-
-  city:
-    string;
-
-  county:
-    string;
-
-  state_code:
-    string;
-
-  postal_code:
-    string | null;
-
-  parcel_number:
-    string | null;
-
-  case_number:
-    string | null;
-
-  source_name:
-    string;
-
-  source_listed_balance_cents:
-    number | string | null;
-
-  promoted_opportunity_id:
-    string | null;
+  id: string;
+  status: string;
+  former_owner_name: string;
+  address_line1: string;
+  city: string;
+  county: string;
+  state_code: string;
+  postal_code: string | null;
+  parcel_number: string | null;
+  case_number: string | null;
+  source_name: string;
+  source_listed_balance_cents: number | string | null;
+  promoted_opportunity_id: string | null;
 }
 
 interface LeadAssignmentRow {
-  id:
-    string;
-
-  discovered_record_id:
-    string | null;
-
-  assigned_to_staff_user_id:
-    string;
-
-  assigned_by_staff_user_id:
-    string;
-
-  assigned_at:
-    string;
-
-  status:
-    string;
+  id: string;
+  discovered_record_id: string | null;
+  assigned_to_staff_user_id: string;
+  assigned_by_staff_user_id: string;
+  assigned_at: string;
+  status: string;
 }
 
 /* ========================================================================== */
-/* Authorization                                                               */
+/* Authorization                                                              */
 /* ========================================================================== */
 
 function isDistributionAdmin(
-  session:
-    StaffSession,
+  session: StaffSession,
 ): boolean {
   return (
-    session.user.role ===
-      "super_admin" ||
-    session.user.role ===
-      "administrator"
+    session.user.role === "super_admin" ||
+    session.user.role === "administrator"
   );
 }
 
 function requireDistributionAdmin(
-  session:
-    StaffSession,
+  session: StaffSession,
 ): void {
-  if (
-    !isDistributionAdmin(
-      session,
-    )
-  ) {
+  if (!isDistributionAdmin(session)) {
     throw new Error(
       "Only a DueQuity Administrator may distribute leads.",
     );
@@ -244,30 +137,18 @@ function requireDistributionAdmin(
 }
 
 /* ========================================================================== */
-/* Helpers                                                                     */
+/* Helpers                                                                    */
 /* ========================================================================== */
 
 function normalizeText(
-  value:
-    string,
+  value: string,
 ): string {
   return value
-    .normalize(
-      "NFKD",
-    )
-    .replace(
-      /[\u0300-\u036f]/g,
-      "",
-    )
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .replace(
-      /[^a-z0-9]+/g,
-      " ",
-    )
-    .replace(
-      /\s+/g,
-      " ",
-    )
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -275,16 +156,11 @@ function matchesQuery({
   row,
   query,
 }: {
-  row:
-    DiscoveredRecordRow;
-
-  query:
-    string;
+  row: DiscoveredRecordRow;
+  query: string;
 }): boolean {
   const normalizedQuery =
-    normalizeText(
-      query,
-    );
+    normalizeText(query);
 
   if (!normalizedQuery) {
     return false;
@@ -292,12 +168,8 @@ function matchesQuery({
 
   const tokens =
     normalizedQuery
-      .split(
-        " ",
-      )
-      .filter(
-        Boolean,
-      );
+      .split(" ")
+      .filter(Boolean);
 
   const searchable =
     normalizeText(
@@ -308,25 +180,16 @@ function matchesQuery({
         row.city,
         row.county,
         row.state_code,
-        row.postal_code ??
-          "",
-        row.parcel_number ??
-          "",
-        row.case_number ??
-          "",
+        row.postal_code ?? "",
+        row.parcel_number ?? "",
+        row.case_number ?? "",
         row.source_name,
-      ].join(
-        " ",
-      ),
+      ].join(" "),
     );
 
   return tokens.every(
-    (
-      token,
-    ) =>
-      searchable.includes(
-        token,
-      ),
+    (token) =>
+      searchable.includes(token),
   );
 }
 
@@ -334,66 +197,47 @@ function recordScore({
   row,
   query,
 }: {
-  row:
-    DiscoveredRecordRow;
-
-  query:
-    string;
+  row: DiscoveredRecordRow;
+  query: string;
 }): number {
   const normalizedQuery =
-    normalizeText(
-      query,
-    );
+    normalizeText(query);
 
   const owner =
-    normalizeText(
-      row.former_owner_name,
-    );
+    normalizeText(row.former_owner_name);
 
   const address =
-    normalizeText(
-      row.address_line1,
-    );
+    normalizeText(row.address_line1);
 
   const parcel =
     normalizeText(
-      row.parcel_number ??
-        "",
+      row.parcel_number ?? "",
     );
 
   const caseNumber =
     normalizeText(
-      row.case_number ??
-        "",
+      row.case_number ?? "",
     );
 
-  if (
-    owner ===
-    normalizedQuery
-  ) {
+  if (owner === normalizedQuery) {
     return 100;
   }
 
   if (
     parcel &&
-    parcel ===
-      normalizedQuery
+    parcel === normalizedQuery
   ) {
     return 95;
   }
 
   if (
     caseNumber &&
-    caseNumber ===
-      normalizedQuery
+    caseNumber === normalizedQuery
   ) {
     return 95;
   }
 
-  if (
-    address ===
-    normalizedQuery
-  ) {
+  if (address === normalizedQuery) {
     return 90;
   }
 
@@ -409,27 +253,18 @@ function recordScore({
 }
 
 function centsFromDatabase(
-  value:
-    number | string | null,
+  value: number | string | null,
 ): number | undefined {
-  if (
-    value ===
-    null
-  ) {
+  if (value === null) {
     return undefined;
   }
 
   const parsed =
-    Number(
-      value,
-    );
+    Number(value);
 
   if (
-    !Number.isSafeInteger(
-      parsed,
-    ) ||
-    parsed <
-      0
+    !Number.isSafeInteger(parsed) ||
+    parsed < 0
   ) {
     return undefined;
   }
@@ -441,33 +276,23 @@ function staffClearedForState({
   staff,
   stateCode,
 }: {
-  staff:
-    StaffUserRow;
-
-  stateCode:
-    string;
+  staff: StaffUserRow;
+  stateCode: string;
 }): boolean {
   const clearances =
-    staff.states_cleared ??
-    [];
+    staff.states_cleared ?? [];
 
   /*
-   * DueQuity's existing convention:
-   *
+   * DueQuity convention:
    * Empty clearance list means the role is intentionally cleared nationally.
    */
-  if (
-    clearances.length ===
-    0
-  ) {
+  if (clearances.length === 0) {
     return true;
   }
 
   return clearances
     .map(
-      (
-        value,
-      ) =>
+      (value) =>
         value
           .trim()
           .toUpperCase(),
@@ -480,18 +305,15 @@ function staffClearedForState({
 }
 
 /* ========================================================================== */
-/* Staff options                                                               */
+/* Staff options                                                              */
 /* ========================================================================== */
 
 export async function listLeadDistributionStaffOptions(
-  session:
-    StaffSession,
+  session: StaffSession,
 ): Promise<
   LeadDistributionStaffOption[]
 > {
-  requireDistributionAdmin(
-    session,
-  );
+  requireDistributionAdmin(session);
 
   const admin =
     getSupabaseAdmin();
@@ -501,9 +323,7 @@ export async function listLeadDistributionStaffOptions(
     error,
   } =
     await admin
-      .from(
-        "staff_users",
-      )
+      .from("staff_users")
       .select(
         [
           "id",
@@ -513,19 +333,13 @@ export async function listLeadDistributionStaffOptions(
           "role",
           "states_cleared",
           "status",
-        ].join(
-          ", ",
-        ),
+        ].join(", "),
       )
-      .eq(
-        "status",
-        "active",
-      )
+      .eq("status", "active")
       .order(
         "name",
         {
-          ascending:
-            true,
+          ascending: true,
         },
       );
 
@@ -537,87 +351,59 @@ export async function listLeadDistributionStaffOptions(
 
   return (
     (
-      data ??
-      []
+      data ?? []
     ) as unknown as
       StaffUserRow[]
   )
+    /*
+     * Super Admin remains management-only for this assignment picker.
+     * Administrator is intentionally INCLUDED because Olayide's
+     * olayide.ibironke@duequity.com account may receive county/lead work.
+     */
     .filter(
-      (
-        staff,
-      ) =>
-        staff.role !==
-          "super_admin" &&
-        staff.role !==
-          "administrator",
+      (staff) =>
+        staff.role !== "super_admin",
     )
     .map(
-      (
-        staff,
-      ) => ({
-        id:
-          staff.id,
-
-        name:
-          staff.name,
-
-        email:
-          staff.email,
-
-        title:
-          staff.title,
-
-        role:
-          staff.role,
-
+      (staff) => ({
+        id: staff.id,
+        name: staff.name,
+        email: staff.email,
+        title: staff.title,
+        role: staff.role,
         statesCleared:
-          staff.states_cleared ??
-          [],
+          staff.states_cleared ?? [],
       }),
     );
 }
 
 /* ========================================================================== */
-/* Search distributable Discovery leads                                        */
+/* Search distributable Discovery leads                                       */
 /* ========================================================================== */
 
 export async function searchLeadDistributionDiscoveryRecords({
   session,
   query,
 }: {
-  session:
-    StaffSession;
-
-  query:
-    string;
+  session: StaffSession;
+  query: string;
 }): Promise<
   LeadDistributionSearchResult
 > {
-  requireDistributionAdmin(
-    session,
-  );
+  requireDistributionAdmin(session);
 
   const normalizedQuery =
     query
       .trim()
-      .slice(
-        0,
-        200,
-      );
+      .slice(0, 200);
 
   if (
-    normalizedQuery.length <
-    2
+    normalizedQuery.length < 2
   ) {
     return {
-      query:
-        normalizedQuery,
-
-      totalMatches:
-        0,
-
-      records:
-        [],
+      query: normalizedQuery,
+      totalMatches: 0,
+      records: [],
     };
   }
 
@@ -631,9 +417,7 @@ export async function searchLeadDistributionDiscoveryRecords({
   ] =
     await Promise.all([
       admin
-        .from(
-          "discovered_records",
-        )
+        .from("discovered_records")
         .select(
           [
             "id",
@@ -649,9 +433,7 @@ export async function searchLeadDistributionDiscoveryRecords({
             "source_name",
             "source_listed_balance_cents",
             "promoted_opportunity_id",
-          ].join(
-            ", ",
-          ),
+          ].join(", "),
         )
         .in(
           "status",
@@ -664,14 +446,10 @@ export async function searchLeadDistributionDiscoveryRecords({
           "promoted_opportunity_id",
           null,
         )
-        .limit(
-          5000,
-        ),
+        .limit(5000),
 
       admin
-        .from(
-          "lead_assignments",
-        )
+        .from("lead_assignments")
         .select(
           [
             "id",
@@ -680,9 +458,7 @@ export async function searchLeadDistributionDiscoveryRecords({
             "assigned_by_staff_user_id",
             "assigned_at",
             "status",
-          ].join(
-            ", ",
-          ),
+          ].join(", "),
         )
         .eq(
           "subject_type",
@@ -694,9 +470,7 @@ export async function searchLeadDistributionDiscoveryRecords({
         ),
 
       admin
-        .from(
-          "staff_users",
-        )
+        .from("staff_users")
         .select(
           [
             "id",
@@ -706,31 +480,23 @@ export async function searchLeadDistributionDiscoveryRecords({
             "role",
             "states_cleared",
             "status",
-          ].join(
-            ", ",
-          ),
+          ].join(", "),
         ),
     ]);
 
-  if (
-    recordsResult.error
-  ) {
+  if (recordsResult.error) {
     throw new Error(
       `Unable to search distributable recovery leads: ${recordsResult.error.message}`,
     );
   }
 
-  if (
-    assignmentsResult.error
-  ) {
+  if (assignmentsResult.error) {
     throw new Error(
       `Unable to resolve current lead assignments: ${assignmentsResult.error.message}`,
     );
   }
 
-  if (
-    staffResult.error
-  ) {
+  if (staffResult.error) {
     throw new Error(
       `Unable to resolve assigned staff identities: ${staffResult.error.message}`,
     );
@@ -738,31 +504,26 @@ export async function searchLeadDistributionDiscoveryRecords({
 
   const records =
     (
-      recordsResult.data ??
-      []
+      recordsResult.data ?? []
     ) as unknown as
       DiscoveredRecordRow[];
 
   const assignments =
     (
-      assignmentsResult.data ??
-      []
+      assignmentsResult.data ?? []
     ) as unknown as
       LeadAssignmentRow[];
 
   const staffRows =
     (
-      staffResult.data ??
-      []
+      staffResult.data ?? []
     ) as unknown as
       StaffUserRow[];
 
   const staffById =
     new Map(
       staffRows.map(
-        (
-          staff,
-        ) => [
+        (staff) => [
           staff.id,
           staff,
         ],
@@ -773,21 +534,17 @@ export async function searchLeadDistributionDiscoveryRecords({
     new Map(
       assignments
         .filter(
-          (
-            assignment,
-          ) =>
+          (assignment) =>
             Boolean(
-              assignment.discovered_record_id,
+              assignment
+                .discovered_record_id,
             ),
         )
         .map(
-          (
-            assignment,
-          ) => [
+          (assignment) => [
             assignment
               .discovered_record_id as
               string,
-
             assignment,
           ],
         ),
@@ -796,53 +553,35 @@ export async function searchLeadDistributionDiscoveryRecords({
   const matched =
     records
       .filter(
-        (
-          row,
-        ) =>
+        (row) =>
           matchesQuery({
             row,
-
             query:
               normalizedQuery,
           }),
       )
       .sort(
-        (
-          left,
-          right,
-        ) =>
+        (left, right) =>
           recordScore({
-            row:
-              right,
-
+            row: right,
             query:
               normalizedQuery,
           }) -
           recordScore({
-            row:
-              left,
-
+            row: left,
             query:
               normalizedQuery,
           }),
       )
-      .slice(
-        0,
-        50,
-      );
+      .slice(0, 50);
 
   return {
-    query:
-      normalizedQuery,
-
+    query: normalizedQuery,
     totalMatches:
       matched.length,
-
     records:
       matched.map(
-        (
-          row,
-        ) => {
+        (row) => {
           const assignment =
             assignmentByRecordId.get(
               row.id,
@@ -857,68 +596,50 @@ export async function searchLeadDistributionDiscoveryRecords({
               : undefined;
 
           return {
-            id:
-              row.id,
-
+            id: row.id,
             status:
               row.status as
-                "new" |
-                "reviewed",
-
+                | "new"
+                | "reviewed",
             formerOwnerName:
               row.former_owner_name,
-
             addressLine1:
               row.address_line1,
-
-            city:
-              row.city,
-
-            county:
-              row.county,
-
+            city: row.city,
+            county: row.county,
             stateCode:
               row.state_code,
-
             postalCode:
               row.postal_code ??
               undefined,
-
             parcelNumber:
               row.parcel_number ??
               undefined,
-
             caseNumber:
               row.case_number ??
               undefined,
-
             sourceName:
               row.source_name,
-
             sourceListedBalanceCents:
               centsFromDatabase(
-                row.source_listed_balance_cents,
+                row
+                  .source_listed_balance_cents,
               ),
-
             activeAssignment:
               assignment &&
               assignedStaff
                 ? {
                     id:
                       assignment.id,
-
                     staffUserId:
                       assignedStaff.id,
-
                     staffName:
                       assignedStaff.name,
-
                     staffEmail:
                       assignedStaff.email,
-
                     assignedAt:
-                      assignment.assigned_at,
-
+                      assignment
+                        .assigned_at,
                     assignedByStaffUserId:
                       assignment
                         .assigned_by_staff_user_id,
@@ -931,7 +652,7 @@ export async function searchLeadDistributionDiscoveryRecords({
 }
 
 /* ========================================================================== */
-/* Assign one existing Discovery lead                                          */
+/* Assign one existing Discovery lead                                         */
 /* ========================================================================== */
 
 export async function assignDiscoveryLeadFromDistribution({
@@ -939,26 +660,17 @@ export async function assignDiscoveryLeadFromDistribution({
   discoveredRecordId,
   staffUserId,
 }: {
-  session:
-    StaffSession;
-
-  discoveredRecordId:
-    string;
-
-  staffUserId:
-    string;
+  session: StaffSession;
+  discoveredRecordId: string;
+  staffUserId: string;
 }) {
-  requireDistributionAdmin(
-    session,
-  );
+  requireDistributionAdmin(session);
 
   const normalizedRecordId =
-    discoveredRecordId
-      .trim();
+    discoveredRecordId.trim();
 
   const normalizedStaffUserId =
-    staffUserId
-      .trim();
+    staffUserId.trim();
 
   if (
     !normalizedRecordId ||
@@ -978,9 +690,7 @@ export async function assignDiscoveryLeadFromDistribution({
   ] =
     await Promise.all([
       admin
-        .from(
-          "discovered_records",
-        )
+        .from("discovered_records")
         .select(
           [
             "id",
@@ -989,9 +699,7 @@ export async function assignDiscoveryLeadFromDistribution({
             "county",
             "state_code",
             "promoted_opportunity_id",
-          ].join(
-            ", ",
-          ),
+          ].join(", "),
         )
         .eq(
           "id",
@@ -1000,9 +708,7 @@ export async function assignDiscoveryLeadFromDistribution({
         .maybeSingle(),
 
       admin
-        .from(
-          "staff_users",
-        )
+        .from("staff_users")
         .select(
           [
             "id",
@@ -1012,9 +718,7 @@ export async function assignDiscoveryLeadFromDistribution({
             "role",
             "states_cleared",
             "status",
-          ].join(
-            ", ",
-          ),
+          ].join(", "),
         )
         .eq(
           "id",
@@ -1043,21 +747,11 @@ export async function assignDiscoveryLeadFromDistribution({
 
   const record =
     recordResult.data as unknown as {
-      id:
-        string;
-
-      status:
-        string;
-
-      former_owner_name:
-        string;
-
-      county:
-        string;
-
-      state_code:
-        string;
-
+      id: string;
+      status: string;
+      former_owner_name: string;
+      county: string;
+      state_code: string;
       promoted_opportunity_id:
         string | null;
     };
@@ -1067,10 +761,8 @@ export async function assignDiscoveryLeadFromDistribution({
       StaffUserRow;
 
   if (
-    record.status !==
-      "new" &&
-    record.status !==
-      "reviewed"
+    record.status !== "new" &&
+    record.status !== "reviewed"
   ) {
     throw new Error(
       "Only active Discovery-stage leads may be distributed from this screen.",
@@ -1087,29 +779,28 @@ export async function assignDiscoveryLeadFromDistribution({
   }
 
   if (
-    staff.status !==
-      "active"
+    staff.status !== "active"
   ) {
     throw new Error(
       "Lead assignments require an active staff member.",
     );
   }
 
+  /*
+   * Only the Super Admin is excluded from receiving ordinary assigned work.
+   * An active Administrator is a valid assignment recipient.
+   */
   if (
-    staff.role ===
-      "super_admin" ||
-    staff.role ===
-      "administrator"
+    staff.role === "super_admin"
   ) {
     throw new Error(
-      "Admin accounts do not need ordinary lead assignments.",
+      "The Super Admin account is not an ordinary lead-assignment target.",
     );
   }
 
   if (
     !staffClearedForState({
       staff,
-
       stateCode:
         record.state_code,
     })
@@ -1121,16 +812,12 @@ export async function assignDiscoveryLeadFromDistribution({
 
   return assignLeadToStaff({
     session,
-
     subjectType:
       "discovered_record",
-
     recordId:
       record.id,
-
     staffUserId:
       staff.id,
-
     note:
       `Assigned from Admin Lead Distribution: ${record.former_owner_name} · ${record.county}, ${record.state_code}`,
   });

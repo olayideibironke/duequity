@@ -16,126 +16,70 @@ import {
 } from "@/server/supabase-admin";
 
 /* ========================================================================== */
-/* Public types                                                                */
+/* Public types                                                               */
 /* ========================================================================== */
 
 export interface LeadWorkbookUploadResult {
-  batchId:
-    string;
-
-  batchReference:
-    string;
-
-  fileName:
-    string;
-
-  sheetName:
-    string;
-
-  county:
-    string;
-
-  stateCode:
-    string;
-
-  assignedStaffUserId:
-    string;
-
-  assignedStaffName:
-    string;
-
-  sourceRowCount:
-    number;
-
-  assignedRowCount:
-    number;
-
-  skippedRowCount:
-    number;
-
-  skippedRecordIds:
-    string[];
+  batchId: string;
+  batchReference: string;
+  fileName: string;
+  sheetName: string;
+  county: string;
+  stateCode: string;
+  assignedStaffUserId: string;
+  assignedStaffName: string;
+  sourceRowCount: number;
+  assignedRowCount: number;
+  skippedRowCount: number;
+  skippedRecordIds: string[];
 }
 
 /* ========================================================================== */
-/* Internal types                                                              */
+/* Internal types                                                             */
 /* ========================================================================== */
 
 interface ParsedWorkbookRow {
-  rowNumber:
-    number;
-
-  discoveredRecordId:
-    string;
-
-  county:
-    string;
-
-  stateCode:
-    string;
-
+  rowNumber: number;
+  discoveredRecordId: string;
+  county: string;
+  stateCode: string;
   sourceRowSnapshot:
-    Record<
-      string,
-      string
-    >;
+    Record<string, string>;
 }
 
 interface DiscoveredRecordRow {
-  id:
-    string;
-
-  status:
-    string;
-
-  county:
-    string;
-
-  state_code:
-    string;
-
+  id: string;
+  status: string;
+  county: string;
+  state_code: string;
   promoted_opportunity_id:
     string | null;
 }
 
 interface StaffUserRow {
-  id:
-    string;
-
-  name:
-    string;
-
-  role:
-    string;
-
-  status:
-    string;
-
+  id: string;
+  name: string;
+  role: string;
+  status: string;
   states_cleared:
     string[] | null;
 }
 
 interface CreatedBatchRow {
-  id:
-    string;
-
-  reference:
-    string;
+  id: string;
+  reference: string;
 }
 
 /* ========================================================================== */
-/* Authorization                                                               */
+/* Authorization                                                              */
 /* ========================================================================== */
 
 function requireDistributionAdmin(
-  session:
-    StaffSession,
+  session: StaffSession,
 ): void {
   if (
-    session.user.role !==
-      "super_admin" &&
-    session.user.role !==
-      "administrator"
+    session.user.role !== "super_admin" &&
+    session.user.role !== "administrator"
   ) {
     throw new Error(
       "Only a DueQuity Administrator may upload and distribute lead workbooks.",
@@ -144,24 +88,19 @@ function requireDistributionAdmin(
 }
 
 /* ========================================================================== */
-/* Helpers                                                                     */
+/* Helpers                                                                    */
 /* ========================================================================== */
 
 function normalizeHeader(
-  value:
-    string,
+  value: string,
 ): string {
   return value
     .trim()
-    .replace(
-      /\s+/g,
-      " ",
-    );
+    .replace(/\s+/g, " ");
 }
 
 function normalizeState(
-  value:
-    string,
+  value: string,
 ): string {
   return value
     .trim()
@@ -169,37 +108,27 @@ function normalizeState(
 }
 
 function normalizeCounty(
-  value:
-    string,
+  value: string,
 ): string {
   return value
     .trim()
     .toLowerCase()
-    .replace(
-      /\s+/g,
-      " ",
-    );
+    .replace(/\s+/g, " ");
 }
 
 function cellText(
-  cell:
-    ExcelJS.Cell,
+  cell: ExcelJS.Cell,
 ): string {
   return cell.text
     .trim()
-    .replace(
-      /\s+/g,
-      " ",
-    );
+    .replace(/\s+/g, " ");
 }
 
 function fileNameFromUpload(
-  file:
-    File,
+  file: File,
 ): string {
   const name =
-    file.name
-      .trim();
+    file.name.trim();
 
   if (!name) {
     throw new Error(
@@ -210,9 +139,7 @@ function fileNameFromUpload(
   if (
     !name
       .toLowerCase()
-      .endsWith(
-        ".xlsx",
-      )
+      .endsWith(".xlsx")
   ) {
     throw new Error(
       "DueQuity lead upload currently supports .xlsx Excel workbooks only.",
@@ -226,31 +153,22 @@ function staffClearedForState({
   staff,
   stateCode,
 }: {
-  staff:
-    StaffUserRow;
-
-  stateCode:
-    string;
+  staff: StaffUserRow;
+  stateCode: string;
 }): boolean {
   const clearances =
-    staff.states_cleared ??
-    [];
+    staff.states_cleared ?? [];
 
   if (
-    clearances.length ===
-    0
+    clearances.length === 0
   ) {
     return true;
   }
 
   return clearances
-    .map(
-      normalizeState,
-    )
+    .map(normalizeState)
     .includes(
-      normalizeState(
-        stateCode,
-      ),
+      normalizeState(stateCode),
     );
 }
 
@@ -258,11 +176,8 @@ function buildBatchReference({
   stateCode,
   county,
 }: {
-  stateCode:
-    string;
-
-  county:
-    string;
+  stateCode: string;
+  county: string;
 }): string {
   const date =
     new Date();
@@ -271,21 +186,12 @@ function buildBatchReference({
     [
       date.getUTCFullYear(),
       String(
-        date.getUTCMonth() +
-          1,
-      ).padStart(
-        2,
-        "0",
-      ),
+        date.getUTCMonth() + 1,
+      ).padStart(2, "0"),
       String(
         date.getUTCDate(),
-      ).padStart(
-        2,
-        "0",
-      ),
-    ].join(
-      "",
-    );
+      ).padStart(2, "0"),
+    ].join("");
 
   const countyPart =
     county
@@ -298,10 +204,7 @@ function buildBatchReference({
         /^-+|-+$/g,
         "",
       )
-      .slice(
-        0,
-        24,
-      );
+      .slice(0, 24);
 
   return [
     "LAB",
@@ -309,33 +212,22 @@ function buildBatchReference({
     countyPart,
     datePart,
     randomUUID()
-      .replaceAll(
-        "-",
-        "",
-      )
-      .slice(
-        0,
-        8,
-      )
+      .replaceAll("-", "")
+      .slice(0, 8)
       .toUpperCase(),
-  ].join(
-    "-",
-  );
+  ].join("-");
 }
 
 /* ========================================================================== */
-/* Workbook parsing                                                            */
+/* Workbook parsing                                                           */
 /* ========================================================================== */
 
 function findHeaderRow(
   worksheet:
     ExcelJS.Worksheet,
 ): {
-  rowNumber:
-    number;
-
-  headers:
-    string[];
+  rowNumber: number;
+  headers: string[];
 } {
   const scanLimit =
     Math.min(
@@ -344,36 +236,26 @@ function findHeaderRow(
     );
 
   for (
-    let rowNumber =
-      1;
-    rowNumber <=
-      scanLimit;
-    rowNumber +=
-      1
+    let rowNumber = 1;
+    rowNumber <= scanLimit;
+    rowNumber += 1
   ) {
     const row =
-      worksheet.getRow(
-        rowNumber,
-      );
+      worksheet.getRow(rowNumber);
 
     const headers:
-      string[] =
-      [];
+      string[] = [];
 
     for (
-      let column =
-        1;
+      let column = 1;
       column <=
         worksheet.columnCount;
-      column +=
-        1
+      column += 1
     ) {
       headers.push(
         normalizeHeader(
           cellText(
-            row.getCell(
-              column,
-            ),
+            row.getCell(column),
           ),
         ),
       );
@@ -382,9 +264,7 @@ function findHeaderRow(
     const normalized =
       new Set(
         headers.map(
-          (
-            value,
-          ) =>
+          (value) =>
             value.toLowerCase(),
         ),
       );
@@ -393,16 +273,11 @@ function findHeaderRow(
       normalized.has(
         "duequity record id",
       ) &&
-      normalized.has(
-        "county",
-      ) &&
-      normalized.has(
-        "state",
-      )
+      normalized.has("county") &&
+      normalized.has("state")
     ) {
       return {
         rowNumber,
-
         headers,
       };
     }
@@ -420,29 +295,18 @@ function parseWorkbookRows({
 }: {
   worksheet:
     ExcelJS.Worksheet;
-
-  headerRowNumber:
-    number;
-
-  headers:
-    string[];
+  headerRowNumber: number;
+  headers: string[];
 }): ParsedWorkbookRow[] {
   const headerIndex =
-    new Map<
-      string,
-      number
-    >();
+    new Map<string, number>();
 
   headers.forEach(
-    (
-      header,
-      index,
-    ) => {
+    (header, index) => {
       if (header) {
         headerIndex.set(
           header.toLowerCase(),
-          index +
-            1,
+          index + 1,
         );
       }
     },
@@ -454,14 +318,10 @@ function parseWorkbookRows({
     );
 
   const countyColumn =
-    headerIndex.get(
-      "county",
-    );
+    headerIndex.get("county");
 
   const stateColumn =
-    headerIndex.get(
-      "state",
-    );
+    headerIndex.get("state");
 
   if (
     !idColumn ||
@@ -474,28 +334,21 @@ function parseWorkbookRows({
   }
 
   const rows:
-    ParsedWorkbookRow[] =
-    [];
+    ParsedWorkbookRow[] = [];
 
   for (
     let rowNumber =
-      headerRowNumber +
-      1;
+      headerRowNumber + 1;
     rowNumber <=
       worksheet.rowCount;
-    rowNumber +=
-      1
+    rowNumber += 1
   ) {
     const row =
-      worksheet.getRow(
-        rowNumber,
-      );
+      worksheet.getRow(rowNumber);
 
     const discoveredRecordId =
       cellText(
-        row.getCell(
-          idColumn,
-        ),
+        row.getCell(idColumn),
       );
 
     const county =
@@ -516,16 +369,12 @@ function parseWorkbookRows({
 
     const anyContent =
       headers.some(
-        (
-          header,
-          index,
-        ) =>
+        (header, index) =>
           Boolean(
             header &&
             cellText(
               row.getCell(
-                index +
-                  1,
+                index + 1,
               ),
             ),
           ),
@@ -558,17 +407,11 @@ function parseWorkbookRows({
     }
 
     const sourceRowSnapshot:
-      Record<
-        string,
-        string
-      > =
+      Record<string, string> =
       {};
 
     headers.forEach(
-      (
-        header,
-        index,
-      ) => {
+      (header, index) => {
         if (!header) {
           return;
         }
@@ -578,8 +421,7 @@ function parseWorkbookRows({
         ] =
           cellText(
             row.getCell(
-              index +
-                1,
+              index + 1,
             ),
           );
       },
@@ -587,20 +429,15 @@ function parseWorkbookRows({
 
     rows.push({
       rowNumber,
-
       discoveredRecordId,
-
       county,
-
       stateCode,
-
       sourceRowSnapshot,
     });
   }
 
   if (
-    rows.length ===
-    0
+    rows.length === 0
   ) {
     throw new Error(
       "The uploaded workbook contains no lead rows.",
@@ -611,7 +448,7 @@ function parseWorkbookRows({
 }
 
 /* ========================================================================== */
-/* Upload + assign                                                             */
+/* Upload + assign                                                            */
 /* ========================================================================== */
 
 export async function uploadAndAssignLeadWorkbook({
@@ -619,24 +456,16 @@ export async function uploadAndAssignLeadWorkbook({
   file,
   staffUserId,
 }: {
-  session:
-    StaffSession;
-
-  file:
-    File;
-
-  staffUserId:
-    string;
+  session: StaffSession;
+  file: File;
+  staffUserId: string;
 }): Promise<
   LeadWorkbookUploadResult
 > {
-  requireDistributionAdmin(
-    session,
-  );
+  requireDistributionAdmin(session);
 
   const normalizedStaffUserId =
-    staffUserId
-      .trim();
+    staffUserId.trim();
 
   if (
     !normalizedStaffUserId
@@ -647,13 +476,10 @@ export async function uploadAndAssignLeadWorkbook({
   }
 
   const fileName =
-    fileNameFromUpload(
-      file,
-    );
+    fileNameFromUpload(file);
 
   if (
-    file.size <=
-    0
+    file.size <= 0
   ) {
     throw new Error(
       "The uploaded workbook is empty.",
@@ -662,9 +488,7 @@ export async function uploadAndAssignLeadWorkbook({
 
   if (
     file.size >
-    15 *
-      1024 *
-      1024
+    15 * 1024 * 1024
   ) {
     throw new Error(
       "Lead workbook exceeds the 15 MB upload limit.",
@@ -673,27 +497,18 @@ export async function uploadAndAssignLeadWorkbook({
 
   /*
    * Keep the browser-style ArrayBuffer for ExcelJS.
-   *
    * Node Buffer is created separately for SHA-256 hashing.
    */
   const arrayBuffer =
     await file.arrayBuffer();
 
   const bytes =
-    Buffer.from(
-      arrayBuffer,
-    );
+    Buffer.from(arrayBuffer);
 
   const fileSha256 =
-    createHash(
-      "sha256",
-    )
-      .update(
-        bytes,
-      )
-      .digest(
-        "hex",
-      );
+    createHash("sha256")
+      .update(bytes)
+      .digest("hex");
 
   const workbook =
     new ExcelJS.Workbook();
@@ -719,16 +534,12 @@ export async function uploadAndAssignLeadWorkbook({
       headerRowNumber,
     headers,
   } =
-    findHeaderRow(
-      worksheet,
-    );
+    findHeaderRow(worksheet);
 
   const parsedRows =
     parseWorkbookRows({
       worksheet,
-
       headerRowNumber,
-
       headers,
     });
 
@@ -736,9 +547,7 @@ export async function uploadAndAssignLeadWorkbook({
     Array.from(
       new Set(
         parsedRows.map(
-          (
-            row,
-          ) =>
+          (row) =>
             normalizeState(
               row.stateCode,
             ),
@@ -750,9 +559,7 @@ export async function uploadAndAssignLeadWorkbook({
     Array.from(
       new Set(
         parsedRows.map(
-          (
-            row,
-          ) =>
+          (row) =>
             normalizeCounty(
               row.county,
             ),
@@ -761,10 +568,8 @@ export async function uploadAndAssignLeadWorkbook({
     );
 
   if (
-    stateCodes.length !==
-      1 ||
-    counties.length !==
-      1
+    stateCodes.length !== 1 ||
+    counties.length !== 1
   ) {
     throw new Error(
       "Each uploaded lead workbook must contain exactly one county and one state.",
@@ -789,9 +594,7 @@ export async function uploadAndAssignLeadWorkbook({
       staffError,
   } =
     await admin
-      .from(
-        "staff_users",
-      )
+      .from("staff_users")
       .select(
         [
           "id",
@@ -799,9 +602,7 @@ export async function uploadAndAssignLeadWorkbook({
           "role",
           "status",
           "states_cleared",
-        ].join(
-          ", ",
-        ),
+        ].join(", "),
       )
       .eq(
         "id",
@@ -823,29 +624,28 @@ export async function uploadAndAssignLeadWorkbook({
       StaffUserRow;
 
   if (
-    staff.status !==
-      "active"
+    staff.status !== "active"
   ) {
     throw new Error(
       "Lead workbooks may only be assigned to an active staff member.",
     );
   }
 
+  /*
+   * Super Admin remains excluded from ordinary county/workbook assignment.
+   * An active Administrator is intentionally allowed to receive assigned work.
+   */
   if (
-    staff.role ===
-      "super_admin" ||
-    staff.role ===
-      "administrator"
+    staff.role === "super_admin"
   ) {
     throw new Error(
-      "Administrator accounts do not require ordinary lead assignments.",
+      "The Super Admin account is not an ordinary lead-workbook assignment target.",
     );
   }
 
   if (
     !staffClearedForState({
       staff,
-
       stateCode,
     })
   ) {
@@ -858,9 +658,7 @@ export async function uploadAndAssignLeadWorkbook({
     Array.from(
       new Set(
         parsedRows.map(
-          (
-            row,
-          ) =>
+          (row) =>
             row.discoveredRecordId,
         ),
       ),
@@ -882,9 +680,7 @@ export async function uploadAndAssignLeadWorkbook({
       recordError,
   } =
     await admin
-      .from(
-        "discovered_records",
-      )
+      .from("discovered_records")
       .select(
         [
           "id",
@@ -892,18 +688,14 @@ export async function uploadAndAssignLeadWorkbook({
           "county",
           "state_code",
           "promoted_opportunity_id",
-        ].join(
-          ", ",
-        ),
+        ].join(", "),
       )
       .in(
         "id",
         recordIds,
       );
 
-  if (
-    recordError
-  ) {
+  if (recordError) {
     throw new Error(
       `Unable to verify workbook recovery records: ${recordError.message}`,
     );
@@ -911,17 +703,14 @@ export async function uploadAndAssignLeadWorkbook({
 
   const discoveredRows =
     (
-      recordData ??
-      []
+      recordData ?? []
     ) as unknown as
       DiscoveredRecordRow[];
 
   const discoveredById =
     new Map(
       discoveredRows.map(
-        (
-          row,
-        ) => [
+        (row) => [
           row.id,
           row,
         ],
@@ -930,22 +719,16 @@ export async function uploadAndAssignLeadWorkbook({
 
   const missingRecordIds =
     recordIds.filter(
-      (
-        id,
-      ) =>
-        !discoveredById.has(
-          id,
-        ),
+      (id) =>
+        !discoveredById.has(id),
     );
 
   if (
-    missingRecordIds.length >
-    0
+    missingRecordIds.length > 0
   ) {
     throw new Error(
       `Workbook contains ${missingRecordIds.length} DueQuity Record ID${
-        missingRecordIds.length ===
-        1
+        missingRecordIds.length === 1
           ? ""
           : "s"
       } that do not exist in the current recovery database.`,
@@ -953,12 +736,10 @@ export async function uploadAndAssignLeadWorkbook({
   }
 
   const assignableRows:
-    ParsedWorkbookRow[] =
-    [];
+    ParsedWorkbookRow[] = [];
 
   const skippedRecordIds:
-    string[] =
-    [];
+    string[] = [];
 
   for (
     const parsedRow
@@ -966,7 +747,8 @@ export async function uploadAndAssignLeadWorkbook({
   ) {
     const record =
       discoveredById.get(
-        parsedRow.discoveredRecordId,
+        parsedRow
+          .discoveredRecordId,
       );
 
     if (!record) {
@@ -976,14 +758,11 @@ export async function uploadAndAssignLeadWorkbook({
     if (
       normalizeState(
         record.state_code,
-      ) !==
-        stateCode ||
+      ) !== stateCode ||
       normalizeCounty(
         record.county,
       ) !==
-        normalizeCounty(
-          county,
-        )
+        normalizeCounty(county)
     ) {
       throw new Error(
         `DueQuity record ${record.id} does not match the county/state shown in the uploaded workbook.`,
@@ -992,10 +771,8 @@ export async function uploadAndAssignLeadWorkbook({
 
     if (
       (
-        record.status !==
-          "new" &&
-        record.status !==
-          "reviewed"
+        record.status !== "new" &&
+        record.status !== "reviewed"
       ) ||
       record
         .promoted_opportunity_id
@@ -1003,7 +780,6 @@ export async function uploadAndAssignLeadWorkbook({
       skippedRecordIds.push(
         record.id,
       );
-
       continue;
     }
 
@@ -1013,8 +789,7 @@ export async function uploadAndAssignLeadWorkbook({
   }
 
   if (
-    assignableRows.length ===
-    0
+    assignableRows.length === 0
   ) {
     throw new Error(
       "None of the workbook leads are currently assignable at the Discovery stage.",
@@ -1024,7 +799,6 @@ export async function uploadAndAssignLeadWorkbook({
   const batchReference =
     buildBatchReference({
       stateCode,
-
       county,
     });
 
@@ -1039,59 +813,40 @@ export async function uploadAndAssignLeadWorkbook({
       {
         p_reference:
           batchReference,
-
         p_name:
           `${county}, ${stateCode} · ${fileName}`,
-
         p_source_file_name:
           fileName,
-
         p_source_file_sha256:
           fileSha256,
-
         p_state_code:
           stateCode,
-
         p_county_geoid:
           null,
-
         p_county_name:
           county,
-
         p_actor_staff_user_id:
           session.user.id,
-
         p_metadata: {
           sheetName:
             worksheet.name,
-
           headerRowNumber,
-
           headers,
-
           originalRowCount:
             parsedRows.length,
-
           assignableRowCount:
             assignableRows.length,
-
           skippedRowCount:
             skippedRecordIds.length,
-
           skippedRecordIds,
         },
-
         p_rows:
           assignableRows.map(
-            (
-              row,
-            ) => ({
+            (row) => ({
               rowNumber:
                 row.rowNumber,
-
               discoveredRecordId:
                 row.discoveredRecordId,
-
               sourceRowSnapshot:
                 row.sourceRowSnapshot,
             }),
@@ -1101,11 +856,8 @@ export async function uploadAndAssignLeadWorkbook({
 
   if (
     batchError ||
-    !Array.isArray(
-      batchData,
-    ) ||
-    batchData.length !==
-      1
+    !Array.isArray(batchData) ||
+    batchData.length !== 1
   ) {
     throw new Error(
       batchError?.message ??
@@ -1128,33 +880,25 @@ export async function uploadAndAssignLeadWorkbook({
       {
         p_batch_id:
           createdBatch.id,
-
         p_staff_user_id:
           staff.id,
-
         p_actor_staff_user_id:
           session.user.id,
-
         p_note:
           `Assigned from uploaded workbook ${fileName}`,
       },
     );
 
-  if (
-    assignmentError
-  ) {
+  if (assignmentError) {
     await admin.rpc(
       "close_lead_assignment_batch",
       {
         p_batch_id:
           createdBatch.id,
-
         p_actor_staff_user_id:
           session.user.id,
-
         p_status:
           "cancelled",
-
         p_closed_at:
           null,
       },
@@ -1175,33 +919,22 @@ export async function uploadAndAssignLeadWorkbook({
   return {
     batchId:
       createdBatch.id,
-
     batchReference:
       createdBatch.reference,
-
     fileName,
-
     sheetName:
       worksheet.name,
-
     county,
-
     stateCode,
-
     assignedStaffUserId:
       staff.id,
-
     assignedStaffName:
       staff.name,
-
     sourceRowCount:
       parsedRows.length,
-
     assignedRowCount,
-
     skippedRowCount:
       skippedRecordIds.length,
-
     skippedRecordIds,
   };
 }
