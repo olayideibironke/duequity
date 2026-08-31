@@ -1,0 +1,350 @@
+﻿"use client";
+
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+} from "react";
+
+import {
+  useFormStatus,
+} from "react-dom";
+
+/* ========================================================================== */
+/* Types                                                                       */
+/* ========================================================================== */
+
+interface ProtectedSubmitButtonProps
+  extends Omit<
+    ButtonHTMLAttributes<HTMLButtonElement>,
+    "type" | "children"
+  > {
+  label:
+    string;
+
+  pendingLabel?:
+    string;
+
+  success?:
+    boolean;
+
+  successLabel?:
+    string;
+
+  requireValid?:
+    boolean;
+
+  requireDirty?:
+    boolean;
+}
+
+/* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
+
+function formSnapshot(
+  form:
+    HTMLFormElement,
+): string {
+  const entries =
+    Array.from(
+      new FormData(
+        form,
+      ).entries(),
+    )
+      .map(
+        (
+          [
+            key,
+            value,
+          ],
+        ) => [
+          key,
+          typeof value ===
+            "string"
+            ? value
+            : value.name,
+        ],
+      )
+      .sort(
+        (
+          a,
+          b,
+        ) => {
+          const keyComparison =
+            String(
+              a[0],
+            ).localeCompare(
+              String(
+                b[0],
+              ),
+            );
+
+          if (
+            keyComparison !==
+            0
+          ) {
+            return keyComparison;
+          }
+
+          return String(
+            a[1],
+          ).localeCompare(
+            String(
+              b[1],
+            ),
+          );
+        },
+      );
+
+  return JSON.stringify(
+    entries,
+  );
+}
+
+/* ========================================================================== */
+/* Component                                                                   */
+/* ========================================================================== */
+
+/**
+ * Standard DueQuity consequential submit control.
+ *
+ * States:
+ *
+ * 1. Invalid/incomplete
+ *      disabled + gray
+ *
+ * 2. Previously saved and unchanged
+ *      disabled + durable saved label
+ *
+ * 3. Valid and changed
+ *      active
+ *
+ * 4. Request pending
+ *      disabled + pending label
+ *
+ * 5. Explicit success state supplied by parent
+ *      disabled + durable saved label
+ *
+ * This is a staff-facing safety layer. Server authorization, validation,
+ * idempotency and database constraints remain authoritative.
+ */
+export function ProtectedSubmitButton({
+  label,
+  pendingLabel =
+    "Savingâ€¦",
+  success =
+    false,
+  successLabel =
+    "âœ“ Saved",
+  requireValid =
+    true,
+  requireDirty =
+    false,
+  disabled:
+    externallyDisabled =
+      false,
+  className =
+    "",
+  ...buttonProps
+}: ProtectedSubmitButtonProps) {
+  const {
+    pending,
+  } =
+    useFormStatus();
+
+  const buttonRef =
+    useRef<HTMLButtonElement>(
+      null,
+    );
+
+  const initialSnapshotRef =
+    useRef<string | null>(
+      null,
+    );
+
+  const [
+    formValid,
+    setFormValid,
+  ] =
+    useState(
+      !requireValid,
+    );
+
+  const [
+    formDirty,
+    setFormDirty,
+  ] =
+    useState(
+      !requireDirty,
+    );
+
+  useEffect(
+    () => {
+      const button =
+        buttonRef.current;
+
+      const form =
+        button?.form;
+
+      if (!form) {
+        setFormValid(
+          true,
+        );
+
+        setFormDirty(
+          true,
+        );
+
+        return;
+      }
+
+      const initialSnapshot =
+        formSnapshot(
+          form,
+        );
+
+      initialSnapshotRef.current =
+        initialSnapshot;
+
+      const refresh =
+        () => {
+          setFormValid(
+            !requireValid ||
+              form.checkValidity(),
+          );
+
+          if (
+            requireDirty
+          ) {
+            setFormDirty(
+              formSnapshot(
+                form,
+              ) !==
+                initialSnapshotRef.current,
+            );
+          } else {
+            setFormDirty(
+              true,
+            );
+          }
+        };
+
+      const handleReset =
+        () => {
+          window.setTimeout(
+            () => {
+              initialSnapshotRef.current =
+                formSnapshot(
+                  form,
+                );
+
+              refresh();
+            },
+            0,
+          );
+        };
+
+      refresh();
+
+      form.addEventListener(
+        "input",
+        refresh,
+        true,
+      );
+
+      form.addEventListener(
+        "change",
+        refresh,
+        true,
+      );
+
+      form.addEventListener(
+        "reset",
+        handleReset,
+      );
+
+      return () => {
+        form.removeEventListener(
+          "input",
+          refresh,
+          true,
+        );
+
+        form.removeEventListener(
+          "change",
+          refresh,
+          true,
+        );
+
+        form.removeEventListener(
+          "reset",
+          handleReset,
+        );
+      };
+    },
+    [
+      requireDirty,
+      requireValid,
+    ],
+  );
+
+  const unchangedSavedState =
+    requireDirty &&
+    !formDirty &&
+    formValid;
+
+  const disabled =
+    externallyDisabled ||
+    pending ||
+    success ||
+    unchangedSavedState ||
+    (
+      requireValid &&
+      !formValid
+    );
+
+  const text =
+    success ||
+    unchangedSavedState
+      ? successLabel
+      : pending
+        ? pendingLabel
+        : label;
+
+  return (
+    <button
+      {...buttonProps}
+      ref={
+        buttonRef
+      }
+      type="submit"
+      disabled={
+        disabled
+      }
+      aria-disabled={
+        disabled
+      }
+      aria-busy={
+        pending
+      }
+      className={[
+        "inline-flex items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold transition",
+        "bg-ink-950 text-white hover:bg-ink-800",
+        "disabled:cursor-not-allowed disabled:bg-ink-200 disabled:text-ink-500 disabled:opacity-100",
+        className,
+      ]
+        .filter(
+          Boolean,
+        )
+        .join(
+          " ",
+        )}
+    >
+      {
+        text
+      }
+    </button>
+  );
+}

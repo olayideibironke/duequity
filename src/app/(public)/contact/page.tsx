@@ -133,7 +133,7 @@ export default async function ContactPage({
                 <p>
                   You can also reach DueQuity by phone at{" "}
                   <a
-                    href="tel:+18886692551"
+                    href="tel:+18663317778"
                     className="font-semibold underline"
                   >
                     {DUEQUITY_CONTACT_PHONE}
@@ -430,7 +430,7 @@ export default async function ContactPage({
 
                       <DataItem label="Phone">
                         <a
-                          href="tel:+18886692551"
+                          href="tel:+18663317778"
                           className="font-mono text-sm hover:underline"
                         >
                           {DUEQUITY_CONTACT_PHONE}

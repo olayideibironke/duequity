@@ -109,10 +109,10 @@ export default async function StatesPage() {
 
           <div className="mt-6 flex flex-wrap gap-3">
             <a
-              href="tel:+18886692551"
+              href="tel:+18663317778"
               className="inline-flex min-h-11 items-center justify-center rounded-md bg-accent-700 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
             >
-              Call 1-888-669-2551
+              Call 866-331-7778
             </a>
 
             <Link
@@ -289,10 +289,10 @@ export default async function StatesPage() {
               </Link>
 
               <a
-                href="tel:+18886692551"
+                href="tel:+18663317778"
                 className="inline-flex min-h-10 items-center justify-center rounded-md border border-line bg-paper px-4 py-2 text-sm font-semibold text-ink-800 transition-colors hover:bg-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
               >
-                Call 1-888-669-2551
+                Call 866-331-7778
               </a>
             </div>
           </div>

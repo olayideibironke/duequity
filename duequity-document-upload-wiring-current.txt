@@ -1,0 +1,152 @@
+============================================================
+FILE: .\src\components\portal\document-upload.tsx
+============================================================
+import { Callout } from "@/components/ui/surface";
+
+/**
+ * CLAIMANT DOCUMENT SUBMISSION
+ *
+ * ============================ IMPORTANT ==================================
+ * There is no claimant document upload endpoint, and this control therefore does
+ * not accept a file.
+ *
+ * It previously presented a working upload: it validated a file client side, then
+ * displayed a success message without transmitting anything. That is a worse
+ * outcome than no control at all. A claimant who has photographed their driver
+ * license and been told "Received" reasonably believes the document is with us,
+ * stops chasing it, and their claim stalls on a requirement they think is met.
+ *
+ * A claimant upload endpoint cannot be built before claimant authentication
+ * exists, because an unauthenticated document upload accepting identity documents
+ * is a serious exposure in its own right. So this surface states the position and
+ * tells the claimant what actually reaches us.
+ *
+ * WHEN THIS IS IMPLEMENTED, IT NEEDS
+ *
+ *   - authenticated claimant sessions
+ *   - a claimant-scoped upload route that verifies the request belongs to the
+ *     claimant's own claim before accepting bytes
+ *   - private durable object storage, not the local filesystem
+ *   - malware scanning before the document becomes reviewable
+ *   - encryption at rest and short-lived signed read URLs
+ *   - retention and deletion controls
+ *
+ * The staff-side upload route already enforces the equivalent controls it can
+ * enforce locally, and is the path by which a document currently enters a claim.
+ * =========================================================================
+ */
+
+export function DocumentUpload({ documentLabel }: { documentLabel: string }) {
+  return (
+    <Callout tone="caution" title="Portal upload is not available yet">
+      <div className="space-y-2">
+        <p>
+          You cannot send your {documentLabel.toLowerCase()} through this page
+          yet. Secure document upload is not active in the claimant portal, and
+          we will not show you a control that appears to send a document when it
+          does not.
+        </p>
+
+        <p>
+          Your specialist will tell you exactly how to provide this document and
+          will confirm in writing once it has been received and accepted. This
+          page will show it move to Under review and then to Accepted.
+        </p>
+
+        <p className="text-sm">
+          Please do not email identity documents. If you are asked to email one
+          by someone claiming to be from Duequity, treat that request as
+          suspicious and report it to{" "}
+          <span className="font-mono text-sm">security@duequity.com</span>.
+        </p>
+      </div>
+    </Callout>
+  );
+}
+
+
+============================================================
+DOCUMENT UPLOAD REFERENCES
+============================================================
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\api\portal\identity-document\route.ts:8
+  uploadClaimantGovernmentId,
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\api\portal\identity-document\route.ts:169
+      await uploadClaimantGovernmentId({
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\api\pro\claims\[id]\documents\route.ts:26
+  registerClaimDocumentUpload,
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\api\pro\claims\[id]\documents\route.ts:411
+function requireDocumentUpload(
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\api\pro\claims\[id]\documents\route.ts:1145
+      requireDocumentUpload(
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\api\pro\claims\[id]\documents\route.ts:1325
+        await registerClaimDocumentUpload({
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\portal\documents\page.tsx:21
+import { DocumentUpload } from "@/components/portal/document-upload";
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\portal\documents\page.tsx:304
+                      <DocumentUpload
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\components\portal\document-upload.tsx:36
+export function DocumentUpload({ documentLabel }: { documentLabel: string }) {
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\server\claim-document-store.ts:115
+export interface RegisterClaimDocumentUploadInput {
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\server\claim-document-store.ts:2605
+export async function registerClaimDocumentUpload(
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\server\claim-document-store.ts:2607
+    RegisterClaimDocumentUploadInput,
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\server\claimant-identity-document-service.ts:161
+export interface UploadClaimantGovernmentIdInput {
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\server\claimant-identity-document-service.ts:1510
+    UploadClaimantGovernmentIdInput,
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\server\claimant-identity-document-service.ts:1841
+    UploadClaimantGovernmentIdInput,
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\server\claimant-identity-document-service.ts:2103
+export async function uploadClaimantGovernmentId(
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\server\claimant-identity-document-service.ts:2105
+    UploadClaimantGovernmentIdInput,
+
+============================================================
+DOCUMENT KIND DEFINITION
+============================================================
+  agencyAddress?: Omit<Address, "id" | "county">;
+  claimMethod: ClaimSubmissionMethod;
+  claimFormUrl?: string;
+  requiredDocuments: DocumentKind[];
+  claimDeadlineDays?: number;
+  statuteReference?: string;
+  permittedFeeModels: FeeModel[];
+  feeCapPercent?: number;
+  feeCapAmount?: Cents;
+  assignmentPermitted: boolean;
+  powerOfAttorneyAccepted: boolean;
+  finderLicenseRequired: boolean;
+  bondRequired: boolean;
+  attorneyRequired: boolean;
+  mandatoryContractLanguage?: string[];
+  cancellationPeriodDays?: number;
+  paymentRoutingNote?: string;
+  probateRequiredWhenDeceased: boolean;
+  complianceStatus: ComplianceStatus;
+  lastLegalReview?: IsoDate;
+  reviewedBy?: string;
+  internalNotes?: string;
+  legalRuleVersion?: number;
+  legalRuleEffectiveFrom?: IsoDate;
+  legalRuleEffectiveThrough?: IsoDate;
+  legalReviewDueAt?: IsoDate;
+  legalSourceUrls?: string[];
+  legalApprovedByUserId?: string;
+  legalApprovedAt?: IsoInstant;
+  legalProcessingRule?: import("./legal").LegalProcessingRule;
+}
+
+/* ========================================================================== */
+/* Commercial pricing policy                                                   */
+/* ========================================================================== */
+
+export type CommercialFeePolicyStatus =
+  "draft" | "approved" | "paused" | "retired";
+
+export type FeeQuoteRecoveryBasis = "estimated" | "confirmed";
+
+export type CommercialViabilityStatus =
+  | "not_evaluated"
+  | "viable"

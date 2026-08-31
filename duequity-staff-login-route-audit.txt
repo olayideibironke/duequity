@@ -1,0 +1,29 @@
+=== STALE STAFF LOGIN ROUTE AUDIT ===
+
+
+=== APPROVED STAFF LOGIN ROUTE REFERENCES ===
+
+Path                                                                                                            LineNumber Line                                            
+----                                                                                                            ---------- ----                                            
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\(public)\check\page.tsx                       50       "/staff/sign-in",                         
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\auth\forgot-password\page.tsx                 55       ? "/staff/sign-in"                        
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\auth\update-password\page.tsx                 55       ? "/staff/sign-in"                        
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\claimants\onboarding\actions.ts          424       "/staff/sign-in",                         
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\claimants\onboarding\actions.ts          570       "/staff/sign-in",                         
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\claimants\[id]\actions.ts                 63       `/staff/sign-in?next=${encodeURIComponent(
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\lead-distribution\actions.ts             143       "/staff/sign-in",                         
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\lead-distribution\actions.ts             253       "/staff/sign-in",                         
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\my-leads\[assignmentId]\page.tsx         127       "/staff/sign-in",                         
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\my-leads\page.tsx                         71       "/staff/sign-in",                         
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\staff\actions.ts                         112       "/staff/sign-in",                         
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\staff\activate\page.tsx                      184             href="/staff/sign-in"               
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\staff\sign-in\actions.ts                      14   "/staff/sign-in";                             
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\components\public\site-header.tsx                 90             href="/staff/sign-in"               
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\components\public\site-header.tsx                192                 href="/staff/sign-in"           
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\components\ui\authentication-required.tsx         56               href="/staff/sign-in"             
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\proxy.ts                                         340       "/staff/sign-in",                         
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\proxy.ts                                         384       "/staff/sign-in",                         
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\proxy.ts                                         410       "/staff/sign-in",                         
+
+
+

@@ -65,10 +65,10 @@ export function SiteFooter() {
             <p className="mt-4 text-sm text-ink-300">
               Call{" "}
               <a
-                href="tel:+18886692551"
+                href="tel:+18663317778"
                 className="font-semibold text-white underline decoration-ink-600 underline-offset-4 transition-colors hover:decoration-accent-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
               >
-                1-888-669-2551
+                866-331-7778
               </a>
             </p>
           </div>

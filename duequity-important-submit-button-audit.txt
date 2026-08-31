@@ -1,0 +1,753 @@
+======================================================================
+DUEQUITY IMPORTANT SUBMIT BUTTON AUDIT
+======================================================================
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\(public)\contact\page.tsx
+LINE: 389
+======================================================================
+                          public form.
+                        </p>
+                      </Callout>
+
+                      <p className="text-xs leading-relaxed text-ink-500">
+                        Submitting this form does not create a claim, establish
+                        entitlement to funds, or create an attorney-client
+                        relationship.
+                      </p>
+
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          className="rounded-xl bg-ink-900 px-6 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                        >
+                          Send message
+                        </button>
+                      </div>
+                    </form>
+                  </CardBody>
+                </Card>
+
+                <Callout
+                  tone="neutral"
+                  className="mt-6"
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\auth\forgot-email\page.tsx
+LINE: 156
+======================================================================
+                  title="Enter a U.S. phone number in the format (555) 123-4567"
+                  maxLength={14}
+                  required
+                  className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                />
+
+                <p className="text-xs text-ink-500">
+                  Format: (555) 123-4567
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-ink-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+              >
+                Recover sign-in email
+              </button>
+            </form>
+          </CardBody>
+        </Card>
+
+        <div className="text-center">
+          <Link
+            href="/claimant/sign-in"
+            className="text-sm font-medium text-ink-700 underline underline-offset-4"
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\auth\forgot-password\page.tsx
+LINE: 151
+======================================================================
+
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-ink-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+              >
+                Send password reset email
+              </button>
+            </form>
+          </CardBody>
+        </Card>
+
+        <div className="text-center">
+          <Link
+            href={signInPath}
+            className="text-sm font-medium text-ink-700 underline underline-offset-4"
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\auth\update-password\page.tsx
+LINE: 177
+======================================================================
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={12}
+                    required
+                    className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full rounded-xl bg-ink-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                >
+                  Update password
+                </button>
+              </form>
+            </CardBody>
+          </Card>
+        ) : null}
+
+        <div className="text-center">
+          <Link
+            href={signInPath}
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\claimant\activate\page.tsx
+LINE: 387
+======================================================================
+                      className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                    />
+                  </div>
+
+                  <Callout
+                    tone="neutral"
+                    title="Identity document required after activation"
+                  >
+                    Account creation is not blocked by your ID upload. After you sign in, DueQuity will require one current government-issued photo ID before claim processing can continue: a valid Driver&apos;s License, valid U.S. Passport, valid State ID, or another current government-issued photo ID.
+                  </Callout>
+
+                  <button
+                    type="submit"
+                    className="w-full rounded-xl bg-ink-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                  >
+                    Activate My DueQuity Account
+                  </button>
+                </form>
+              </CardBody>
+            </Card>
+          </>
+        )}
+
+        <div className="text-center">
+          <Link
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\claimant\sign-in\page.tsx
+LINE: 150
+======================================================================
+
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-ink-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+              >
+                Sign in to My DueQuity
+              </button>
+            </form>
+
+            <div className="mt-5 border-t border-ink-100 pt-5 text-center">
+              <Link
+                href="/auth/forgot-email"
+                className="text-sm font-medium text-ink-700 underline underline-offset-4"
+              >
+                Forgot your sign-in email?
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\portal\security\page.tsx
+LINE: 215
+======================================================================
+                </p>
+
+                <p className="mt-1 text-sm leading-relaxed text-ink-600">
+                  Sign out of My DueQuity on this browser.
+                </p>
+              </div>
+
+              <form
+                action="/auth/sign-out"
+                method="post"
+              >
+                <button
+                  type="submit"
+                  className="rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-800 transition hover:bg-ink-50"
+                >
+                  Sign out
+                </button>
+              </form>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+
+      {/* ==================================================== delete feedback */}
+      {deleteStatus === "invalid" ? (
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\portal\security\page.tsx
+LINE: 339
+======================================================================
+
+              <input
+                id="delete-confirmation"
+                name="confirmation"
+                type="text"
+                autoComplete="off"
+                required
+                className="w-full rounded-xl border border-critical-300 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-critical-500"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="rounded-xl border border-critical-300 bg-white px-4 py-3 text-sm font-semibold text-critical-700 transition hover:bg-critical-50"
+            >
+              Permanently delete portal account
+            </button>
+          </form>
+        </CardBody>
+      </Card>
+
+      {/* ================================================== impersonation */}
+      <Card elevated>
+        <CardHeader
+          eyebrow="Claimant safety"
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\claimants\onboarding\page.tsx
+LINE: 944
+======================================================================
+                tone="neutral"
+                title="Do not collect sensitive information here"
+              >
+                Do not enter Social Security numbers, bank information, card information, passwords, authentication codes, government ID images or signatures in this intake form.
+              </Callout>
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <p className="max-w-2xl text-xs leading-relaxed text-ink-500">
+                  Creating the claimant links the confirmed person to this existing Claim. It does not verify entitlement, approve payment, file with an agency, or activate the claimant account.
+                </p>
+
+                <button
+                  type="submit"
+                  className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                >
+                  Create claimant record
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+      {candidate.route.intakeCleared &&
+        !candidate.converted && (
+          <div className="border-t border-line-subtle px-5 py-5">
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\claimants\onboarding\page.tsx
+LINE: 1203
+======================================================================
+          </span>
+        </label>
+
+        <Callout
+          tone="neutral"
+          title="What happens next"
+        >
+          DueQuity sends a one-time secure activation link to the saved email. The claimant creates their own password.
+        </Callout>
+
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={
+              !mayInvite ||
+              !firstName ||
+              !lastName
+            }
+            className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Send secure activation
+          </button>
+        </div>
+      </form>
+    </div>
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\claimants\onboarding\page.tsx
+LINE: 1598
+======================================================================
+                  <input
+                    id="q"
+                    name="q"
+                    type="search"
+                    defaultValue={
+                      query
+                    }
+                    placeholder="Example: Charles Cooper, James Shehan Jr, OPP-..., 51 Union St..."
+                    className="min-w-0 flex-1 rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                  />
+
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                  >
+                    Find lead
+                  </button>
+                </div>
+              </form>
+
+              {query.length ===
+                1 && (
+                <Callout
+                  tone="caution"
+                  title="Enter more information"
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\claimants\[id]\page.tsx
+LINE: 1223
+======================================================================
+                            }
+                          >
+                            {staff.name} · {roleLabel(
+                              staff.role,
+                            )}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-ink-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-500"
+                  >
+                    Update manager
+                  </button>
+                </form>
+
+                <p className="mt-4 text-xs leading-relaxed text-ink-500">
+                  Reassignment changes operational access only. The staff member
+                  who originally brought this claimant to DueQuity remains
+                  permanently attributed and is not rewritten.
+                </p>
+              </CardBody>
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\contact\[id]\page.tsx
+LINE: 497
+======================================================================
+                        name="bodyText"
+                        rows={8}
+                        maxLength={
+                          20_000
+                        }
+                        required
+                        className="w-full resize-y rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm leading-6 text-ink-900 outline-none transition focus:border-ink-500"
+                      />
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                      >
+                        Send reply
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </CardBody>
+            </Card>
+          ) : null}
+        </div>
+
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\contact\[id]\page.tsx
+LINE: 643
+======================================================================
+
+                      <option value="closed">
+                        Closed
+                      </option>
+
+                      <option value="spam">
+                        Spam
+                      </option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full rounded-xl border border-ink-300 bg-white px-4 py-2.5 text-sm font-semibold text-ink-800 transition hover:bg-ink-50"
+                  >
+                    Update status
+                  </button>
+                </form>
+              </CardBody>
+            </Card>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\lead-distribution\page.tsx
+LINE: 656
+======================================================================
+
+            <div className="flex justify-end">
+              {recentlySaved ? (
+                <button
+                  type="button"
+                  disabled
+                  className="rounded-xl bg-accent-700 px-5 py-3 text-sm font-semibold text-white opacity-90"
+                >
+                  ? Saved
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                >
+                  {record.activeAssignment
+                    ? "Save assignment"
+                    : "Assign lead"}
+                </button>
+              )}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\lead-distribution\page.tsx
+LINE: 967
+======================================================================
+              </div>
+            </div>
+
+            <Callout
+              tone="neutral"
+              title="Assignment-scoped staff download"
+            >
+              DueQuity preserves each uploaded row with its assignment batch. Staff download access will contain only the recovery leads currently assigned to that staff member, never an unrelated county-wide workbook.
+            </Callout>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="rounded-xl bg-accent-700 px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                Upload &amp; assign workbook
+              </button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
+
+      {/* ================================================================== */}
+      {/* Manual individual assignment                                       */}
+      {/* ================================================================== */}
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\lead-distribution\page.tsx
+LINE: 1004
+======================================================================
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                name="q"
+                type="search"
+                defaultValue={
+                  query
+                }
+                placeholder="Example: Charles Cooper"
+                className="min-w-0 flex-1 rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+              />
+
+              <button
+                type="submit"
+                className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+              >
+                Find lead
+              </button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
+
+      {query.length ===
+        1 && (
+        <Callout
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\staff\page.tsx
+LINE: 519
+======================================================================
+              tone="neutral"
+              title="Controlled staff activation"
+            >
+              <p>
+                The employee will receive a one-time invitation by email. Their
+                staff profile remains invited and cannot enter the DueQuity
+                operations workspace until activation is completed.
+              </p>
+            </Callout>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                className="rounded-xl bg-ink-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+              >
+                Send staff invitation
+              </button>
+            </div>
+          </form>
+        </CardBody>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardHeader
+          title="Staff roster"
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\staff\activate\page.tsx
+LINE: 172
+======================================================================
+                  <input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={12}
+                    required
+                    className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full rounded-xl bg-ink-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                >
+                  Activate staff account
+                </button>
+              </form>
+            </CardBody>
+          </Card>
+        ) : null}
+
+        <div className="text-center">
+          <Link
+            href="/staff/sign-in"
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\staff\sign-in\page.tsx
+LINE: 121
+======================================================================
+
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  className="w-full rounded-xl border border-ink-200 bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-ink-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full rounded-xl bg-ink-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+              >
+                Sign in to Operations
+              </button>
+            </form>
+          </CardBody>
+        </Card>
+
+        <p className="text-center text-xs leading-relaxed text-ink-500">
+          Access is restricted to authorized DueQuity staff accounts.
+        </p>
+      </div>
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\components\portal\portal-shell.tsx
+LINE: 337
+======================================================================
+                  }}
+                  className="block rounded-md px-3 py-2.5 text-base text-ink-300 transition-colors hover:bg-ink-900 hover:text-white"
+                >
+                  Return to duequity.com
+                </Link>
+
+                <form
+                  action="/auth/sign-out"
+                  method="post"
+                  className="pt-2"
+                >
+                  <button
+                    type="submit"
+                    className="w-full rounded-md border border-ink-700 px-3 py-2.5 text-left text-base font-medium text-ink-300 transition-colors hover:border-ink-600 hover:bg-ink-900 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
+                  >
+                    Sign out
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+      </header>
+
+      <div className="mx-auto flex w-full max-w-6xl flex-1 gap-8 px-4 py-6 sm:px-6 lg:py-8">
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\components\pro\claimant-intake-discovery-card.tsx
+LINE: 420
+======================================================================
+            </label>
+          </div>
+
+          <Callout
+            tone="neutral"
+            title="Assigned lead record"
+          >
+            Saving this form records the verified claimant contact and consent on this exact Admin-assigned recovery lead. Your assigned workflow remains active after the contact is saved.
+          </Callout>
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+            >
+              {update
+                ? "Save updated contact"
+                : "Save claimant contact"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </details>
+  );
+}
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\components\pro\pro-shell.tsx
+LINE: 1396
+======================================================================
+            href="/auth/update-password?audience=staff"
+            className="mt-3 block w-full rounded-md border border-ink-700 px-3 py-2 text-center text-sm font-medium text-ink-300 transition-colors hover:border-ink-600 hover:bg-ink-900 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
+          >
+            Security / Password
+          </Link>
+
+          <form
+            action="/auth/sign-out"
+            method="post"
+            className="mt-2"
+          >
+            <button
+              type="submit"
+              className="w-full rounded-md border border-ink-700 px-3 py-2 text-sm font-medium text-ink-300 transition-colors hover:border-ink-600 hover:bg-ink-900 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-400"
+            >
+              Sign out
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {railOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\components\public\check-form.tsx
+LINE: 244
+======================================================================
+
+        {error && (
+          <p
+            role="alert"
+            className="mt-4 text-sm font-medium text-critical-700"
+          >
+            {error}
+          </p>
+        )}
+
+        <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-line-subtle pt-5">
+          <Button
+            type="submit"
+            variant="primary"
+            accent
+            size="lg"
+            loading={pending}
+            leading={<IconSearch size={17} />}
+          >
+            Search records
+          </Button>
+
+          <p className="text-xs text-ink-500">
+            Free. No account needed. No Social Security number requested.
+          </p>
+
+======================================================================
+FILE: C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\components\public\verify-code-form.tsx
+LINE: 74
+======================================================================
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          className="font-mono text-lg tracking-[0.25em]"
+          hint="Four characters, printed near the top of the letter or in the email footer."
+          error={error}
+          required
+        />
+      </div>
+
+      <div className="mt-5 flex flex-wrap items-center gap-3">
+        <Button
+          type="submit"
+          variant="primary"
+          accent
+          loading={pending}
+          leading={<IconShield size={16} />}
+        >
+          Verify this contact
+        </Button>
+        <p className="text-xs text-ink-500">
+          No personal information is required to verify.
+        </p>
+      </div>
+    </form>

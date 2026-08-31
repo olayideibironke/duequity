@@ -10,7 +10,7 @@ export const DUEQUITY_CONTACT_EMAIL =
   "info@duequity.com";
 
 export const DUEQUITY_CONTACT_PHONE =
-  "1-888-669-2551";
+  "866-331-7778";
 
 const DEFAULT_SMTP_HOST =
   "smtp.purelymail.com";

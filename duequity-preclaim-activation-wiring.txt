@@ -1,0 +1,7289 @@
+
+======================================================================
+FILE: .\src\app\pro\claimants\onboarding\page.tsx
+======================================================================
+import type {
+  Metadata,
+} from "next";
+
+import Link from "next/link";
+
+import {
+  ClaimantIntakeDiscoveryCard,
+} from "@/components/pro/claimant-intake-discovery-card";
+
+import {
+  Badge,
+} from "@/components/ui/badge";
+
+import {
+  StaffAuthenticationRequired,
+} from "@/components/ui/authentication-required";
+
+import {
+  Callout,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyState,
+} from "@/components/ui/surface";
+
+import {
+  can,
+} from "@/lib/session";
+
+import {
+  formatCents,
+} from "@/lib/format";
+
+import {
+  searchClaimantIntakeCandidates,
+  type ClaimantIntakeCandidate,
+} from "@/server/claimant-intake-service";
+
+import {
+  searchClaimantIntakeDiscoveryCandidates,
+} from "@/server/claimant-intake-discovery-service";
+
+import {
+  listClaimantActivationCandidates,
+  listClaimantActivationInvitations,
+  type ClaimantActivationCandidate,
+  type ClaimantActivationInvitation,
+} from "@/server/claimant-invite-service";
+
+import {
+  resolveStaffSession,
+} from "@/server/staff-session";
+
+import {
+  createClaimantFromConfirmedCallAction,
+  sendClaimantActivationInvitation,
+} from "./actions";
+
+export const metadata: Metadata = {
+  title:
+    "Claimant Onboarding",
+};
+
+export const dynamic =
+  "force-dynamic";
+
+/* ========================================================================== */
+/* Types                                                                       */
+/* ========================================================================== */
+
+interface ClaimantOnboardingPageProps {
+  searchParams: Promise<{
+    status?: string;
+    q?: string;
+    claimantId?: string;
+  }>;
+}
+
+type LeadClaimantState =
+  | "not_created"
+  | "ready_for_activation"
+  | "invitation_open"
+  | "activated";
+
+/* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
+
+function formatTimestamp(
+  value:
+    string | undefined,
+): string {
+  if (!value) {
+    return "Not recorded";
+  }
+
+  const date =
+    new Date(
+      value,
+    );
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      month:
+        "short",
+
+      day:
+        "numeric",
+
+      year:
+        "numeric",
+
+      hour:
+        "numeric",
+
+      minute:
+        "2-digit",
+    },
+  ).format(
+    date,
+  );
+}
+
+function statusTone(
+  status:
+    string,
+):
+  | "positive"
+  | "caution"
+  | "critical"
+  | "neutral"
+  | "info" {
+  switch (
+    status
+  ) {
+    case "activated":
+      return "positive";
+
+    case "sent":
+    case "preparing":
+      return "info";
+
+    case "failed":
+    case "revoked":
+      return "critical";
+
+    case "expired":
+      return "caution";
+
+    default:
+      return "neutral";
+  }
+}
+
+function routeBadgeTone(
+  candidate:
+    ClaimantIntakeCandidate,
+):
+  | "positive"
+  | "caution"
+  | "critical"
+  | "neutral" {
+  return candidate.route.tone;
+}
+
+function titleCase(
+  value:
+    string,
+): string {
+  return value
+    .replaceAll(
+      "_",
+      " ",
+    )
+    .replace(
+      /\b\w/g,
+      (
+        character,
+      ) =>
+        character.toUpperCase(),
+    );
+}
+
+function legalNameParts(
+  legalName:
+    string,
+): {
+  firstName:
+    string;
+
+  lastName:
+    string;
+} {
+  const parts =
+    legalName
+      .trim()
+      .replace(
+        /\s+/g,
+        " ",
+      )
+      .split(
+        " ",
+      )
+      .filter(
+        Boolean,
+      );
+
+  if (
+    parts.length ===
+    0
+  ) {
+    return {
+      firstName:
+        "",
+
+      lastName:
+        "",
+    };
+  }
+
+  if (
+    parts.length ===
+    1
+  ) {
+    return {
+      firstName:
+        parts[0],
+
+      lastName:
+        "",
+    };
+  }
+
+  return {
+    firstName:
+      parts[0],
+
+    lastName:
+      parts
+        .slice(
+          1,
+        )
+        .join(
+          " ",
+        ),
+  };
+}
+
+function claimantStateForClaim({
+  claimId,
+  activationCandidates,
+  invitations,
+}: {
+  claimId:
+    string | undefined;
+
+  activationCandidates:
+    ClaimantActivationCandidate[];
+
+  invitations:
+    ClaimantActivationInvitation[];
+}): {
+  state:
+    LeadClaimantState;
+
+  activationCandidate?:
+    ClaimantActivationCandidate;
+} {
+  if (!claimId) {
+    return {
+      state:
+        "not_created",
+    };
+  }
+
+  const activated =
+    invitations.some(
+      (
+        invitation,
+      ) =>
+        invitation.claimId ===
+          claimId &&
+        invitation.status ===
+          "activated",
+    );
+
+  if (activated) {
+    return {
+      state:
+        "activated",
+    };
+  }
+
+  const openInvitation =
+    invitations.some(
+      (
+        invitation,
+      ) =>
+        invitation.claimId ===
+          claimId &&
+        (
+          invitation.status ===
+            "sent" ||
+          invitation.status ===
+            "preparing"
+        ),
+    );
+
+  if (openInvitation) {
+    return {
+      state:
+        "invitation_open",
+    };
+  }
+
+  const activationCandidate =
+    activationCandidates.find(
+      (
+        candidate,
+      ) =>
+        candidate.claimId ===
+        claimId,
+    );
+
+  if (activationCandidate) {
+    return {
+      state:
+        "ready_for_activation",
+
+      activationCandidate,
+    };
+  }
+
+  return {
+    state:
+      "not_created",
+  };
+}
+
+/* ========================================================================== */
+/* Operational lead result                                                    */
+/* ========================================================================== */
+
+function LeadResultCard({
+  candidate,
+  query,
+  mayCreateClaimant,
+  claimantState,
+  activationCandidate,
+}: {
+  candidate:
+    ClaimantIntakeCandidate;
+
+  query:
+    string;
+
+  mayCreateClaimant:
+    boolean;
+
+  claimantState:
+    LeadClaimantState;
+
+  activationCandidate?:
+    ClaimantActivationCandidate;
+}) {
+  const ownerNames =
+    candidate.formerOwnerNames.length >
+    0
+      ? candidate.formerOwnerNames.join(
+          " / ",
+        )
+      : "Former owner not recorded";
+
+  const creationAllowed =
+    mayCreateClaimant &&
+    candidate.route.intakeCleared &&
+    candidate.converted &&
+    Boolean(
+      candidate.claimId,
+    ) &&
+    claimantState ===
+      "not_created";
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+      <div className="border-b border-line-subtle px-5 py-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md bg-ink-950 px-2.5 py-1 font-mono text-xs font-semibold text-white">
+                {
+                  candidate.opportunityReference
+                }
+              </span>
+
+              <Badge
+                tone={
+                  routeBadgeTone(
+                    candidate,
+                  )
+                }
+              >
+                {
+                  candidate.route.code
+                }{" "}
+                ·{" "}
+                {
+                  candidate.route.label
+                }
+              </Badge>
+
+              {candidate.converted ? (
+                <Badge tone="positive">
+                  Claim exists
+                </Badge>
+              ) : (
+                <Badge tone="neutral">
+                  Opportunity
+                </Badge>
+              )}
+
+              {claimantState ===
+                "ready_for_activation" && (
+                <Badge tone="info">
+                  Claimant created
+                </Badge>
+              )}
+
+              {claimantState ===
+                "invitation_open" && (
+                <Badge tone="info">
+                  Activation sent
+                </Badge>
+              )}
+
+              {claimantState ===
+                "activated" && (
+                <Badge tone="positive">
+                  Claimant activated
+                </Badge>
+              )}
+            </div>
+
+            <h3 className="mt-3 text-lg font-semibold text-ink-950">
+              {ownerNames}
+            </h3>
+
+            <p className="mt-1 text-sm leading-relaxed text-ink-600">
+              {
+                candidate.propertyAddress
+              }
+            </p>
+          </div>
+
+          <div className="text-right">
+            <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-ink-400">
+              {
+                candidate.surplusQuality ===
+                "confirmed"
+                  ? "Confirmed surplus"
+                  : "Estimated surplus"
+              }
+            </p>
+
+            <p className="mt-1 tnum text-lg font-semibold text-ink-950">
+              {formatCents(
+                candidate.surplusAmount,
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-0 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="border-b border-line-subtle px-5 py-5 lg:border-b-0 lg:border-r">
+          <p className="eyebrow text-ink-500">
+            Source record to verify
+          </p>
+
+          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-xs font-medium text-ink-500">
+                Former owner
+              </dt>
+
+              <dd className="mt-1 text-sm font-semibold text-ink-900">
+                {ownerNames}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium text-ink-500">
+                County / state
+              </dt>
+
+              <dd className="mt-1 text-sm font-semibold text-ink-900">
+                {candidate.county
+                  ? `${candidate.county}, `
+                  : ""}
+                {
+                  candidate.state
+                }
+              </dd>
+            </div>
+
+            <div className="sm:col-span-2">
+              <dt className="text-xs font-medium text-ink-500">
+                Foreclosed property
+              </dt>
+
+              <dd className="mt-1 text-sm font-semibold text-ink-900">
+                {
+                  candidate.propertyAddress
+                }
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium text-ink-500">
+                Sale type
+              </dt>
+
+              <dd className="mt-1 text-sm text-ink-800">
+                {titleCase(
+                  candidate.saleType,
+                )}
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium text-ink-500">
+                Opportunity status
+              </dt>
+
+              <dd className="mt-1 text-sm text-ink-800">
+                {titleCase(
+                  candidate.opportunityStatus,
+                )}
+              </dd>
+            </div>
+          </dl>
+
+          <Callout
+            className="mt-5"
+            tone="neutral"
+            title="Phone verification"
+          >
+            Confirm the caller&apos;s first and last name and ask them to confirm that they previously owned or had an interest in the property shown above. Do not alter the government/source record from this screen.
+          </Callout>
+        </div>
+
+        <div className="px-5 py-5">
+          <p className="eyebrow text-ink-500">
+            DueQuity recovery route
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="rounded-lg bg-ink-950 px-3 py-1.5 font-mono text-sm font-bold tracking-wide text-white">
+              {
+                candidate.route.code
+              }
+            </span>
+
+            <Badge
+              tone={
+                routeBadgeTone(
+                  candidate,
+                )
+              }
+            >
+              {
+                candidate.route.label
+              }
+            </Badge>
+          </div>
+
+          <dl className="mt-5 space-y-4">
+            <div>
+              <dt className="text-xs font-medium text-ink-500">
+                Filing control
+              </dt>
+
+              <dd className="mt-1 text-sm font-semibold text-ink-900">
+                {
+                  candidate.route.filingPartyLabel
+                }
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium text-ink-500">
+                Payment route
+              </dt>
+
+              <dd className="mt-1 text-sm font-semibold text-ink-900">
+                {
+                  candidate.route.paymentRouteLabel
+                }
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium text-ink-500">
+                DueQuity may file
+              </dt>
+
+              <dd className="mt-1 text-sm text-ink-800">
+                {
+                  candidate.route.representativeMayFile ===
+                  "yes"
+                    ? "Yes"
+                    : candidate.route.representativeMayFile ===
+                        "no"
+                      ? "No"
+                      : "Not cleared"
+                }
+              </dd>
+            </div>
+
+            <div>
+              <dt className="text-xs font-medium text-ink-500">
+                DueQuity may receive payment
+              </dt>
+
+              <dd className="mt-1 text-sm text-ink-800">
+                {
+                  candidate.route.representativeMayReceivePayment ===
+                  "yes"
+                    ? "Yes"
+                    : candidate.route.representativeMayReceivePayment ===
+                        "no"
+                      ? "No"
+                      : "Not cleared"
+                }
+              </dd>
+            </div>
+          </dl>
+
+          <Callout
+            className="mt-5"
+            tone={
+              candidate.route.intakeCleared
+                ? "positive"
+                : candidate.route.code ===
+                    "ATTY"
+                  ? "caution"
+                  : "critical"
+            }
+            title={
+              candidate.route.intakeCleared
+                ? "Intake route cleared"
+                : candidate.route.code ===
+                    "ATTY"
+                  ? "Attorney route"
+                  : "Do not advance intake"
+            }
+          >
+            {
+              candidate.route.reason
+            }
+          </Callout>
+        </div>
+      </div>
+
+      <div className="border-t border-line-subtle bg-inset px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            {candidate.converted ? (
+              <>
+                <p className="text-sm font-semibold text-ink-900">
+                  Claim already created
+                </p>
+
+                <p className="mt-0.5 text-xs text-ink-500">
+                  {candidate.claimReference ??
+                    candidate.claimId}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-ink-900">
+                  Claim has not been created yet
+                </p>
+
+                <p className="mt-0.5 max-w-2xl text-xs leading-relaxed text-ink-500">
+                  The Opportunity must pass DueQuity&apos;s existing conversion controls before a claimant record can be created.
+                </p>
+              </>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/pro/opportunities/${candidate.opportunityId}`}
+              className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-ink-800 transition hover:border-ink-300 hover:bg-ink-50"
+            >
+              Open opportunity
+            </Link>
+
+            {candidate.converted &&
+              candidate.claimId && (
+                <Link
+                  href={`/pro/claims/${candidate.claimId}`}
+                  className="rounded-xl bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-800"
+                >
+                  Open claim
+                </Link>
+              )}
+          </div>
+        </div>
+      </div>
+
+      {claimantState ===
+        "activated" && (
+        <div className="border-t border-line-subtle px-5 py-5">
+          <Callout
+            tone="positive"
+            title="Claimant already activated"
+          >
+            A claimant record and My DueQuity account already exist for this Claim. Do not create another claimant record or send another activation invitation.
+          </Callout>
+        </div>
+      )}
+
+      {claimantState ===
+        "invitation_open" && (
+        <div className="border-t border-line-subtle px-5 py-5">
+          <Callout
+            tone="info"
+            title="Activation invitation already sent"
+          >
+            The claimant record already exists and an activation invitation is currently open.
+          </Callout>
+        </div>
+      )}
+
+      {claimantState ===
+        "ready_for_activation" &&
+        activationCandidate && (
+          <div className="border-t border-line-subtle px-5 py-5">
+            <Callout
+              tone="positive"
+              title="Claimant record already created"
+            >
+              {activationCandidate.claimantReference} is ready for secure activation. Continue below without recreating the claimant.
+            </Callout>
+
+            <div className="mt-4">
+              <Link
+                href={`/pro/claimants/onboarding?q=${encodeURIComponent(
+                  query,
+                )}&claimantId=${encodeURIComponent(
+                  activationCandidate.claimantId,
+                )}#send-claimant-activation`}
+                className="inline-flex rounded-xl bg-ink-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-ink-800"
+              >
+                Continue to activation
+              </Link>
+            </div>
+          </div>
+        )}
+
+      {creationAllowed &&
+        candidate.claimId && (
+          <div className="border-t border-line-subtle px-5 py-6">
+            <div className="max-w-4xl">
+              <p className="eyebrow text-accent-700">
+                Next step
+              </p>
+
+              <h4 className="mt-1 text-lg font-semibold text-ink-950">
+                Create claimant from confirmed call
+              </h4>
+
+              <p className="mt-2 text-sm leading-relaxed text-ink-600">
+                Enter only the identity and contact information the claimant personally confirmed. The source property and county route remain system-controlled.
+              </p>
+            </div>
+
+            <form
+              action={
+                createClaimantFromConfirmedCallAction
+              }
+              className="mt-5 space-y-5"
+            >
+              <input
+                type="hidden"
+                name="claimId"
+                value={
+                  candidate.claimId
+                }
+              />
+
+              <input
+                type="hidden"
+                name="q"
+                value={
+                  query
+                }
+              />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label
+                    htmlFor={`legalFirstName-${candidate.opportunityId}`}
+                    className="block text-sm font-semibold text-ink-800"
+                  >
+                    Confirmed legal first name
+                  </label>
+
+                  <input
+                    id={`legalFirstName-${candidate.opportunityId}`}
+                    name="legalFirstName"
+                    type="text"
+                    autoComplete="given-name"
+                    required
+                    placeholder="First name confirmed by claimant"
+                    className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor={`legalLastName-${candidate.opportunityId}`}
+                    className="block text-sm font-semibold text-ink-800"
+                  >
+                    Confirmed legal last name
+                  </label>
+
+                  <input
+                    id={`legalLastName-${candidate.opportunityId}`}
+                    name="legalLastName"
+                    type="text"
+                    autoComplete="family-name"
+                    required
+                    placeholder="Last name confirmed by claimant"
+                    className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <label
+                    htmlFor={`email-${candidate.opportunityId}`}
+                    className="block text-sm font-semibold text-ink-800"
+                  >
+                    Confirmed email
+                  </label>
+
+                  <input
+                    id={`email-${candidate.opportunityId}`}
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    placeholder="claimant@example.com"
+                    className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                  />
+
+                  <p className="text-xs leading-relaxed text-ink-500">
+                    Read the complete email address back to the claimant before saving.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor={`mobilePhone-${candidate.opportunityId}`}
+                    className="block text-sm font-semibold text-ink-800"
+                  >
+                    Confirmed U.S. mobile
+                  </label>
+
+                  <input
+                    id={`mobilePhone-${candidate.opportunityId}`}
+                    name="mobilePhone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel-national"
+                    required
+                    placeholder="(555) 123-4567"
+                    className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                  />
+
+                  <p className="text-xs leading-relaxed text-ink-500">
+                    Use the claimant&apos;s confirmed 10-digit U.S. mobile number.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 rounded-xl border border-line bg-inset px-4 py-4">
+                  <input
+                    type="checkbox"
+                    name="propertyConnectionConfirmed"
+                    value="confirmed"
+                    required
+                    className="mt-0.5 size-4"
+                  />
+
+                  <span className="text-sm leading-relaxed text-ink-700">
+                    The claimant confirmed that they previously owned or had an interest in the foreclosed property shown above.
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3 rounded-xl border border-line bg-inset px-4 py-4">
+                  <input
+                    type="checkbox"
+                    name="activationEmailConsentConfirmed"
+                    value="confirmed"
+                    required
+                    className="mt-0.5 size-4"
+                  />
+
+                  <span className="text-sm leading-relaxed text-ink-700">
+                    The claimant voluntarily agreed to move forward with DueQuity and gave permission for DueQuity to send secure activation materials to the confirmed email address.
+                  </span>
+                </label>
+              </div>
+
+              <Callout
+                tone="neutral"
+                title="Do not collect sensitive information here"
+              >
+                Do not enter Social Security numbers, bank information, card information, passwords, authentication codes, government ID images or signatures in this intake form.
+              </Callout>
+
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <p className="max-w-2xl text-xs leading-relaxed text-ink-500">
+                  Creating the claimant links the confirmed person to this existing Claim. It does not verify entitlement, approve payment, file with an agency, or activate the claimant account.
+                </p>
+
+                <button
+                  type="submit"
+                  className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                >
+                  Create claimant record
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+      {candidate.route.intakeCleared &&
+        !candidate.converted && (
+          <div className="border-t border-line-subtle px-5 py-5">
+            <Callout
+              tone="caution"
+              title="Claim conversion required first"
+            >
+              This county route is cleared, but the Opportunity has not yet become a Claim.
+            </Callout>
+          </div>
+        )}
+
+      {!candidate.route.intakeCleared && (
+        <div className="border-t border-line-subtle px-5 py-5">
+          <Callout
+            tone={
+              candidate.route.code ===
+              "ATTY"
+                ? "caution"
+                : "critical"
+            }
+            title="Claimant creation blocked"
+          >
+            This recovery may not advance through ordinary claimant intake while the current route remains {candidate.route.label.toLowerCase()}.
+          </Callout>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ========================================================================== */
+/* Activation card                                                            */
+/* ========================================================================== */
+
+function ActivationCandidateCard({
+  candidate,
+  mayInvite,
+  selected,
+}: {
+  candidate:
+    ClaimantActivationCandidate;
+
+  mayInvite:
+    boolean;
+
+  selected:
+    boolean;
+}) {
+  const {
+    firstName,
+    lastName,
+  } =
+    legalNameParts(
+      candidate.currentLegalName,
+    );
+
+  return (
+    <div
+      className={[
+        "rounded-2xl border bg-white p-5",
+        selected
+          ? "border-accent-300 ring-2 ring-accent-100"
+          : "border-line",
+      ].join(
+        " ",
+      )}
+    >
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md bg-ink-950 px-2.5 py-1 font-mono text-xs font-semibold text-white">
+              {
+                candidate.claimantReference
+              }
+            </span>
+
+            <Badge tone="info">
+              Ready for activation
+            </Badge>
+          </div>
+
+          <p className="mt-3 font-semibold text-ink-950">
+            {
+              candidate.currentLegalName
+            }
+          </p>
+
+          <p className="mt-1 text-sm text-ink-600">
+            {
+              candidate.currentEmail
+            }
+          </p>
+
+          <p className="mt-0.5 text-xs text-ink-500">
+            Claim:{" "}
+            {
+              candidate.claimReference
+            }{" "}
+            · Mobile:{" "}
+            {
+              candidate.currentMobilePhone
+            }
+          </p>
+        </div>
+
+        {selected && (
+          <Badge tone="positive">
+            Newly created
+          </Badge>
+        )}
+      </div>
+
+      <form
+        action={
+          sendClaimantActivationInvitation
+        }
+        className="mt-5 space-y-4"
+      >
+        <input
+          type="hidden"
+          name="claimantId"
+          value={
+            candidate.claimantId
+          }
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label
+              htmlFor={`activationFirst-${candidate.claimantId}`}
+              className="block text-sm font-semibold text-ink-800"
+            >
+              Confirmed legal first name
+            </label>
+
+            <input
+              id={`activationFirst-${candidate.claimantId}`}
+              name="legalFirstName"
+              type="text"
+              required
+              defaultValue={
+                firstName
+              }
+              disabled={
+                !mayInvite
+              }
+              className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100 disabled:opacity-60"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor={`activationLast-${candidate.claimantId}`}
+              className="block text-sm font-semibold text-ink-800"
+            >
+              Confirmed legal last name
+            </label>
+
+            <input
+              id={`activationLast-${candidate.claimantId}`}
+              name="legalLastName"
+              type="text"
+              required
+              defaultValue={
+                lastName
+              }
+              disabled={
+                !mayInvite
+              }
+              className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100 disabled:opacity-60"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <label
+              htmlFor={`activationEmail-${candidate.claimantId}`}
+              className="block text-sm font-semibold text-ink-800"
+            >
+              Confirmed email
+            </label>
+
+            <input
+              id={`activationEmail-${candidate.claimantId}`}
+              name="email"
+              type="email"
+              required
+              defaultValue={
+                candidate.currentEmail
+              }
+              disabled={
+                !mayInvite
+              }
+              className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100 disabled:opacity-60"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label
+              htmlFor={`activationPhone-${candidate.claimantId}`}
+              className="block text-sm font-semibold text-ink-800"
+            >
+              Confirmed U.S. mobile
+            </label>
+
+            <input
+              id={`activationPhone-${candidate.claimantId}`}
+              name="mobilePhone"
+              type="tel"
+              required
+              defaultValue={
+                candidate.currentMobilePhone
+              }
+              disabled={
+                !mayInvite
+              }
+              className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100 disabled:opacity-60"
+            />
+          </div>
+        </div>
+
+        <label className="flex items-start gap-3 rounded-xl border border-line bg-inset px-4 py-4">
+          <input
+            type="checkbox"
+            name="confirmation"
+            value="confirmed"
+            required
+            disabled={
+              !mayInvite
+            }
+            className="mt-0.5 size-4"
+          />
+
+          <span className="text-sm leading-relaxed text-ink-700">
+            I reviewed the saved claimant identity and contact information and intend to send the controlled My DueQuity activation invitation.
+          </span>
+        </label>
+
+        <Callout
+          tone="neutral"
+          title="What happens next"
+        >
+          DueQuity sends a one-time secure activation link to the saved email. The claimant creates their own password.
+        </Callout>
+
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={
+              !mayInvite ||
+              !firstName ||
+              !lastName
+            }
+            className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Send secure activation
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ========================================================================== */
+/* Page                                                                        */
+/* ========================================================================== */
+
+export default async function ClaimantOnboardingPage({
+  searchParams,
+}: ClaimantOnboardingPageProps) {
+  const session =
+    await resolveStaffSession();
+
+  if (!session) {
+    return (
+      <StaffAuthenticationRequired />
+    );
+  }
+
+  const params =
+    await searchParams;
+
+  const query =
+    params.q
+      ?.trim()
+      .slice(
+        0,
+        200,
+      ) ??
+    "";
+
+  const selectedClaimantId =
+    params.claimantId
+      ?.trim() ??
+    "";
+
+  const mayLocateLead =
+    can(
+      session,
+      "opportunity.read",
+    ) &&
+    can(
+      session,
+      "claim.read",
+    ) &&
+    can(
+      session,
+      "claimant.read",
+    );
+
+  const mayCreateClaimant =
+    can(
+      session,
+      "claim.read",
+    ) &&
+    can(
+      session,
+      "claim.write",
+    ) &&
+    can(
+      session,
+      "claimant.read",
+    ) &&
+    can(
+      session,
+      "claimant.write",
+    );
+
+  const mayInvite =
+    mayCreateClaimant;
+
+  const shouldSearch =
+    mayLocateLead &&
+    query.length >=
+      2;
+
+  const [
+    activationCandidates,
+    invitations,
+    intakeSearch,
+    discoverySearch,
+  ] =
+    await Promise.all([
+      listClaimantActivationCandidates(
+        session,
+      ),
+
+      listClaimantActivationInvitations(
+        session,
+      ),
+
+      shouldSearch
+        ? searchClaimantIntakeCandidates({
+            session,
+
+            query,
+          })
+        : Promise.resolve({
+            query,
+
+            candidates:
+              [],
+
+            totalMatches:
+              0,
+          }),
+
+      shouldSearch
+        ? searchClaimantIntakeDiscoveryCandidates({
+            session,
+
+            query,
+          })
+        : Promise.resolve({
+            query,
+
+            candidates:
+              [],
+
+            totalMatches:
+              0,
+          }),
+    ]);
+
+  const totalSearchMatches =
+    intakeSearch.totalMatches +
+    discoverySearch.totalMatches;
+
+  const orderedActivationCandidates =
+    activationCandidates
+      .slice()
+      .sort(
+        (
+          left,
+          right,
+        ) => {
+          if (
+            left.claimantId ===
+            selectedClaimantId
+          ) {
+            return -1;
+          }
+
+          if (
+            right.claimantId ===
+            selectedClaimantId
+          ) {
+            return 1;
+          }
+
+          return left
+            .claimantReference
+            .localeCompare(
+              right.claimantReference,
+            );
+        },
+      );
+
+  const superAdmin =
+    session.user.role ===
+    "super_admin";
+
+  /*
+   * The broader assignment-scoped invitation list above is intentionally
+   * retained for internal claimant-state detection. It prevents a reassigned
+   * claim from appearing as though no invitation exists.
+   *
+   * Staff-visible history is narrower: ordinary staff see only invitations
+   * they personally sent. Super Admin retains the complete history.
+   */
+  const historyInvitations =
+    superAdmin
+      ? invitations
+      : invitations.filter(
+          (
+            invitation,
+          ) =>
+            invitation.sentByStaffUserId ===
+            session.user.id,
+        );
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="eyebrow text-ink-500">
+          Claimants
+        </p>
+
+        <h1 className="mt-1.5 text-2xl sm:text-3xl">
+          Claimant Onboarding
+        </h1>
+
+        <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-600">
+          Find the Admin-assigned recovery record, verify the caller against the source property, confirm the DueQuity recovery route, create the claimant record, and send secure activation.
+        </p>
+      </div>
+
+      {params.status ===
+        "claimant-created" && (
+        <Callout
+          tone="positive"
+          title="Claimant record created"
+          role="status"
+        >
+          The claimant is now persistently linked to the recovery. Their confirmed property connection and email communication consent were recorded. Continue to secure activation below.
+        </Callout>
+      )}
+
+      {params.status ===
+        "claimant-create-invalid" && (
+        <Callout
+          tone="critical"
+          title="Complete the claimant intake form"
+          role="alert"
+        >
+          First name, last name, email, mobile number, property confirmation and activation-email consent are required before creating a claimant.
+        </Callout>
+      )}
+
+      {params.status ===
+        "source-name-mismatch" && (
+        <Callout
+          tone="critical"
+          title="Claimant name requires review"
+          role="alert"
+        >
+          The first and last name confirmed on the call do not sufficiently match the former-owner identity on the recovery source record.
+        </Callout>
+      )}
+
+      {params.status ===
+        "property-confirmation-required" && (
+        <Callout
+          tone="critical"
+          title="Property connection not confirmed"
+          role="alert"
+        >
+          Claimant creation and activation are blocked until the person confirms their connection to the displayed foreclosed property.
+        </Callout>
+      )}
+
+      {params.status ===
+        "consent-required" && (
+        <Callout
+          tone="critical"
+          title="Activation permission not recorded"
+          role="alert"
+        >
+          An email address alone is not permission to use it. Record the claimant&apos;s permission for DueQuity to send secure activation materials before continuing.
+        </Callout>
+      )}
+
+      {params.status ===
+        "claim-not-found" && (
+        <Callout
+          tone="critical"
+          title="Claim unavailable"
+          role="alert"
+        >
+          The Claim or its source Opportunity could not be resolved.
+        </Callout>
+      )}
+
+      {params.status ===
+        "record-mismatch" && (
+        <Callout
+          tone="critical"
+          title="Recovery linkage mismatch"
+          role="alert"
+        >
+          The Claim does not match its persisted source Opportunity.
+        </Callout>
+      )}
+
+      {params.status ===
+        "intake-blocked" && (
+        <Callout
+          tone="critical"
+          title="Claimant intake blocked"
+          role="alert"
+        >
+          The current jurisdiction, legal lane, deadline or other operational control does not permit ordinary claimant creation for this recovery.
+        </Callout>
+      )}
+
+      {params.status ===
+        "claimant-review-required" && (
+        <Callout
+          tone="caution"
+          title="Claimant review required"
+          role="alert"
+        >
+          This ordinary flow supports a single living individual former owner.
+        </Callout>
+      )}
+
+      {params.status ===
+        "claimant-create-unavailable" && (
+        <Callout
+          tone="critical"
+          title="Claimant could not be created"
+          role="alert"
+        >
+          DueQuity could not complete the controlled claimant creation.
+        </Callout>
+      )}
+
+      <details
+        id="new-claimant-intake"
+        open
+        className="group overflow-hidden rounded-2xl border border-line bg-white shadow-sm"
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-5 px-4 py-4 transition hover:bg-inset sm:px-5 [&::-webkit-details-marker]:hidden">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="flex size-7 items-center justify-center rounded-lg bg-ink-950 text-lg font-medium text-white">
+                +
+              </span>
+
+              <h2 className="text-sm font-semibold text-ink-950">
+                Start new claimant
+              </h2>
+            </div>
+
+            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-ink-600">
+              Search the full DueQuity recovery pipeline. The record may still be in Discovery, already be an Opportunity, or already have a Claim.
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden text-xs font-semibold text-ink-500 sm:inline">
+              Open / close
+            </span>
+
+            <span
+              aria-hidden="true"
+              className="flex size-8 items-center justify-center rounded-full border border-line bg-white text-lg text-ink-700 transition-transform duration-200 group-open:rotate-180"
+            >
+              ↓
+            </span>
+          </div>
+        </summary>
+
+        <div className="border-t border-line-subtle p-4 sm:p-5">
+          {!mayLocateLead ? (
+            <Callout
+              tone="caution"
+              title="Lead lookup unavailable"
+            >
+              Your current DueQuity role is not authorized to locate claimant intake records.
+            </Callout>
+          ) : (
+            <div className="space-y-5">
+              <form
+                method="get"
+                action="/pro/claimants/onboarding"
+                className="rounded-2xl border border-line bg-inset p-4 sm:p-5"
+              >
+                <label
+                  htmlFor="q"
+                  className="block text-sm font-semibold text-ink-900"
+                >
+                  Find assigned lead
+                </label>
+
+                <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                  Search by former-owner name, Opportunity reference, Claim reference, property address, parcel number, case number, city or ZIP code.
+                </p>
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <input
+                    id="q"
+                    name="q"
+                    type="search"
+                    defaultValue={
+                      query
+                    }
+                    placeholder="Example: Charles Cooper, James Shehan Jr, OPP-..., 51 Union St..."
+                    className="min-w-0 flex-1 rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                  />
+
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                  >
+                    Find lead
+                  </button>
+                </div>
+              </form>
+
+              {query.length ===
+                1 && (
+                <Callout
+                  tone="caution"
+                  title="Enter more information"
+                >
+                  Enter at least two characters to search DueQuity recovery records.
+                </Callout>
+              )}
+
+              {query.length >=
+                2 &&
+                totalSearchMatches ===
+                  0 && (
+                  <EmptyState
+                    compact
+                    title="No matching DueQuity recovery record"
+                    description="No accessible Discovery record, Opportunity or converted Claim matched this search. Verify the former-owner name, recovery reference or property information."
+                  />
+                )}
+
+              {totalSearchMatches >
+                0 && (
+                <div className="space-y-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-ink-900">
+                        {
+                          totalSearchMatches
+                        }{" "}
+                        matching{" "}
+                        {totalSearchMatches ===
+                        1
+                          ? "record"
+                          : "records"}
+                      </p>
+
+                      <p className="mt-0.5 text-xs text-ink-500">
+                        DueQuity identified the current pipeline stage and recovery route automatically.
+                      </p>
+                    </div>
+
+                    <Badge tone="info">
+                      Pipeline stage identified
+                    </Badge>
+                  </div>
+
+                  {intakeSearch.candidates.map(
+                    (
+                      candidate,
+                    ) => {
+                      const claimantState =
+                        claimantStateForClaim({
+                          claimId:
+                            candidate.claimId,
+
+                          activationCandidates,
+
+                          invitations,
+                        });
+
+                      return (
+                        <LeadResultCard
+                          key={
+                            candidate.opportunityId
+                          }
+                          candidate={
+                            candidate
+                          }
+                          query={
+                            query
+                          }
+                          mayCreateClaimant={
+                            mayCreateClaimant
+                          }
+                          claimantState={
+                            claimantState.state
+                          }
+                          activationCandidate={
+                            claimantState.activationCandidate
+                          }
+                        />
+                      );
+                    },
+                  )}
+
+                  {discoverySearch.candidates.map(
+                    (
+                      candidate,
+                    ) => (
+                      <ClaimantIntakeDiscoveryCard
+                        key={
+                          candidate.discoveredRecordId
+                        }
+                        candidate={
+                          candidate
+                        }
+                      />
+                    ),
+                  )}
+                </div>
+              )}
+
+              {query.length <
+                2 && (
+                <Callout
+                  tone="neutral"
+                  title="How this workflow starts"
+                >
+                  Leads are assigned by the Admin. Search the claimant or property here even if the source record has not yet become an Opportunity. DueQuity identifies the current pipeline stage, DCR/MRR/attorney/blocked route, and the next controlled action automatically.
+                </Callout>
+              )}
+            </div>
+          )}
+        </div>
+      </details>
+
+      {params.status ===
+        "sent" && (
+        <Callout
+          tone="positive"
+          title="Activation invitation sent"
+          role="status"
+        >
+          The claimant was sent a secure DueQuity activation email.
+        </Callout>
+      )}
+
+      {params.status ===
+        "invalid" && (
+        <Callout
+          tone="critical"
+          title="Check the activation information"
+          role="alert"
+        >
+          Review the claimant legal name, email and mobile number and complete the activation confirmation.
+        </Callout>
+      )}
+
+      {params.status ===
+        "legal-name-mismatch" && (
+        <Callout
+          tone="critical"
+          title="Legal name does not match"
+          role="alert"
+        >
+          The activation name does not match the claimant identity saved to this recovery.
+        </Callout>
+      )}
+
+      {params.status ===
+        "email-mismatch" && (
+        <Callout
+          tone="critical"
+          title="Email does not match"
+          role="alert"
+        >
+          The activation email does not match the claimant email saved to this recovery.
+        </Callout>
+      )}
+
+      {params.status ===
+        "mobile-mismatch" && (
+        <Callout
+          tone="critical"
+          title="Mobile number does not match"
+          role="alert"
+        >
+          The activation mobile number does not match the claimant mobile saved to this recovery.
+        </Callout>
+      )}
+
+      {params.status ===
+        "claimant-record-incomplete" && (
+        <Callout
+          tone="critical"
+          title="Claimant record is incomplete"
+          role="alert"
+        >
+          Finish the claimant identity/contact record before issuing an activation invitation.
+        </Callout>
+      )}
+
+      {params.status ===
+        "already-active" && (
+        <Callout
+          tone="caution"
+          title="Claimant account already exists"
+          role="alert"
+        >
+          This claimant already has a My DueQuity authentication identity.
+        </Callout>
+      )}
+
+      {params.status ===
+        "open-invitation" && (
+        <Callout
+          tone="caution"
+          title="Activation invitation already open"
+          role="alert"
+        >
+          This claimant already has an active activation invitation.
+        </Callout>
+      )}
+
+      {params.status ===
+        "claimant-not-found" && (
+        <Callout
+          tone="critical"
+          title="Claimant record unavailable"
+          role="alert"
+        >
+          DueQuity could not find the accessible claimant record required for this activation.
+        </Callout>
+      )}
+
+      {params.status ===
+        "auth-collision" && (
+        <Callout
+          tone="critical"
+          title="Authentication identity conflict"
+          role="alert"
+        >
+          A DueQuity staff authentication identity cannot also be used as this claimant identity.
+        </Callout>
+      )}
+
+      {params.status ===
+        "not-authorized" && (
+        <Callout
+          tone="critical"
+          title="Action not authorized"
+          role="alert"
+        >
+          Your current DueQuity role is not authorized to complete this claimant action.
+        </Callout>
+      )}
+
+      {params.status ===
+        "unavailable" && (
+        <Callout
+          tone="critical"
+          title="Invitation could not be sent"
+          role="alert"
+        >
+          DueQuity could not complete the controlled claimant invitation.
+        </Callout>
+      )}
+
+      {!mayInvite && (
+        <Callout
+          tone="caution"
+          title="Read-only onboarding access"
+        >
+          Your current DueQuity role may review claimant onboarding but cannot create or activate claimants.
+        </Callout>
+      )}
+
+      <div id="send-claimant-activation">
+        <Card>
+          <CardHeader
+            title="Send claimant activation"
+            description={
+              superAdmin
+                ? "Eligible claimant records across all staff assignments are shown. Saved identity and recovery linkage remain system-controlled."
+                : "Only claimant records currently assigned to you are shown. Saved identity and recovery linkage remain system-controlled."
+            }
+          />
+
+          <CardBody>
+            {orderedActivationCandidates.length ===
+              0 ? (
+              <EmptyState
+                compact
+                title="No claimant records awaiting invitation"
+                description="After a claimant record is created from a valid recovery, it will appear here until its secure activation is sent."
+              />
+            ) : (
+              <div className="space-y-4">
+                {orderedActivationCandidates.map(
+                  (
+                    candidate,
+                  ) => (
+                    <ActivationCandidateCard
+                      key={
+                        candidate.claimantId
+                      }
+                      candidate={
+                        candidate
+                      }
+                      mayInvite={
+                        mayInvite
+                      }
+                      selected={
+                        candidate.claimantId ===
+                        selectedClaimantId
+                      }
+                    />
+                  ),
+                )}
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader
+          title="Activation history"
+          description={`${historyInvitations.length.toLocaleString()} accessible claimant activation invitation${
+            historyInvitations.length ===
+            1
+              ? ""
+              : "s"
+          } recorded.`}
+        />
+
+        <CardBody flush>
+          {historyInvitations.length ===
+            0 ? (
+            <EmptyState
+              compact
+              className="m-4 border-0 bg-transparent"
+              title="No claimant invitations yet"
+              description="Controlled claimant invitations sent by your staff account will appear here."
+            />
+          ) : (
+            <ul className="divide-y divide-line-subtle">
+              {historyInvitations.map(
+                (
+                  invitation,
+                ) => (
+                  <li
+                    key={
+                      invitation.id
+                    }
+                    className="px-4 py-4 sm:px-5"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-md bg-ink-950 px-2.5 py-1 font-mono text-xs font-semibold text-white">
+                            {
+                              invitation.claimantReference
+                            }
+                          </span>
+
+                          <Badge
+                            tone={
+                              statusTone(
+                                invitation.status,
+                              )
+                            }
+                          >
+                            {
+                              invitation.status
+                            }
+                          </Badge>
+                        </div>
+
+                        <p className="mt-2 font-semibold text-ink-900">
+                          {invitation.legalFirstName} {invitation.legalLastName}
+                        </p>
+
+                        <p className="mt-1 text-sm text-ink-600">
+                          {
+                            invitation.email
+                          }
+                        </p>
+
+                        <p className="mt-0.5 text-xs text-ink-500">
+                          Mobile:{" "}
+                          {
+                            invitation.mobilePhone
+                          }
+                        </p>
+                      </div>
+
+                      <div className="text-right text-xs leading-relaxed text-ink-500">
+                        <p>
+                          Sent:{" "}
+                          {formatTimestamp(
+                            invitation.sentAt,
+                          )}
+                        </p>
+
+                        <p>
+                          Expires:{" "}
+                          {formatTimestamp(
+                            invitation.expiresAt,
+                          )}
+                        </p>
+
+                        {invitation.activatedAt && (
+                          <p className="text-accent-700">
+                            Activated:{" "}
+                            {formatTimestamp(
+                              invitation.activatedAt,
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ),
+              )}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
+    </div>
+  );
+}
+
+======================================================================
+FILE: .\src\app\pro\claimants\onboarding\actions.ts
+======================================================================
+"use server";
+
+import {
+  headers,
+} from "next/headers";
+
+import {
+  redirect,
+} from "next/navigation";
+
+import {
+  assertClaimantActivationPrerequisites,
+  createClaimantFromConfirmedCall,
+} from "@/server/claimant-intake-create-service";
+
+import {
+  inviteClaimantUser,
+} from "@/server/claimant-invite-service";
+
+import {
+  resolveStaffSession,
+} from "@/server/staff-session";
+
+const ONBOARDING_PATH =
+  "/pro/claimants/onboarding";
+
+/* ========================================================================== */
+/* Form helpers                                                                */
+/* ========================================================================== */
+
+function readFormValue(
+  formData:
+    FormData,
+  name:
+    string,
+): string {
+  const value =
+    formData.get(
+      name,
+    );
+
+  return typeof value ===
+    "string"
+    ? value.trim()
+    : "";
+}
+
+function checked(
+  formData:
+    FormData,
+  name:
+    string,
+): boolean {
+  return (
+    readFormValue(
+      formData,
+      name,
+    ) ===
+    "confirmed"
+  );
+}
+
+function onboardingLocation({
+  status,
+  query,
+  claimantId,
+}: {
+  status:
+    string;
+
+  query?:
+    string;
+
+  claimantId?:
+    string;
+}): string {
+  const params =
+    new URLSearchParams();
+
+  params.set(
+    "status",
+    status,
+  );
+
+  if (
+    query?.trim()
+  ) {
+    params.set(
+      "q",
+      query.trim(),
+    );
+  }
+
+  if (
+    claimantId?.trim()
+  ) {
+    params.set(
+      "claimantId",
+      claimantId.trim(),
+    );
+  }
+
+  return `${ONBOARDING_PATH}?${params.toString()}`;
+}
+
+/* ========================================================================== */
+/* Origin                                                                      */
+/* ========================================================================== */
+
+async function resolveRequestOrigin(): Promise<string> {
+  const requestHeaders =
+    await headers();
+
+  const origin =
+    requestHeaders
+      .get(
+        "origin",
+      )
+      ?.trim();
+
+  if (origin) {
+    return origin.replace(
+      /\/+$/,
+      "",
+    );
+  }
+
+  const forwardedHost =
+    requestHeaders
+      .get(
+        "x-forwarded-host",
+      )
+      ?.split(
+        ",",
+      )[0]
+      ?.trim();
+
+  const host =
+    forwardedHost ||
+    requestHeaders
+      .get(
+        "host",
+      )
+      ?.trim();
+
+  const forwardedProto =
+    requestHeaders
+      .get(
+        "x-forwarded-proto",
+      )
+      ?.split(
+        ",",
+      )[0]
+      ?.trim();
+
+  const protocol =
+    forwardedProto ||
+    (
+      host?.startsWith(
+        "localhost",
+      ) ||
+      host?.startsWith(
+        "127.0.0.1",
+      )
+        ? "http"
+        : "https"
+    );
+
+  if (!host) {
+    throw new Error(
+      "Unable to determine the DueQuity application origin.",
+    );
+  }
+
+  return `${protocol}://${host}`;
+}
+
+/* ========================================================================== */
+/* Claimant creation error routing                                             */
+/* ========================================================================== */
+
+function creationFailureStatus(
+  failure:
+    unknown,
+): string {
+  if (!(failure instanceof Error)) {
+    return "claimant-create-unavailable";
+  }
+
+  const message =
+    failure.message
+      .trim()
+      .toLowerCase();
+
+  if (
+    message.includes(
+      "confirmed claimant name does not sufficiently match",
+    )
+  ) {
+    return "source-name-mismatch";
+  }
+
+  if (
+    message.includes(
+      "connection to the displayed foreclosed property",
+    )
+  ) {
+    return "property-confirmation-required";
+  }
+
+  if (
+    message.includes(
+      "permission for duequity to send secure activation materials",
+    )
+  ) {
+    return "consent-required";
+  }
+
+  if (
+    message.includes(
+      "exactly one living individual former owner",
+    ) ||
+    message.includes(
+      "recorded 100% ownership share",
+    )
+  ) {
+    return "claimant-review-required";
+  }
+
+  if (
+    message.includes(
+      "claim not found",
+    ) ||
+    message.includes(
+      "source opportunity could not be resolved",
+    )
+  ) {
+    return "claim-not-found";
+  }
+
+  if (
+    message.includes(
+      "claim does not match its persisted source opportunity",
+    )
+  ) {
+    return "record-mismatch";
+  }
+
+  if (
+    message.includes(
+      "no current approved jurisdiction rule",
+    ) ||
+    message.includes(
+      "claimant intake is not authorized",
+    ) ||
+    message.includes(
+      "claimant creation is blocked",
+    )
+  ) {
+    return "intake-blocked";
+  }
+
+  if (
+    message.includes(
+      "not cleared to work on claimant intake",
+    ) ||
+    message.includes(
+      "not authorized to create claimant onboarding records",
+    ) ||
+    message.includes(
+      "not assigned to your duequity staff account",
+    )
+  ) {
+    return "not-authorized";
+  }
+
+  return "claimant-create-unavailable";
+}
+
+/* ========================================================================== */
+/* Invitation error routing                                                    */
+/* ========================================================================== */
+
+function invitationFailureStatus(
+  failure:
+    unknown,
+): string {
+  if (!(failure instanceof Error)) {
+    return "unavailable";
+  }
+
+  const message =
+    failure.message
+      .trim()
+      .toLowerCase();
+
+  if (
+    message.includes(
+      "property has been confirmed and recorded",
+    ) ||
+    message.includes(
+      "connection to the source property",
+    )
+  ) {
+    return "property-confirmation-required";
+  }
+
+  if (
+    message.includes(
+      "email communication consent",
+    ) ||
+    message.includes(
+      "consent to use the claimant's email",
+    )
+  ) {
+    return "consent-required";
+  }
+
+  if (
+    message.includes(
+      "activation legal name does not match",
+    )
+  ) {
+    return "legal-name-mismatch";
+  }
+
+  if (
+    message.includes(
+      "activation email does not match",
+    )
+  ) {
+    return "email-mismatch";
+  }
+
+  if (
+    message.includes(
+      "activation mobile number does not match",
+    )
+  ) {
+    return "mobile-mismatch";
+  }
+
+  if (
+    message.includes(
+      "saved claimant identity or contact record is incomplete",
+    )
+  ) {
+    return "claimant-record-incomplete";
+  }
+
+  if (
+    message.includes(
+      "already has a my duequity authentication identity",
+    )
+  ) {
+    return "already-active";
+  }
+
+  if (
+    message.includes(
+      "already has an active activation invitation",
+    )
+  ) {
+    return "open-invitation";
+  }
+
+  if (
+    message.includes(
+      "selected claimant record could not be found",
+    ) ||
+    message.includes(
+      "selected claimant onboarding record could not be resolved",
+    )
+  ) {
+    return "claimant-not-found";
+  }
+
+  if (
+    message.includes(
+      "currently limited to individual claimants",
+    )
+  ) {
+    return "claimant-review-required";
+  }
+
+  if (
+    message.includes(
+      "staff auth identity cannot be used as a claimant identity",
+    )
+  ) {
+    return "auth-collision";
+  }
+
+  if (
+    message.includes(
+      "not authorized to create claimant activation invitations",
+    ) ||
+    message.includes(
+      "not authorized to create claimant onboarding records",
+    ) ||
+    message.includes(
+      "not assigned to your duequity staff account",
+    )
+  ) {
+    return "not-authorized";
+  }
+
+  return "unavailable";
+}
+
+/* ========================================================================== */
+/* Create claimant from confirmed call                                         */
+/* ========================================================================== */
+
+export async function createClaimantFromConfirmedCallAction(
+  formData:
+    FormData,
+) {
+  const session =
+    await resolveStaffSession();
+
+  if (!session) {
+    redirect(
+      "/staff/sign-in",
+    );
+  }
+
+  const claimId =
+    readFormValue(
+      formData,
+      "claimId",
+    );
+
+  const legalFirstName =
+    readFormValue(
+      formData,
+      "legalFirstName",
+    );
+
+  const legalLastName =
+    readFormValue(
+      formData,
+      "legalLastName",
+    );
+
+  const email =
+    readFormValue(
+      formData,
+      "email",
+    );
+
+  const mobilePhone =
+    readFormValue(
+      formData,
+      "mobilePhone",
+    );
+
+  const query =
+    readFormValue(
+      formData,
+      "q",
+    );
+
+  const propertyConnectionConfirmed =
+    checked(
+      formData,
+      "propertyConnectionConfirmed",
+    );
+
+  const activationEmailConsentConfirmed =
+    checked(
+      formData,
+      "activationEmailConsentConfirmed",
+    );
+
+  if (
+    !claimId ||
+    !legalFirstName ||
+    !legalLastName ||
+    !email ||
+    !mobilePhone ||
+    !propertyConnectionConfirmed ||
+    !activationEmailConsentConfirmed
+  ) {
+    redirect(
+      onboardingLocation({
+        status:
+          "claimant-create-invalid",
+
+        query,
+      }),
+    );
+  }
+
+  let createdClaimantId =
+    "";
+
+  try {
+    const result =
+      await createClaimantFromConfirmedCall({
+        session,
+
+        claimId,
+
+        legalFirstName,
+
+        legalLastName,
+
+        email,
+
+        mobilePhone,
+
+        propertyConnectionConfirmed,
+
+        activationEmailConsentConfirmed,
+      });
+
+    createdClaimantId =
+      result.claimantId;
+  } catch (
+    failure
+  ) {
+    const status =
+      creationFailureStatus(
+        failure,
+      );
+
+    redirect(
+      onboardingLocation({
+        status,
+
+        query,
+      }),
+    );
+  }
+
+  /*
+   * redirect() intentionally lives outside the try/catch.
+   *
+   * Next.js implements redirect by throwing a framework-controlled signal.
+   * Keeping it outside prevents our service-error catch from accidentally
+   * converting a successful redirect into a failure status.
+   */
+  redirect(
+    onboardingLocation({
+      status:
+        "claimant-created",
+
+      query,
+
+      claimantId:
+        createdClaimantId,
+    }),
+  );
+}
+
+/* ========================================================================== */
+/* Send invitation                                                             */
+/* ========================================================================== */
+
+export async function sendClaimantActivationInvitation(
+  formData:
+    FormData,
+) {
+  const session =
+    await resolveStaffSession();
+
+  if (!session) {
+    redirect(
+      "/staff/sign-in",
+    );
+  }
+
+  const claimantId =
+    readFormValue(
+      formData,
+      "claimantId",
+    );
+
+  const legalFirstName =
+    readFormValue(
+      formData,
+      "legalFirstName",
+    );
+
+  const legalLastName =
+    readFormValue(
+      formData,
+      "legalLastName",
+    );
+
+  const email =
+    readFormValue(
+      formData,
+      "email",
+    );
+
+  const mobilePhone =
+    readFormValue(
+      formData,
+      "mobilePhone",
+    );
+
+  const confirmation =
+    readFormValue(
+      formData,
+      "confirmation",
+    );
+
+  if (
+    !claimantId ||
+    !legalFirstName ||
+    !legalLastName ||
+    !email ||
+    !mobilePhone ||
+    confirmation !==
+      "confirmed"
+  ) {
+    redirect(
+      `${ONBOARDING_PATH}?status=invalid`,
+    );
+  }
+
+  const origin =
+    await resolveRequestOrigin();
+
+  try {
+    await assertClaimantActivationPrerequisites({
+      session,
+
+      claimantId,
+    });
+
+    await inviteClaimantUser({
+      session,
+
+      claimantId,
+
+      legalFirstName,
+
+      legalLastName,
+
+      email,
+
+      mobilePhone,
+
+      redirectTo:
+        `${origin}/auth/claimant-invite/callback`,
+    });
+  } catch (
+    failure
+  ) {
+    const status =
+      invitationFailureStatus(
+        failure,
+      );
+
+    redirect(
+      `${ONBOARDING_PATH}?status=${encodeURIComponent(
+        status,
+      )}`,
+    );
+  }
+
+  redirect(
+    `${ONBOARDING_PATH}?status=sent`,
+  );
+}
+
+======================================================================
+FILE: .\src\app\auth\claimant-invite\callback\route.ts
+======================================================================
+import type {
+  EmailOtpType,
+} from "@supabase/supabase-js";
+
+import {
+  NextRequest,
+  NextResponse,
+} from "next/server";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+import {
+  getSupabaseServerAuth,
+} from "@/server/supabase-auth";
+
+export const dynamic =
+  "force-dynamic";
+
+/* ========================================================================== */
+/* Redirect helper                                                             */
+/* ========================================================================== */
+
+function redirectTo(
+  request:
+    NextRequest,
+  path:
+    string,
+) {
+  return NextResponse.redirect(
+    new URL(
+      path,
+      request.url,
+    ),
+  );
+}
+
+/* ========================================================================== */
+/* Callback                                                                    */
+/* ========================================================================== */
+
+export async function GET(
+  request:
+    NextRequest,
+) {
+  const supabase =
+    await getSupabaseServerAuth();
+
+  const code =
+    request.nextUrl.searchParams
+      .get(
+        "code",
+      )
+      ?.trim();
+
+  const tokenHash =
+    request.nextUrl.searchParams
+      .get(
+        "token_hash",
+      )
+      ?.trim();
+
+  const type =
+    request.nextUrl.searchParams
+      .get(
+        "type",
+      )
+      ?.trim();
+
+  /*
+   * Support both the PKCE callback shape and the token-hash email-template
+   * shape. The callback accepts only an invite flow.
+   */
+  if (code) {
+    const {
+      error,
+    } =
+      await supabase.auth
+        .exchangeCodeForSession(
+          code,
+        );
+
+    if (error) {
+      return redirectTo(
+        request,
+        "/claimant/sign-in?error=activation",
+      );
+    }
+  } else if (
+    tokenHash &&
+    type ===
+      "invite"
+  ) {
+    const {
+      error,
+    } =
+      await supabase.auth
+        .verifyOtp({
+          token_hash:
+            tokenHash,
+
+          type:
+            type as EmailOtpType,
+        });
+
+    if (error) {
+      return redirectTo(
+        request,
+        "/claimant/sign-in?error=activation",
+      );
+    }
+  }
+
+  const {
+    data: {
+      user,
+    },
+    error:
+      userError,
+  } =
+    await supabase.auth.getUser();
+
+  if (
+    userError ||
+    !user
+  ) {
+    return redirectTo(
+      request,
+      "/claimant/sign-in?error=activation",
+    );
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data:
+      staffUser,
+    error:
+      staffError,
+  } =
+    await admin
+      .from(
+        "staff_users",
+      )
+      .select(
+        "id",
+      )
+      .eq(
+        "id",
+        user.id,
+      )
+      .maybeSingle();
+
+  if (
+    staffError ||
+    staffUser
+  ) {
+    await supabase.auth.signOut();
+
+    return redirectTo(
+      request,
+      "/claimant/sign-in?error=activation",
+    );
+  }
+
+  const {
+    data:
+      invitation,
+    error:
+      invitationError,
+  } =
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .select(
+        "id, claimant_id, claimant_reference, email, status, expires_at",
+      )
+      .eq(
+        "auth_user_id",
+        user.id,
+      )
+      .eq(
+        "status",
+        "sent",
+      )
+      .maybeSingle();
+
+  if (
+    invitationError ||
+    !invitation
+  ) {
+    await supabase.auth.signOut();
+
+    return redirectTo(
+      request,
+      "/claimant/sign-in?error=activation",
+    );
+  }
+
+  if (
+    new Date(
+      String(
+        invitation.expires_at,
+      ),
+    ).getTime() <=
+    Date.now()
+  ) {
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .update({
+        status:
+          "expired",
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        "id",
+        invitation.id,
+      )
+      .eq(
+        "status",
+        "sent",
+      );
+
+    await supabase.auth.signOut();
+
+    return redirectTo(
+      request,
+      "/claimant/sign-in?error=activation-expired",
+    );
+  }
+
+  const {
+    data:
+      claimant,
+    error:
+      claimantError,
+  } =
+    await admin
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "claimant_id, claimant_reference, claimant_auth_user_id, email",
+      )
+      .eq(
+        "claimant_id",
+        invitation.claimant_id,
+      )
+      .maybeSingle();
+
+  if (
+    claimantError ||
+    !claimant ||
+    claimant.claimant_auth_user_id !==
+      user.id ||
+    claimant.claimant_reference !==
+      invitation.claimant_reference ||
+    String(
+      claimant.email,
+    ).toLowerCase() !==
+      String(
+        invitation.email,
+      ).toLowerCase()
+  ) {
+    await supabase.auth.signOut();
+
+    return redirectTo(
+      request,
+      "/claimant/sign-in?error=activation",
+    );
+  }
+
+  return redirectTo(
+    request,
+    "/claimant/activate",
+  );
+}
+
+======================================================================
+FILE: .\src\app\claimant\activate\actions.ts
+======================================================================
+"use server";
+
+import {
+  revalidatePath,
+} from "next/cache";
+
+import {
+  redirect,
+} from "next/navigation";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+import {
+  getSupabaseServerAuth,
+} from "@/server/supabase-auth";
+
+const ACTIVATE_PATH =
+  "/claimant/activate";
+
+/* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
+
+function readFormValue(
+  formData:
+    FormData,
+  name:
+    string,
+): string {
+  const value =
+    formData.get(
+      name,
+    );
+
+  return typeof value ===
+    "string"
+    ? value.trim()
+    : "";
+}
+
+/* ========================================================================== */
+/* Activation                                                                  */
+/* ========================================================================== */
+
+export async function activateClaimantAccount(
+  formData:
+    FormData,
+) {
+  const password =
+    readFormValue(
+      formData,
+      "password",
+    );
+
+  const confirmPassword =
+    readFormValue(
+      formData,
+      "confirmPassword",
+    );
+
+  if (
+    password.length <
+      12 ||
+    password !==
+      confirmPassword
+  ) {
+    redirect(
+      `${ACTIVATE_PATH}?status=invalid-password`,
+    );
+  }
+
+  const supabase =
+    await getSupabaseServerAuth();
+
+  const {
+    data: {
+      user,
+    },
+    error:
+      userError,
+  } =
+    await supabase.auth.getUser();
+
+  if (
+    userError ||
+    !user
+  ) {
+    redirect(
+      `${ACTIVATE_PATH}?status=invalid-invitation`,
+    );
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data:
+      invitation,
+    error:
+      invitationError,
+  } =
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .select(
+        "id, claimant_id, claimant_reference, email, status, expires_at",
+      )
+      .eq(
+        "auth_user_id",
+        user.id,
+      )
+      .eq(
+        "status",
+        "sent",
+      )
+      .maybeSingle();
+
+  if (
+    invitationError ||
+    !invitation
+  ) {
+    redirect(
+      `${ACTIVATE_PATH}?status=invalid-invitation`,
+    );
+  }
+
+  if (
+    new Date(
+      String(
+        invitation.expires_at,
+      ),
+    ).getTime() <=
+    Date.now()
+  ) {
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .update({
+        status:
+          "expired",
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        "id",
+        invitation.id,
+      )
+      .eq(
+        "status",
+        "sent",
+      );
+
+    await supabase.auth.signOut();
+
+    redirect(
+      `${ACTIVATE_PATH}?status=expired`,
+    );
+  }
+
+  const {
+    data:
+      claimant,
+    error:
+      claimantError,
+  } =
+    await admin
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "claimant_id, claimant_reference, claimant_auth_user_id, email",
+      )
+      .eq(
+        "claimant_id",
+        invitation.claimant_id,
+      )
+      .maybeSingle();
+
+  if (
+    claimantError ||
+    !claimant ||
+    claimant.claimant_auth_user_id !==
+      user.id ||
+    claimant.claimant_reference !==
+      invitation.claimant_reference ||
+    String(
+      claimant.email,
+    ).toLowerCase() !==
+      String(
+        invitation.email,
+      ).toLowerCase()
+  ) {
+    await supabase.auth.signOut();
+
+    redirect(
+      `${ACTIVATE_PATH}?status=invalid-invitation`,
+    );
+  }
+
+  const {
+    error:
+      passwordError,
+  } =
+    await supabase.auth.updateUser({
+      password,
+    });
+
+  if (
+    passwordError
+  ) {
+    redirect(
+      `${ACTIVATE_PATH}?status=unavailable`,
+    );
+  }
+
+  const activatedAt =
+    new Date().toISOString();
+
+  const {
+    data:
+      activatedInvitation,
+    error:
+      activationError,
+  } =
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .update({
+        status:
+          "activated",
+
+        activated_at:
+          activatedAt,
+
+        updated_at:
+          activatedAt,
+      })
+      .eq(
+        "id",
+        invitation.id,
+      )
+      .eq(
+        "status",
+        "sent",
+      )
+      .select(
+        "id",
+      )
+      .maybeSingle();
+
+  if (
+    activationError ||
+    !activatedInvitation
+  ) {
+    await supabase.auth.signOut();
+
+    redirect(
+      `${ACTIVATE_PATH}?status=unavailable`,
+    );
+  }
+
+  /*
+   * Account activation is complete, but the identity-document gate remains
+   * independent. The claimant may sign in and use the portal while the claim
+   * remains blocked from further processing until government ID is accepted.
+   */
+  await supabase.auth.signOut();
+
+  revalidatePath(
+    "/",
+    "layout",
+  );
+
+  redirect(
+    "/claimant/sign-in?account=activated",
+  );
+}
+
+======================================================================
+FILE: .\src\app\claimant\activate\page.tsx
+======================================================================
+import type {
+  Metadata,
+} from "next";
+
+import Link from "next/link";
+
+import {
+  Callout,
+  Card,
+  CardBody,
+} from "@/components/ui/surface";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+import {
+  getSupabaseServerAuth,
+} from "@/server/supabase-auth";
+
+import {
+  activateClaimantAccount,
+} from "./actions";
+
+export const metadata: Metadata = {
+  title:
+    "Activate My DueQuity Account | DueQuity",
+
+  robots: {
+    index:
+      false,
+
+    follow:
+      false,
+  },
+};
+
+export const dynamic =
+  "force-dynamic";
+
+/* ========================================================================== */
+/* Types                                                                       */
+/* ========================================================================== */
+
+interface ActivateClaimantPageProps {
+  searchParams: Promise<{
+    status?: string;
+  }>;
+}
+
+interface InvitationRow {
+  id: string;
+
+  claimant_id: string;
+
+  claimant_reference: string;
+
+  legal_first_name: string;
+
+  legal_last_name: string;
+
+  email: string;
+
+  status: string;
+
+  expires_at: string;
+}
+
+interface ClaimantRow {
+  claim_reference: string;
+}
+
+/* ========================================================================== */
+/* Page                                                                        */
+/* ========================================================================== */
+
+export default async function ActivateClaimantPage({
+  searchParams,
+}: ActivateClaimantPageProps) {
+  const params =
+    await searchParams;
+
+  const supabase =
+    await getSupabaseServerAuth();
+
+  const {
+    data: {
+      user,
+    },
+  } =
+    await supabase.auth.getUser();
+
+  const admin =
+    getSupabaseAdmin();
+
+  let invitation:
+    InvitationRow | undefined;
+
+  let claim:
+    ClaimantRow | undefined;
+
+  if (user) {
+    const {
+      data,
+    } =
+      await admin
+        .from(
+          "claimant_activation_invitations",
+        )
+        .select(
+          "id, claimant_id, claimant_reference, legal_first_name, legal_last_name, email, status, expires_at",
+        )
+        .eq(
+          "auth_user_id",
+          user.id,
+        )
+        .in(
+          "status",
+          [
+            "sent",
+            "activated",
+          ],
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          },
+        )
+        .limit(
+          1,
+        )
+        .maybeSingle();
+
+    if (data) {
+      invitation =
+        data as InvitationRow;
+
+      const {
+        data:
+          claimantData,
+      } =
+        await admin
+          .from(
+            "claimant_onboarding",
+          )
+          .select(
+            "claim_reference",
+          )
+          .eq(
+            "claimant_id",
+            invitation.claimant_id,
+          )
+          .maybeSingle();
+
+      if (
+        claimantData
+      ) {
+        claim =
+          claimantData as ClaimantRow;
+      }
+    }
+  }
+
+  const expired =
+    invitation?.status ===
+      "sent" &&
+    new Date(
+      invitation.expires_at,
+    ).getTime() <=
+      Date.now();
+
+  const mayActivate =
+    Boolean(
+      invitation &&
+      invitation.status ===
+        "sent" &&
+      !expired,
+    );
+
+  return (
+    <main className="flex min-h-screen items-center justify-center px-5 py-12">
+      <div
+        className="w-full space-y-5"
+        style={{
+          maxWidth:
+            "500px",
+        }}
+      >
+        <div>
+          <p className="eyebrow text-ink-500">
+            My DueQuity
+          </p>
+
+          <h1 className="mt-1.5 text-3xl">
+            Activate your account
+          </h1>
+
+          <p className="mt-2 text-sm leading-relaxed text-ink-600">
+            Review the identity information confirmed with DueQuity and create your private password.
+          </p>
+        </div>
+
+        {params.status ===
+          "invalid-password" && (
+          <Callout
+            tone="critical"
+            role="alert"
+            title="Check your password"
+          >
+            Use at least 12 characters and make sure both password fields match.
+          </Callout>
+        )}
+
+        {params.status ===
+          "unavailable" && (
+          <Callout
+            tone="critical"
+            role="alert"
+            title="Activation unavailable"
+          >
+            DueQuity could not finish activating this account. Please contact DueQuity claimant support.
+          </Callout>
+        )}
+
+        {(
+          params.status ===
+            "expired" ||
+          expired
+        ) && (
+          <Callout
+            tone="caution"
+            role="alert"
+            title="Activation link expired"
+          >
+            This secure activation link has expired. Contact DueQuity so an authorized staff member can issue a new activation invitation.
+          </Callout>
+        )}
+
+        {!invitation &&
+          params.status !==
+            "expired" && (
+          <Callout
+            tone="critical"
+            role="alert"
+            title="Valid invitation required"
+          >
+            Claimant accounts cannot be created through public registration. Open the secure activation link sent by DueQuity.
+          </Callout>
+        )}
+
+        {invitation?.status ===
+          "activated" && (
+          <Callout
+            tone="positive"
+            title="Account already activated"
+          >
+            Your activation is complete. Sign in to My DueQuity using the password you created.
+          </Callout>
+        )}
+
+        {mayActivate &&
+          invitation && (
+          <>
+            <Card>
+              <CardBody>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">
+                      Legal name
+                    </p>
+
+                    <div className="mt-1.5 rounded-xl border border-line bg-inset px-4 py-3 text-sm font-semibold text-ink-900">
+                      {invitation.legal_first_name}{" "}
+                      {invitation.legal_last_name}
+                    </div>
+
+                    <p className="mt-1 text-xs text-ink-500">
+                      Confirmed by DueQuity staff. This field cannot be edited during activation.
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">
+                      Claimant ID
+                    </p>
+
+                    <div className="mt-1.5 rounded-xl border border-line bg-ink-950 px-4 py-3 font-mono text-sm font-semibold text-white">
+                      {
+                        invitation.claimant_reference
+                      }
+                    </div>
+
+                    <p className="mt-1 text-xs text-ink-500">
+                      Your permanent DueQuity claimant identifier.
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">
+                      Email
+                    </p>
+
+                    <div className="mt-1.5 rounded-xl border border-line bg-inset px-4 py-3 text-sm text-ink-900">
+                      {
+                        invitation.email
+                      }
+                    </div>
+                  </div>
+
+                  {claim && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-500">
+                        Recovery reference
+                      </p>
+
+                      <div className="mt-1.5 rounded-xl border border-line bg-inset px-4 py-3 font-mono text-sm text-ink-800">
+                        {
+                          claim.claim_reference
+                        }
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardBody>
+            </Card>
+
+            <Card>
+              <CardBody>
+                <form
+                  action={
+                    activateClaimantAccount
+                  }
+                  className="space-y-5"
+                >
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="password"
+                      className="block text-sm font-semibold text-ink-800"
+                    >
+                      Create password
+                    </label>
+
+                    <input
+                      id="password"
+                      name="password"
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={12}
+                      required
+                      className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                    />
+
+                    <p className="text-xs text-ink-500">
+                      Use at least 12 characters.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="confirmPassword"
+                      className="block text-sm font-semibold text-ink-800"
+                    >
+                      Confirm password
+                    </label>
+
+                    <input
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      minLength={12}
+                      required
+                      className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                    />
+                  </div>
+
+                  <Callout
+                    tone="neutral"
+                    title="Identity document required after activation"
+                  >
+                    Account creation is not blocked by your ID upload. After you sign in, DueQuity will require one current government-issued photo ID before claim processing can continue: a valid Driver&apos;s License, valid U.S. Passport, valid State ID, or another current government-issued photo ID.
+                  </Callout>
+
+                  <button
+                    type="submit"
+                    className="w-full rounded-xl bg-ink-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                  >
+                    Activate My DueQuity Account
+                  </button>
+                </form>
+              </CardBody>
+            </Card>
+          </>
+        )}
+
+        <div className="text-center">
+          <Link
+            href="/claimant/sign-in"
+            className="text-sm font-medium text-ink-700 underline underline-offset-4"
+          >
+            Back to sign in
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+======================================================================
+FILE: .\src\server\claimant-invite-service.ts
+======================================================================
+import "server-only";
+
+import type {
+  StaffSession,
+} from "@/lib/session";
+
+import {
+  can,
+} from "@/lib/session";
+
+import {
+  recordAuditEvent,
+} from "@/server/audit-event-store";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+/* ========================================================================== */
+/* Constants                                                                   */
+/* ========================================================================== */
+
+const CLAIMANT_INVITATION_LIFETIME_MS =
+  60 * 60 * 1000;
+
+const GOVERNMENT_ID_REASON =
+  "DueQuity requires one current government-issued photo ID before claim processing can continue.";
+
+const GOVERNMENT_ID_GUIDANCE =
+  "Upload one current government-issued photo ID: a valid Driver's License, valid U.S. Passport, valid State ID, or other current government-issued photo ID. Do not send identity documents through ordinary email or Messages.";
+
+/* ========================================================================== */
+/* Public types                                                                */
+/* ========================================================================== */
+
+export type ClaimantActivationInvitationStatus =
+  | "preparing"
+  | "sent"
+  | "activated"
+  | "revoked"
+  | "failed"
+  | "expired";
+
+export interface ClaimantActivationCandidate {
+  claimantId: string;
+
+  claimantReference: string;
+
+  claimId: string;
+
+  claimReference: string;
+
+  currentLegalName: string;
+
+  currentEmail: string;
+
+  currentMobilePhone: string;
+
+  originatingStaffUserId: string;
+
+  assignedStaffUserId: string;
+}
+
+export interface ClaimantActivationInvitation {
+  id: string;
+
+  claimId: string;
+
+  claimantId: string;
+
+  claimantReference: string;
+
+  legalFirstName: string;
+
+  legalLastName: string;
+
+  email: string;
+
+  mobilePhone: string;
+
+  authUserId?: string;
+
+  status:
+    ClaimantActivationInvitationStatus;
+
+  sentByStaffUserId: string;
+
+  sentAt?: string;
+
+  activatedAt?: string;
+
+  revokedAt?: string;
+
+  expiresAt: string;
+
+  createdAt: string;
+
+  updatedAt: string;
+}
+
+export interface InviteClaimantInput {
+  session: StaffSession;
+
+  claimantId: string;
+
+  legalFirstName: string;
+
+  legalLastName: string;
+
+  email: string;
+
+  mobilePhone: string;
+
+  redirectTo: string;
+}
+
+export interface InviteClaimantResult {
+  invitationId: string;
+
+  claimantId: string;
+
+  claimantReference: string;
+
+  email: string;
+}
+
+/* ========================================================================== */
+/* Database rows                                                               */
+/* ========================================================================== */
+
+interface ClaimantOnboardingInviteRow {
+  claim_id: string;
+
+  claim_reference: string;
+
+  claimant_id: string;
+
+  claimant_reference: string;
+
+  claimant_auth_user_id:
+    | string
+    | null;
+
+  legal_name: string;
+
+  email: string;
+
+  mobile_phone: string;
+
+  contact_methods: unknown;
+
+  entity_type: string;
+
+  identity_verification: string;
+
+  originating_staff_user_id: string;
+
+  assigned_staff_user_id: string;
+}
+
+interface ClaimantActivationInvitationRow {
+  id: string;
+
+  claim_id: string;
+
+  claimant_id: string;
+
+  claimant_reference: string;
+
+  legal_first_name: string;
+
+  legal_last_name: string;
+
+  email: string;
+
+  mobile_phone: string;
+
+  auth_user_id:
+    | string
+    | null;
+
+  status:
+    ClaimantActivationInvitationStatus;
+
+  sent_by_staff_user_id: string;
+
+  sent_at:
+    | string
+    | null;
+
+  activated_at:
+    | string
+    | null;
+
+  revoked_at:
+    | string
+    | null;
+
+  expires_at: string;
+
+  created_at: string;
+
+  updated_at: string;
+}
+
+interface ClaimDocumentRequestRow {
+  id: string;
+
+  status: string;
+
+  fulfilled_by_document_id:
+    | string
+    | null;
+}
+
+/* ========================================================================== */
+/* Validation                                                                  */
+/* ========================================================================== */
+
+function normalizeText(
+  value: string,
+): string {
+  return value
+    .trim()
+    .replace(
+      /\s+/g,
+      " ",
+    );
+}
+
+function normalizeEmail(
+  value: string,
+): string {
+  return value
+    .trim()
+    .toLowerCase();
+}
+
+function normalizePhone(
+  value: string,
+): string {
+  return value.replace(
+    /\D/g,
+    "",
+  );
+}
+
+function validEmail(
+  value: string,
+): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    value,
+  );
+}
+
+function equivalentLegalName(
+  left: string,
+  right: string,
+): boolean {
+  return (
+    normalizeText(
+      left,
+    ).toLowerCase() ===
+    normalizeText(
+      right,
+    ).toLowerCase()
+  );
+}
+
+function safeIdPart(
+  value: string,
+): string {
+  return value.replace(
+    /[^A-Za-z0-9_-]/g,
+    "-",
+  );
+}
+
+function governmentIdRequestId(
+  claimId: string,
+): string {
+  return `doc-request-${safeIdPart(
+    claimId,
+  )}-government_id`;
+}
+
+function currentIsoDate(): string {
+  return new Date()
+    .toISOString()
+    .slice(
+      0,
+      10,
+    );
+}
+
+function isSuperAdmin(
+  session:
+    StaffSession,
+): boolean {
+  return (
+    session.user.role ===
+    "super_admin"
+  );
+}
+
+function invitationFromRow(
+  row:
+    ClaimantActivationInvitationRow,
+): ClaimantActivationInvitation {
+  return {
+    id:
+      row.id,
+
+    claimId:
+      row.claim_id,
+
+    claimantId:
+      row.claimant_id,
+
+    claimantReference:
+      row.claimant_reference,
+
+    legalFirstName:
+      row.legal_first_name,
+
+    legalLastName:
+      row.legal_last_name,
+
+    email:
+      row.email,
+
+    mobilePhone:
+      row.mobile_phone,
+
+    authUserId:
+      row.auth_user_id ??
+      undefined,
+
+    status:
+      row.status,
+
+    sentByStaffUserId:
+      row.sent_by_staff_user_id,
+
+    sentAt:
+      row.sent_at ??
+      undefined,
+
+    activatedAt:
+      row.activated_at ??
+      undefined,
+
+    revokedAt:
+      row.revoked_at ??
+      undefined,
+
+    expiresAt:
+      row.expires_at,
+
+    createdAt:
+      row.created_at,
+
+    updatedAt:
+      row.updated_at,
+  };
+}
+
+/* ========================================================================== */
+/* Authorization                                                               */
+/* ========================================================================== */
+
+function requireInvitationAuthority(
+  session:
+    StaffSession,
+): void {
+  if (
+    !can(
+      session,
+      "claim.read",
+    ) ||
+    !can(
+      session,
+      "claim.write",
+    ) ||
+    !can(
+      session,
+      "claimant.read",
+    ) ||
+    !can(
+      session,
+      "claimant.write",
+    )
+  ) {
+    throw new Error(
+      "Your DueQuity role is not authorized to create claimant activation invitations.",
+    );
+  }
+}
+
+function requireClaimantOwnership(
+  session:
+    StaffSession,
+  claimant:
+    ClaimantOnboardingInviteRow,
+): void {
+  if (
+    isSuperAdmin(
+      session,
+    )
+  ) {
+    return;
+  }
+
+  if (
+    claimant.assigned_staff_user_id !==
+    session.user.id
+  ) {
+    /*
+     * Deliberately use the same error as a missing claimant.
+     *
+     * Staff must not be able to determine that another staff member owns a
+     * claimant merely by probing claimant IDs.
+     */
+    throw new Error(
+      "The selected claimant record could not be found.",
+    );
+  }
+}
+
+/* ========================================================================== */
+/* Expiration cleanup                                                          */
+/* ========================================================================== */
+
+async function expireStaleInvitations(): Promise<void> {
+  const admin =
+    getSupabaseAdmin();
+
+  const now =
+    new Date().toISOString();
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .select(
+        "id, claimant_id, auth_user_id",
+      )
+      .eq(
+        "status",
+        "sent",
+      )
+      .lt(
+        "expires_at",
+        now,
+      );
+
+  if (error) {
+    throw new Error(
+      `Unable to inspect expired claimant invitations: ${error.message}`,
+    );
+  }
+
+  for (
+    const rawRow of
+      data ??
+      []
+  ) {
+    const row =
+      rawRow as {
+        id: string;
+
+        claimant_id: string;
+
+        auth_user_id:
+          | string
+          | null;
+      };
+
+    const {
+      error:
+        expireError,
+    } =
+      await admin
+        .from(
+          "claimant_activation_invitations",
+        )
+        .update({
+          status:
+            "expired",
+
+          updated_at:
+            now,
+        })
+        .eq(
+          "id",
+          row.id,
+        )
+        .eq(
+          "status",
+          "sent",
+        );
+
+    if (expireError) {
+      throw new Error(
+        `Unable to expire claimant invitation: ${expireError.message}`,
+      );
+    }
+
+    if (
+      row.auth_user_id
+    ) {
+      await admin
+        .from(
+          "claimant_onboarding",
+        )
+        .update({
+          claimant_auth_user_id:
+            null,
+        })
+        .eq(
+          "claimant_id",
+          row.claimant_id,
+        )
+        .eq(
+          "claimant_auth_user_id",
+          row.auth_user_id,
+        );
+
+      await admin.auth.admin.deleteUser(
+        row.auth_user_id,
+      );
+    }
+  }
+}
+
+/* ========================================================================== */
+/* Government ID requirement                                                   */
+/* ========================================================================== */
+
+async function ensureGovernmentIdRequest(
+  row:
+    ClaimantOnboardingInviteRow,
+  actorUserId:
+    string,
+): Promise<void> {
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "claim_document_requests",
+      )
+      .select(
+        "id, status, fulfilled_by_document_id",
+      )
+      .eq(
+        "claim_id",
+        row.claim_id,
+      )
+      .eq(
+        "kind",
+        "government_id",
+      )
+      .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Unable to inspect the claimant government ID requirement: ${error.message}`,
+    );
+  }
+
+  const existing =
+    data
+      ? data as ClaimDocumentRequestRow
+      : undefined;
+
+  if (!existing) {
+    const {
+      error:
+        insertError,
+    } =
+      await admin
+        .from(
+          "claim_document_requests",
+        )
+        .insert({
+          id:
+            governmentIdRequestId(
+              row.claim_id,
+            ),
+
+          claim_id:
+            row.claim_id,
+
+          kind:
+            "government_id",
+
+          reason:
+            GOVERNMENT_ID_REASON,
+
+          requested_from_claimant_id:
+            row.claimant_id,
+
+          requested_at:
+            currentIsoDate(),
+
+          due_by:
+            null,
+
+          required:
+            true,
+
+          status:
+            "outstanding",
+
+          guidance:
+            GOVERNMENT_ID_GUIDANCE,
+
+          fulfilled_by_document_id:
+            null,
+
+          waived_reason:
+            null,
+
+          row_version:
+            1,
+
+          updated_at:
+            new Date().toISOString(),
+        });
+
+    if (insertError) {
+      throw new Error(
+        `Unable to create the claimant government ID requirement: ${insertError.message}`,
+      );
+    }
+
+    const {
+      error:
+        auditError,
+    } =
+      await admin
+        .from(
+          "claim_document_audit",
+        )
+        .insert({
+          id:
+            crypto.randomUUID(),
+
+          claim_id:
+            row.claim_id,
+
+          document_id:
+            null,
+
+          request_id:
+            governmentIdRequestId(
+              row.claim_id,
+            ),
+
+          action:
+            "document_requests_synced",
+
+          actor_user_id:
+            actorUserId,
+
+          occurred_at:
+            new Date().toISOString(),
+
+          detail:
+            "Required claimant government ID request created during controlled claimant activation.",
+        });
+
+    if (auditError) {
+      throw new Error(
+        `Unable to record the government ID request audit event: ${auditError.message}`,
+      );
+    }
+
+    return;
+  }
+
+  if (
+    existing.status ===
+      "accepted" &&
+    existing.fulfilled_by_document_id
+  ) {
+    return;
+  }
+
+  const {
+    error:
+      updateError,
+  } =
+    await admin
+      .from(
+        "claim_document_requests",
+      )
+      .update({
+        requested_from_claimant_id:
+          row.claimant_id,
+
+        requested_at:
+          currentIsoDate(),
+
+        required:
+          true,
+
+        status:
+          existing.status ===
+            "received"
+            ? "received"
+            : "outstanding",
+
+        reason:
+          GOVERNMENT_ID_REASON,
+
+        guidance:
+          GOVERNMENT_ID_GUIDANCE,
+
+        waived_reason:
+          null,
+
+        updated_at:
+          new Date().toISOString(),
+      })
+      .eq(
+        "id",
+        existing.id,
+      );
+
+  if (updateError) {
+    throw new Error(
+      `Unable to refresh the claimant government ID requirement: ${updateError.message}`,
+    );
+  }
+}
+
+/* ========================================================================== */
+/* Reads                                                                       */
+/* ========================================================================== */
+
+export async function listClaimantActivationCandidates(
+  session:
+    StaffSession,
+): Promise<
+  ClaimantActivationCandidate[]
+> {
+  await expireStaleInvitations();
+
+  const admin =
+    getSupabaseAdmin();
+
+  let claimantQuery =
+    admin
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "claim_id, claim_reference, claimant_id, claimant_reference, claimant_auth_user_id, legal_name, email, mobile_phone, entity_type, originating_staff_user_id, assigned_staff_user_id",
+      )
+      .eq(
+        "entity_type",
+        "individual",
+      )
+      .is(
+        "claimant_auth_user_id",
+        null,
+      );
+
+  if (
+    !isSuperAdmin(
+      session,
+    )
+  ) {
+    claimantQuery =
+      claimantQuery.eq(
+        "assigned_staff_user_id",
+        session.user.id,
+      );
+  }
+
+  const [
+    claimantResult,
+    openInvitationResult,
+  ] =
+    await Promise.all([
+      claimantQuery.order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      ),
+
+      admin
+        .from(
+          "claimant_activation_invitations",
+        )
+        .select(
+          "claim_id",
+        )
+        .in(
+          "status",
+          [
+            "preparing",
+            "sent",
+          ],
+        ),
+    ]);
+
+  if (
+    claimantResult.error
+  ) {
+    throw new Error(
+      `Unable to load claimant activation candidates: ${claimantResult.error.message}`,
+    );
+  }
+
+  if (
+    openInvitationResult.error
+  ) {
+    throw new Error(
+      `Unable to load open claimant invitations: ${openInvitationResult.error.message}`,
+    );
+  }
+
+  const openClaims =
+    new Set(
+      (
+        openInvitationResult.data ??
+        []
+      ).map(
+        (
+          item,
+        ) =>
+          String(
+            item.claim_id,
+          ),
+      ),
+    );
+
+  return (
+    claimantResult.data ??
+    []
+  )
+    .filter(
+      (
+        item,
+      ) =>
+        !openClaims.has(
+          String(
+            item.claim_id,
+          ),
+        ),
+    )
+    .map(
+      (
+        item,
+      ) => ({
+        claimantId:
+          String(
+            item.claimant_id,
+          ),
+
+        claimantReference:
+          String(
+            item.claimant_reference,
+          ),
+
+        claimId:
+          String(
+            item.claim_id,
+          ),
+
+        claimReference:
+          String(
+            item.claim_reference,
+          ),
+
+        currentLegalName:
+          String(
+            item.legal_name,
+          ),
+
+        currentEmail:
+          String(
+            item.email,
+          ),
+
+        currentMobilePhone:
+          String(
+            item.mobile_phone,
+          ),
+
+        originatingStaffUserId:
+          String(
+            item.originating_staff_user_id,
+          ),
+
+        assignedStaffUserId:
+          String(
+            item.assigned_staff_user_id,
+          ),
+      }),
+    );
+}
+
+export async function listClaimantActivationInvitations(
+  session:
+    StaffSession,
+): Promise<
+  ClaimantActivationInvitation[]
+> {
+  await expireStaleInvitations();
+
+  const admin =
+    getSupabaseAdmin();
+
+  if (
+    isSuperAdmin(
+      session,
+    )
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "claimant_activation_invitations",
+        )
+        .select("*")
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          },
+        )
+        .limit(
+          200,
+        );
+
+    if (error) {
+      throw new Error(
+        `Unable to load claimant activation invitations: ${error.message}`,
+      );
+    }
+
+    return (
+      data ??
+      []
+    ).map(
+      (
+        row,
+      ) =>
+        invitationFromRow(
+          row as ClaimantActivationInvitationRow,
+        ),
+    );
+  }
+
+  const {
+    data:
+      ownedRows,
+    error:
+      ownedError,
+  } =
+    await admin
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "claim_id",
+      )
+      .eq(
+        "assigned_staff_user_id",
+        session.user.id,
+      );
+
+  if (ownedError) {
+    throw new Error(
+      `Unable to resolve claimant invitation ownership: ${ownedError.message}`,
+    );
+  }
+
+  const ownedClaimIds =
+    [
+      ...new Set(
+        (
+          ownedRows ??
+          []
+        ).map(
+          (
+            row,
+          ) =>
+            String(
+              row.claim_id,
+            ),
+        ),
+      ),
+    ];
+
+  if (
+    ownedClaimIds.length ===
+    0
+  ) {
+    return [];
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .select("*")
+      .in(
+        "claim_id",
+        ownedClaimIds,
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        200,
+      );
+
+  if (error) {
+    throw new Error(
+      `Unable to load claimant activation invitations: ${error.message}`,
+    );
+  }
+
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      invitationFromRow(
+        row as ClaimantActivationInvitationRow,
+      ),
+  );
+}
+
+/* ========================================================================== */
+/* Cleanup                                                                     */
+/* ========================================================================== */
+
+async function invalidateFailedInvite({
+  invitationId,
+  claimantId,
+  authUserId,
+}: {
+  invitationId:
+    string;
+
+  claimantId:
+    string;
+
+  authUserId?:
+    string;
+}): Promise<void> {
+  const admin =
+    getSupabaseAdmin();
+
+  if (
+    authUserId
+  ) {
+    await admin
+      .from(
+        "claimant_onboarding",
+      )
+      .update({
+        claimant_auth_user_id:
+          null,
+      })
+      .eq(
+        "claimant_id",
+        claimantId,
+      )
+      .eq(
+        "claimant_auth_user_id",
+        authUserId,
+      );
+
+    await admin.auth.admin.deleteUser(
+      authUserId,
+    );
+  }
+
+  await admin
+    .from(
+      "claimant_activation_invitations",
+    )
+    .update({
+      status:
+        "failed",
+
+      updated_at:
+        new Date().toISOString(),
+    })
+    .eq(
+      "id",
+      invitationId,
+    )
+    .eq(
+      "status",
+      "preparing",
+    );
+}
+
+/* ========================================================================== */
+/* Invite                                                                      */
+/* ========================================================================== */
+
+export async function inviteClaimantUser(
+  input:
+    InviteClaimantInput,
+): Promise<
+  InviteClaimantResult
+> {
+  requireInvitationAuthority(
+    input.session,
+  );
+
+  await expireStaleInvitations();
+
+  const claimantId =
+    normalizeText(
+      input.claimantId,
+    );
+
+  const legalFirstName =
+    normalizeText(
+      input.legalFirstName,
+    );
+
+  const legalLastName =
+    normalizeText(
+      input.legalLastName,
+    );
+
+  const confirmedLegalName =
+    normalizeText(
+      `${legalFirstName} ${legalLastName}`,
+    );
+
+  const email =
+    normalizeEmail(
+      input.email,
+    );
+
+  const mobilePhone =
+    normalizePhone(
+      input.mobilePhone,
+    );
+
+  const redirectTo =
+    input.redirectTo.trim();
+
+  if (
+    !claimantId ||
+    !legalFirstName ||
+    !legalLastName ||
+    !validEmail(
+      email,
+    ) ||
+    mobilePhone.length !==
+      10 ||
+    !redirectTo
+  ) {
+    throw new Error(
+      "Claimant activation information is incomplete or invalid.",
+    );
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "claim_id, claim_reference, claimant_id, claimant_reference, claimant_auth_user_id, legal_name, email, mobile_phone, contact_methods, entity_type, identity_verification, originating_staff_user_id, assigned_staff_user_id",
+      )
+      .eq(
+        "claimant_id",
+        claimantId,
+      )
+      .maybeSingle();
+
+  if (
+    error ||
+    !data
+  ) {
+    throw new Error(
+      "The selected claimant record could not be found.",
+    );
+  }
+
+  const claimant =
+    data as ClaimantOnboardingInviteRow;
+
+  requireClaimantOwnership(
+    input.session,
+    claimant,
+  );
+
+  if (
+    claimant.entity_type !==
+    "individual"
+  ) {
+    throw new Error(
+      "This activation flow is currently limited to individual claimants. Estate, trust and business claimant records require review.",
+    );
+  }
+
+  if (
+    claimant.claimant_auth_user_id
+  ) {
+    throw new Error(
+      "This claimant already has a My DueQuity authentication identity.",
+    );
+  }
+
+  const persistedLegalName =
+    normalizeText(
+      claimant.legal_name,
+    );
+
+  const persistedEmail =
+    normalizeEmail(
+      claimant.email,
+    );
+
+  const persistedMobilePhone =
+    normalizePhone(
+      claimant.mobile_phone,
+    );
+
+  if (
+    !persistedLegalName ||
+    !validEmail(
+      persistedEmail,
+    ) ||
+    persistedMobilePhone.length !==
+      10
+  ) {
+    throw new Error(
+      "The saved claimant identity or contact record is incomplete. Complete claimant onboarding before sending activation.",
+    );
+  }
+
+  if (
+    !equivalentLegalName(
+      confirmedLegalName,
+      persistedLegalName,
+    )
+  ) {
+    throw new Error(
+      "The activation legal name does not match the saved claimant record. Update the claimant onboarding record first, then send activation.",
+    );
+  }
+
+  if (
+    email !==
+    persistedEmail
+  ) {
+    throw new Error(
+      "The activation email does not match the saved claimant record. Save the claimant contact change first, then send activation.",
+    );
+  }
+
+  if (
+    mobilePhone !==
+    persistedMobilePhone
+  ) {
+    throw new Error(
+      "The activation mobile number does not match the saved claimant record. Save the claimant contact change first, then send activation.",
+    );
+  }
+
+  const {
+    data:
+      openInvitation,
+    error:
+      openInvitationError,
+  } =
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .select(
+        "id",
+      )
+      .eq(
+        "claim_id",
+        claimant.claim_id,
+      )
+      .in(
+        "status",
+        [
+          "preparing",
+          "sent",
+        ],
+      )
+      .maybeSingle();
+
+  if (
+    openInvitationError
+  ) {
+    throw new Error(
+      `Unable to verify invitation state: ${openInvitationError.message}`,
+    );
+  }
+
+  if (
+    openInvitation
+  ) {
+    throw new Error(
+      "This claimant already has an active activation invitation.",
+    );
+  }
+
+  const now =
+    new Date();
+
+  const expiresAt =
+    new Date(
+      now.getTime() +
+      CLAIMANT_INVITATION_LIFETIME_MS,
+    );
+
+  const {
+    data:
+      invitationData,
+    error:
+      invitationError,
+  } =
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .insert({
+        claim_id:
+          claimant.claim_id,
+
+        claimant_id:
+          claimant.claimant_id,
+
+        claimant_reference:
+          claimant.claimant_reference,
+
+        legal_first_name:
+          legalFirstName,
+
+        legal_last_name:
+          legalLastName,
+
+        email:
+          persistedEmail,
+
+        mobile_phone:
+          persistedMobilePhone,
+
+        auth_user_id:
+          null,
+
+        status:
+          "preparing",
+
+        sent_by_staff_user_id:
+          input.session.user.id,
+
+        sent_at:
+          null,
+
+        activated_at:
+          null,
+
+        revoked_at:
+          null,
+
+        expires_at:
+          expiresAt.toISOString(),
+
+        created_at:
+          now.toISOString(),
+
+        updated_at:
+          now.toISOString(),
+      })
+      .select(
+        "id",
+      )
+      .single();
+
+  if (
+    invitationError ||
+    !invitationData
+  ) {
+    throw new Error(
+      `Unable to prepare claimant activation invitation: ${
+        invitationError?.message ??
+        "Invitation record unavailable."
+      }`,
+    );
+  }
+
+  const invitationId =
+    String(
+      invitationData.id,
+    );
+
+  let authUserId:
+    string | undefined;
+
+  try {
+    const {
+      data:
+        inviteData,
+      error:
+        inviteError,
+    } =
+      await admin.auth.admin
+        .inviteUserByEmail(
+          persistedEmail,
+          {
+            redirectTo,
+
+            data: {
+              audience:
+                "claimant",
+
+              claimant_id:
+                claimant.claimant_id,
+
+              claimant_reference:
+                claimant.claimant_reference,
+
+              claim_reference:
+                claimant.claim_reference,
+
+              legal_name:
+                persistedLegalName,
+            },
+          },
+        );
+
+    if (
+      inviteError ||
+      !inviteData.user
+    ) {
+      throw new Error(
+        inviteError?.message ??
+        "Supabase did not create the claimant invitation identity.",
+      );
+    }
+
+    authUserId =
+      inviteData.user.id;
+
+    const {
+      data:
+        staffCollision,
+      error:
+        staffCollisionError,
+    } =
+      await admin
+        .from(
+          "staff_users",
+        )
+        .select(
+          "id",
+        )
+        .eq(
+          "id",
+          authUserId,
+        )
+        .maybeSingle();
+
+    if (
+      staffCollisionError
+    ) {
+      throw new Error(
+        `Unable to verify claimant Auth audience: ${staffCollisionError.message}`,
+      );
+    }
+
+    if (
+      staffCollision
+    ) {
+      throw new Error(
+        "A DueQuity staff Auth identity cannot be used as a claimant identity.",
+      );
+    }
+
+    const claimantBindingUpdate:
+      Record<string, unknown> = {
+        claimant_auth_user_id:
+          authUserId,
+      };
+
+    if (
+      claimant.identity_verification ===
+      "not_started"
+    ) {
+      claimantBindingUpdate.identity_verification =
+        "documents_requested";
+
+      claimantBindingUpdate.identity_verified_at =
+        null;
+
+      claimantBindingUpdate.identity_provider_ref =
+        null;
+    }
+
+    let claimantBindingQuery =
+      admin
+        .from(
+          "claimant_onboarding",
+        )
+        .update(
+          claimantBindingUpdate,
+        )
+        .eq(
+          "claimant_id",
+          claimant.claimant_id,
+        )
+        .is(
+          "claimant_auth_user_id",
+          null,
+        );
+
+    /*
+     * Re-check ownership on the actual update so reassignment that races this
+     * request cannot allow the former assignee to finish an invitation.
+     */
+    if (
+      !isSuperAdmin(
+        input.session,
+      )
+    ) {
+      claimantBindingQuery =
+        claimantBindingQuery.eq(
+          "assigned_staff_user_id",
+          input.session.user.id,
+        );
+    }
+
+    const {
+      data:
+        updatedClaimant,
+      error:
+        updateClaimantError,
+    } =
+      await claimantBindingQuery
+        .select(
+          "claimant_id",
+        )
+        .maybeSingle();
+
+    if (
+      updateClaimantError ||
+      !updatedClaimant
+    ) {
+      throw new Error(
+        `Unable to bind the claimant invitation to the claimant record: ${
+          updateClaimantError?.message ??
+          "Claimant record changed before invitation binding."
+        }`,
+      );
+    }
+
+    await ensureGovernmentIdRequest(
+      claimant,
+      input.session.user.id,
+    );
+
+    const sentAt =
+      new Date().toISOString();
+
+    const {
+      data:
+        sentInvitation,
+      error:
+        sentInvitationError,
+    } =
+      await admin
+        .from(
+          "claimant_activation_invitations",
+        )
+        .update({
+          auth_user_id:
+            authUserId,
+
+          status:
+            "sent",
+
+          sent_at:
+            sentAt,
+
+          updated_at:
+            sentAt,
+        })
+        .eq(
+          "id",
+          invitationId,
+        )
+        .eq(
+          "status",
+          "preparing",
+        )
+        .select(
+          "id",
+        )
+        .maybeSingle();
+
+    if (
+      sentInvitationError ||
+      !sentInvitation
+    ) {
+      throw new Error(
+        `Unable to finalize claimant invitation state: ${
+          sentInvitationError?.message ??
+          "Invitation state changed."
+        }`,
+      );
+    }
+
+    await recordAuditEvent({
+      actor:
+        input.session.user,
+
+      action:
+        "claimant.activation_invited",
+
+      targetType:
+        "claimant",
+
+      targetId:
+        claimant.claimant_id,
+
+      targetLabel:
+        claimant.claimant_reference,
+
+      outcome:
+        "success",
+
+      detail:
+        `Controlled claimant activation invitation sent to saved claimant email ${persistedEmail}. Saved claimant identity and contact values were preserved. Government ID requirement created or preserved.`,
+    });
+
+    return {
+      invitationId,
+
+      claimantId:
+        claimant.claimant_id,
+
+      claimantReference:
+        claimant.claimant_reference,
+
+      email:
+        persistedEmail,
+    };
+  } catch (
+    inviteFailure
+  ) {
+    await invalidateFailedInvite({
+      invitationId,
+
+      claimantId:
+        claimant.claimant_id,
+
+      authUserId,
+    });
+
+    try {
+      await recordAuditEvent({
+        actor:
+          input.session.user,
+
+        action:
+          "claimant.activation_invite_failed",
+
+        targetType:
+          "claimant",
+
+        targetId:
+          claimant.claimant_id,
+
+        targetLabel:
+          claimant.claimant_reference,
+
+        outcome:
+          "failure",
+
+        detail:
+          inviteFailure instanceof Error
+            ? inviteFailure.message
+            : "Claimant activation invitation failed.",
+      });
+    } catch {
+      /*
+       * Preserve the original invitation failure.
+       */
+    }
+
+    throw inviteFailure;
+  }
+}
+
+======================================================================
+FILE: .\src\server\claimant-session.ts
+======================================================================
+import "server-only";
+
+import {
+  tryGetClaimantSession,
+  type ClaimantSession,
+} from "@/lib/session";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+import {
+  getSupabaseServerAuth,
+} from "@/server/supabase-auth";
+
+/* ========================================================================== */
+/* Types                                                                       */
+/* ========================================================================== */
+
+interface ClaimantOnboardingAuthRow {
+  claimant_id: string;
+}
+
+interface ClaimantInvitationSessionRow {
+  claimant_id: string;
+
+  status: string;
+}
+
+interface SupabaseClaimantResolution {
+  authenticatedIdentity: boolean;
+
+  session:
+    ClaimantSession | null;
+}
+
+/* ========================================================================== */
+/* Supabase                                                                    */
+/* ========================================================================== */
+
+async function resolveSupabaseClaimantSession(): Promise<
+  SupabaseClaimantResolution
+> {
+  const auth =
+    await getSupabaseServerAuth();
+
+  const {
+    data: {
+      user:
+        authUser,
+    },
+    error:
+      authError,
+  } =
+    await auth.auth.getUser();
+
+  if (
+    authError ||
+    !authUser
+  ) {
+    return {
+      authenticatedIdentity:
+        false,
+
+      session:
+        null,
+    };
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "claimant_onboarding",
+      )
+      .select(
+        "claimant_id",
+      )
+      .eq(
+        "claimant_auth_user_id",
+        authUser.id,
+      )
+      .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Unable to resolve claimant profile: ${error.message}`,
+    );
+  }
+
+  if (!data) {
+    return {
+      authenticatedIdentity:
+        true,
+
+      session:
+        null,
+    };
+  }
+
+  const row =
+    data as ClaimantOnboardingAuthRow;
+
+  /*
+   * Invitation-backed claimant identities must finish activation before portal
+   * access is granted.
+   *
+   * Legacy claimant Auth identities created before controlled invitations were
+   * introduced have no invitation rows and remain valid.
+   */
+  const {
+    data:
+      invitationData,
+    error:
+      invitationError,
+  } =
+    await admin
+      .from(
+        "claimant_activation_invitations",
+      )
+      .select(
+        "claimant_id, status",
+      )
+      .eq(
+        "auth_user_id",
+        authUser.id,
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        1,
+      );
+
+  if (
+    invitationError
+  ) {
+    throw new Error(
+      `Unable to verify claimant activation state: ${invitationError.message}`,
+    );
+  }
+
+  const invitations =
+    (
+      invitationData ??
+      []
+    ) as ClaimantInvitationSessionRow[];
+
+  if (
+    invitations.length >
+    0
+  ) {
+    const invitation =
+      invitations[0];
+
+    if (
+      invitation.claimant_id !==
+        row.claimant_id ||
+      invitation.status !==
+        "activated"
+    ) {
+      return {
+        authenticatedIdentity:
+          true,
+
+        session:
+          null,
+      };
+    }
+  }
+
+  return {
+    authenticatedIdentity:
+      true,
+
+    session: {
+      claimantId:
+        row.claimant_id,
+
+      provider:
+        "supabase",
+    },
+  };
+}
+
+/* ========================================================================== */
+/* Unified resolver                                                            */
+/* ========================================================================== */
+
+/**
+ * A real Supabase identity always takes precedence.
+ *
+ * This matters during local invitation testing: a pending real claimant invite
+ * must never fall through to the development claimant adapter and accidentally
+ * receive portal access.
+ */
+export async function resolveClaimantSession(): Promise<
+  ClaimantSession | null
+> {
+  const resolution =
+    await resolveSupabaseClaimantSession();
+
+  if (
+    resolution.authenticatedIdentity
+  ) {
+    return resolution.session;
+  }
+
+  return tryGetClaimantSession();
+}
+
+======================================================================
+FILE: .\src\server\assigned-lead-claimant-activation-service.ts
+======================================================================
+import "server-only";
+
+import type {
+  StaffSession,
+} from "@/lib/session";
+
+import {
+  can,
+} from "@/lib/session";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+/* ========================================================================== */
+/* Constants                                                                   */
+/* ========================================================================== */
+
+const ACTIVATION_LIFETIME_MS =
+  60 * 60 * 1000;
+
+/* ========================================================================== */
+/* Public types                                                                */
+/* ========================================================================== */
+
+export type AssignedLeadActivationStatus =
+  | "preparing"
+  | "sent"
+  | "activated"
+  | "revoked"
+  | "failed"
+  | "expired";
+
+export interface AssignedLeadActivationCandidate {
+  workcaseId:
+    string;
+
+  claimantId:
+    string;
+
+  claimantReference:
+    string;
+
+  discoveredRecordId:
+    string;
+
+  legalFirstName:
+    string;
+
+  legalLastName:
+    string;
+
+  email:
+    string;
+
+  mobilePhone:
+    string;
+
+  originatingStaffUserId:
+    string;
+
+  assignedStaffUserId:
+    string;
+}
+
+export interface AssignedLeadActivationInvitation {
+  id:
+    string;
+
+  workcaseId:
+    string;
+
+  claimantId:
+    string;
+
+  claimantReference:
+    string;
+
+  legalFirstName:
+    string;
+
+  legalLastName:
+    string;
+
+  email:
+    string;
+
+  mobilePhone:
+    string;
+
+  authUserId?:
+    string;
+
+  status:
+    AssignedLeadActivationStatus;
+
+  sentByStaffUserId:
+    string;
+
+  sentAt?:
+    string;
+
+  activatedAt?:
+    string;
+
+  revokedAt?:
+    string;
+
+  expiresAt:
+    string;
+
+  createdAt:
+    string;
+
+  updatedAt:
+    string;
+}
+
+export interface InviteAssignedLeadClaimantInput {
+  session:
+    StaffSession;
+
+  workcaseId:
+    string;
+
+  redirectTo:
+    string;
+}
+
+export interface InviteAssignedLeadClaimantResult {
+  invitationId:
+    string;
+
+  workcaseId:
+    string;
+
+  claimantId:
+    string;
+
+  claimantReference:
+    string;
+
+  email:
+    string;
+}
+
+/* ========================================================================== */
+/* Database rows                                                               */
+/* ========================================================================== */
+
+interface WorkcaseRow {
+  id:
+    string;
+
+  claimant_id:
+    string;
+
+  claimant_reference:
+    string;
+
+  discovered_record_id:
+    string;
+
+  legal_first_name:
+    string;
+
+  legal_last_name:
+    string;
+
+  email:
+    string;
+
+  mobile_phone:
+    string;
+
+  originating_staff_user_id:
+    string;
+
+  assigned_staff_user_id:
+    string;
+
+  auth_user_id:
+    string | null;
+
+  status:
+    string;
+}
+
+interface InvitationRow {
+  id:
+    string;
+
+  workcase_id:
+    string;
+
+  claimant_id:
+    string;
+
+  claimant_reference:
+    string;
+
+  legal_first_name:
+    string;
+
+  legal_last_name:
+    string;
+
+  email:
+    string;
+
+  mobile_phone:
+    string;
+
+  auth_user_id:
+    string | null;
+
+  status:
+    AssignedLeadActivationStatus;
+
+  sent_by_staff_user_id:
+    string;
+
+  sent_at:
+    string | null;
+
+  activated_at:
+    string | null;
+
+  revoked_at:
+    string | null;
+
+  expires_at:
+    string;
+
+  created_at:
+    string;
+
+  updated_at:
+    string;
+}
+
+/* ========================================================================== */
+/* Helpers                                                                     */
+/* ========================================================================== */
+
+function hasGlobalAccess(
+  session:
+    StaffSession,
+): boolean {
+  return (
+    session.user.role ===
+      "administrator" ||
+    session.user.role ===
+      "super_admin"
+  );
+}
+
+function requireActivationAuthority(
+  session:
+    StaffSession,
+): void {
+  if (
+    !can(
+      session,
+      "claim.read",
+    ) ||
+    !can(
+      session,
+      "claim.write",
+    ) ||
+    !can(
+      session,
+      "claimant.read",
+    ) ||
+    !can(
+      session,
+      "claimant.write",
+    )
+  ) {
+    throw new Error(
+      "Your DueQuity role is not authorized to create claimant activation invitations.",
+    );
+  }
+}
+
+function normalizeEmail(
+  value:
+    string,
+): string {
+  return value
+    .trim()
+    .toLowerCase();
+}
+
+function validEmail(
+  value:
+    string,
+): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+    value,
+  );
+}
+
+function invitationFromRow(
+  row:
+    InvitationRow,
+): AssignedLeadActivationInvitation {
+  return {
+    id:
+      row.id,
+
+    workcaseId:
+      row.workcase_id,
+
+    claimantId:
+      row.claimant_id,
+
+    claimantReference:
+      row.claimant_reference,
+
+    legalFirstName:
+      row.legal_first_name,
+
+    legalLastName:
+      row.legal_last_name,
+
+    email:
+      row.email,
+
+    mobilePhone:
+      row.mobile_phone,
+
+    authUserId:
+      row.auth_user_id ??
+      undefined,
+
+    status:
+      row.status,
+
+    sentByStaffUserId:
+      row.sent_by_staff_user_id,
+
+    sentAt:
+      row.sent_at ??
+      undefined,
+
+    activatedAt:
+      row.activated_at ??
+      undefined,
+
+    revokedAt:
+      row.revoked_at ??
+      undefined,
+
+    expiresAt:
+      row.expires_at,
+
+    createdAt:
+      row.created_at,
+
+    updatedAt:
+      row.updated_at,
+  };
+}
+
+/* ========================================================================== */
+/* Expiration cleanup                                                          */
+/* ========================================================================== */
+
+async function expireStaleAssignedLeadInvitations():
+  Promise<void> {
+  const admin =
+    getSupabaseAdmin();
+
+  const now =
+    new Date()
+      .toISOString();
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_activation_invitations",
+      )
+      .select(
+        "id, auth_user_id",
+      )
+      .eq(
+        "status",
+        "sent",
+      )
+      .lt(
+        "expires_at",
+        now,
+      );
+
+  if (error) {
+    throw new Error(
+      `Unable to inspect expired assigned claimant invitations: ${error.message}`,
+    );
+  }
+
+  for (
+    const rawRow of
+      data ??
+      []
+  ) {
+    const row =
+      rawRow as {
+        id:
+          string;
+
+        auth_user_id:
+          string | null;
+      };
+
+    const {
+      error:
+        expireError,
+    } =
+      await admin.rpc(
+        "expire_assigned_lead_claimant_activation_invitation",
+        {
+          p_invitation_id:
+            row.id,
+        },
+      );
+
+    if (expireError) {
+      throw new Error(
+        `Unable to expire assigned claimant invitation: ${expireError.message}`,
+      );
+    }
+
+    /*
+     * The invitation is no longer usable once the database state is expired.
+     * Remove the temporary invited Auth identity when one exists.
+     */
+    if (
+      row.auth_user_id
+    ) {
+      await admin.auth.admin
+        .deleteUser(
+          row.auth_user_id,
+        );
+    }
+  }
+}
+
+/* ========================================================================== */
+/* Candidate reads                                                             */
+/* ========================================================================== */
+
+export async function listAssignedLeadActivationCandidates(
+  session:
+    StaffSession,
+): Promise<
+  AssignedLeadActivationCandidate[]
+> {
+  requireActivationAuthority(
+    session,
+  );
+
+  await expireStaleAssignedLeadInvitations();
+
+  const admin =
+    getSupabaseAdmin();
+
+  let workcaseQuery =
+    admin
+      .from(
+        "assigned_lead_claimant_workcases",
+      )
+      .select(
+        [
+          "id",
+          "claimant_id",
+          "claimant_reference",
+          "discovered_record_id",
+          "legal_first_name",
+          "legal_last_name",
+          "email",
+          "mobile_phone",
+          "originating_staff_user_id",
+          "assigned_staff_user_id",
+          "auth_user_id",
+          "status",
+        ].join(
+          ", ",
+        ),
+      )
+      .eq(
+        "status",
+        "ready_for_activation",
+      )
+      .is(
+        "auth_user_id",
+        null,
+      );
+
+  if (
+    !hasGlobalAccess(
+      session,
+    )
+  ) {
+    workcaseQuery =
+      workcaseQuery.eq(
+        "assigned_staff_user_id",
+        session.user.id,
+      );
+  }
+
+  const [
+    workcasesResult,
+    invitationsResult,
+  ] =
+    await Promise.all([
+      workcaseQuery.order(
+        "updated_at",
+        {
+          ascending:
+            false,
+        },
+      ),
+
+      admin
+        .from(
+          "assigned_lead_claimant_activation_invitations",
+        )
+        .select(
+          "workcase_id",
+        )
+        .in(
+          "status",
+          [
+            "preparing",
+            "sent",
+          ],
+        ),
+    ]);
+
+  if (
+    workcasesResult.error
+  ) {
+    throw new Error(
+      `Unable to load assigned claimant activation candidates: ${workcasesResult.error.message}`,
+    );
+  }
+
+  if (
+    invitationsResult.error
+  ) {
+    throw new Error(
+      `Unable to inspect assigned claimant invitation state: ${invitationsResult.error.message}`,
+    );
+  }
+
+  const openWorkcases =
+    new Set(
+      (
+        invitationsResult.data ??
+        []
+      ).map(
+        (
+          row,
+        ) =>
+          String(
+            row.workcase_id,
+          ),
+      ),
+    );
+
+  return (
+    workcasesResult.data ??
+    []
+  )
+    .map(
+      (
+        rawRow,
+      ) =>
+        rawRow as unknown as
+          WorkcaseRow,
+    )
+    .filter(
+      (
+        row,
+      ) =>
+        !openWorkcases.has(
+          row.id,
+        ),
+    )
+    .map(
+      (
+        row,
+      ) => ({
+        workcaseId:
+          row.id,
+
+        claimantId:
+          row.claimant_id,
+
+        claimantReference:
+          row.claimant_reference,
+
+        discoveredRecordId:
+          row.discovered_record_id,
+
+        legalFirstName:
+          row.legal_first_name,
+
+        legalLastName:
+          row.legal_last_name,
+
+        email:
+          row.email,
+
+        mobilePhone:
+          row.mobile_phone,
+
+        originatingStaffUserId:
+          row.originating_staff_user_id,
+
+        assignedStaffUserId:
+          row.assigned_staff_user_id,
+      }),
+    );
+}
+
+/* ========================================================================== */
+/* Invitation history                                                          */
+/* ========================================================================== */
+
+export async function listAssignedLeadActivationInvitations(
+  session:
+    StaffSession,
+): Promise<
+  AssignedLeadActivationInvitation[]
+> {
+  requireActivationAuthority(
+    session,
+  );
+
+  await expireStaleAssignedLeadInvitations();
+
+  const admin =
+    getSupabaseAdmin();
+
+  if (
+    hasGlobalAccess(
+      session,
+    )
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from(
+          "assigned_lead_claimant_activation_invitations",
+        )
+        .select(
+          "*",
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          },
+        )
+        .limit(
+          200,
+        );
+
+    if (error) {
+      throw new Error(
+        `Unable to load assigned claimant invitations: ${error.message}`,
+      );
+    }
+
+    return (
+      data ??
+      []
+    ).map(
+      (
+        row,
+      ) =>
+        invitationFromRow(
+          row as
+            InvitationRow,
+        ),
+    );
+  }
+
+  const {
+    data:
+      ownedWorkcases,
+    error:
+      ownershipError,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_workcases",
+      )
+      .select(
+        "id",
+      )
+      .eq(
+        "assigned_staff_user_id",
+        session.user.id,
+      )
+      .neq(
+        "status",
+        "closed",
+      );
+
+  if (
+    ownershipError
+  ) {
+    throw new Error(
+      `Unable to resolve assigned claimant invitation ownership: ${ownershipError.message}`,
+    );
+  }
+
+  const workcaseIds =
+    (
+      ownedWorkcases ??
+      []
+    ).map(
+      (
+        row,
+      ) =>
+        String(
+          row.id,
+        ),
+    );
+
+  if (
+    workcaseIds.length ===
+    0
+  ) {
+    return [];
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await admin
+      .from(
+        "assigned_lead_claimant_activation_invitations",
+      )
+      .select(
+        "*",
+      )
+      .in(
+        "workcase_id",
+        workcaseIds,
+      )
+      .order(
+        "created_at",
+        {
+          ascending:
+            false,
+        },
+      )
+      .limit(
+        200,
+      );
+
+  if (error) {
+    throw new Error(
+      `Unable to load assigned claimant invitations: ${error.message}`,
+    );
+  }
+
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      invitationFromRow(
+        row as
+          InvitationRow,
+      ),
+  );
+}
+
+/* ========================================================================== */
+/* Send invitation                                                             */
+/* ========================================================================== */
+
+export async function inviteAssignedLeadClaimantUser(
+  input:
+    InviteAssignedLeadClaimantInput,
+): Promise<
+  InviteAssignedLeadClaimantResult
+> {
+  requireActivationAuthority(
+    input.session,
+  );
+
+  await expireStaleAssignedLeadInvitations();
+
+  const workcaseId =
+    input.workcaseId
+      .trim();
+
+  const redirectTo =
+    input.redirectTo
+      .trim();
+
+  if (
+    !workcaseId ||
+    !redirectTo
+  ) {
+    throw new Error(
+      "Assigned claimant activation information is incomplete.",
+    );
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  /*
+   * The application never accepts claimant identity/contact values from the
+   * activation form.
+   *
+   * Stage 29 copies the already-saved workcase identity into the prepared
+   * invitation. This prevents the activation action from silently changing
+   * the claimant's name, email or phone.
+   */
+  const expiresAt =
+    new Date(
+      Date.now() +
+        ACTIVATION_LIFETIME_MS,
+    );
+
+  const {
+    data:
+      preparedData,
+    error:
+      preparedError,
+  } =
+    await admin.rpc(
+      "prepare_assigned_lead_claimant_activation_invitation",
+      {
+        p_workcase_id:
+          workcaseId,
+
+        p_staff_user_id:
+          input.session.user.id,
+
+        p_expires_at:
+          expiresAt.toISOString(),
+      },
+    );
+
+  if (
+    preparedError ||
+    !Array.isArray(
+      preparedData,
+    ) ||
+    preparedData.length !==
+      1
+  ) {
+    throw new Error(
+      preparedError?.message ??
+      "DueQuity could not prepare the assigned claimant activation invitation.",
+    );
+  }
+
+  const prepared =
+    preparedData[0] as
+      InvitationRow;
+
+  const persistedEmail =
+    normalizeEmail(
+      prepared.email,
+    );
+
+  if (
+    !validEmail(
+      persistedEmail,
+    ) ||
+    !/^[0-9]{10}$/.test(
+      prepared.mobile_phone,
+    )
+  ) {
+    await admin.rpc(
+      "mark_assigned_lead_claimant_activation_failed",
+      {
+        p_invitation_id:
+          prepared.id,
+
+        p_staff_user_id:
+          input.session.user.id,
+      },
+    );
+
+    throw new Error(
+      "The saved assigned claimant contact information is incomplete for activation.",
+    );
+  }
+
+  /*
+   * Fail before touching Supabase Auth when the email belongs to a staff
+   * identity.
+   */
+  const {
+    data:
+      staffEmailCollision,
+    error:
+      staffEmailCollisionError,
+  } =
+    await admin
+      .from(
+        "staff_users",
+      )
+      .select(
+        "id",
+      )
+      .eq(
+        "email",
+        persistedEmail,
+      )
+      .maybeSingle();
+
+  if (
+    staffEmailCollisionError
+  ) {
+    await admin.rpc(
+      "mark_assigned_lead_claimant_activation_failed",
+      {
+        p_invitation_id:
+          prepared.id,
+
+        p_staff_user_id:
+          input.session.user.id,
+      },
+    );
+
+    throw new Error(
+      `Unable to verify claimant authentication audience: ${staffEmailCollisionError.message}`,
+    );
+  }
+
+  if (
+    staffEmailCollision
+  ) {
+    await admin.rpc(
+      "mark_assigned_lead_claimant_activation_failed",
+      {
+        p_invitation_id:
+          prepared.id,
+
+        p_staff_user_id:
+          input.session.user.id,
+      },
+    );
+
+    throw new Error(
+      "A DueQuity staff Auth identity cannot be used as a claimant identity.",
+    );
+  }
+
+  let authUserId:
+    string | undefined;
+
+  try {
+    const {
+      data:
+        inviteData,
+      error:
+        inviteError,
+    } =
+      await admin.auth.admin
+        .inviteUserByEmail(
+          persistedEmail,
+          {
+            redirectTo,
+
+            data: {
+              audience:
+                "claimant_preclaim",
+
+              claimant_id:
+                prepared.claimant_id,
+
+              claimant_reference:
+                prepared.claimant_reference,
+
+              workcase_id:
+                prepared.workcase_id,
+
+              recovery_stage:
+                "assigned_lead",
+
+              legal_name:
+                `${prepared.legal_first_name} ${prepared.legal_last_name}`,
+            },
+          },
+        );
+
+    if (
+      inviteError ||
+      !inviteData.user
+    ) {
+      throw new Error(
+        inviteError?.message ??
+        "Supabase did not create the assigned claimant invitation identity.",
+      );
+    }
+
+    authUserId =
+      inviteData.user.id;
+
+    /*
+     * Defense in depth.
+     *
+     * We checked the email before invitation, but also verify the actual Auth
+     * UUID returned by Supabase.
+     */
+    const {
+      data:
+        staffIdCollision,
+      error:
+        staffIdCollisionError,
+    } =
+      await admin
+        .from(
+          "staff_users",
+        )
+        .select(
+          "id",
+        )
+        .eq(
+          "id",
+          authUserId,
+        )
+        .maybeSingle();
+
+    if (
+      staffIdCollisionError
+    ) {
+      throw new Error(
+        `Unable to verify claimant Auth identity: ${staffIdCollisionError.message}`,
+      );
+    }
+
+    if (
+      staffIdCollision
+    ) {
+      /*
+       * Never delete this Auth user: it is an existing DueQuity staff
+       * identity.
+       */
+      authUserId =
+        undefined;
+
+      throw new Error(
+        "A DueQuity staff Auth identity cannot be used as a claimant identity.",
+      );
+    }
+
+    const {
+      data:
+        sentData,
+      error:
+        sentError,
+    } =
+      await admin.rpc(
+        "mark_assigned_lead_claimant_activation_sent",
+        {
+          p_invitation_id:
+            prepared.id,
+
+          p_auth_user_id:
+            inviteData.user.id,
+
+          p_staff_user_id:
+            input.session.user.id,
+        },
+      );
+
+    if (
+      sentError ||
+      !Array.isArray(
+        sentData,
+      ) ||
+      sentData.length !==
+        1
+    ) {
+      throw new Error(
+        sentError?.message ??
+        "DueQuity could not finalize the assigned claimant activation invitation.",
+      );
+    }
+
+    return {
+      invitationId:
+        prepared.id,
+
+      workcaseId:
+        prepared.workcase_id,
+
+      claimantId:
+        prepared.claimant_id,
+
+      claimantReference:
+        prepared.claimant_reference,
+
+      email:
+        persistedEmail,
+    };
+  } catch (
+    failure
+  ) {
+    await admin.rpc(
+      "mark_assigned_lead_claimant_activation_failed",
+      {
+        p_invitation_id:
+          prepared.id,
+
+        p_staff_user_id:
+          input.session.user.id,
+      },
+    );
+
+    /*
+     * Only remove an Auth identity that was created for this attempted
+     * claimant invitation and was not identified as an existing staff user.
+     */
+    if (
+      authUserId
+    ) {
+      await admin.auth.admin
+        .deleteUser(
+          authUserId,
+        );
+    }
+
+    throw failure;
+  }
+}
+
+======================================================================
+FILE: .\src\server\assigned-lead-claimant-workcase-service.ts
+======================================================================
+import "server-only";
+
+import type {
+  StaffSession,
+} from "@/lib/session";
+
+import {
+  getSupabaseAdmin,
+} from "@/server/supabase-admin";
+
+/* ========================================================================== */
+/* Public types                                                                */
+/* ========================================================================== */
+
+export type AssignedLeadClaimantWorkcaseStatus =
+  | "ready_for_activation"
+  | "activation_sent"
+  | "activated"
+  | "bound_to_claim"
+  | "closed";
+
+export interface AssignedLeadClaimantWorkcase {
+  id:
+    string;
+
+  claimantId:
+    string;
+
+  claimantReference:
+    string;
+
+  discoveredRecordId:
+    string;
+
+  originatingAssignmentId:
+    string;
+
+  originatingStaffUserId:
+    string;
+
+  assignedStaffUserId:
+    string;
+
+  latestContactId:
+    string;
+
+  legalFirstName:
+    string;
+
+  legalLastName:
+    string;
+
+  email:
+    string;
+
+  mobilePhone:
+    string;
+
+  propertyConnectionConfirmedAt:
+    string;
+
+  activationMaterialsConsentAt:
+    string;
+
+  authUserId?:
+    string;
+
+  status:
+    AssignedLeadClaimantWorkcaseStatus;
+
+  linkedClaimId?:
+    string;
+
+  linkedAt?:
+    string;
+
+  closedAt?:
+    string;
+
+  createdAt:
+    string;
+
+  updatedAt:
+    string;
+}
+
+/* ========================================================================== */
+/* Database rows                                                               */
+/* ========================================================================== */
+
+interface AssignedLeadClaimantWorkcaseRow {
+  id:
+    string;
+
+  claimant_id:
+    string;
+
+  claimant_reference:
+    string;
+
+  discovered_record_id:
+    string;
+
+  originating_assignment_id:
+    string;
+
+  originating_staff_user_id:
+    string;
+
+  assigned_staff_user_id:
+    string;
+
+  latest_contact_id:
+    string;
+
+  legal_first_name:
+    string;
+
+  legal_last_name:
+    string;
+
+  email:
+    string;
+
+  mobile_phone:
+    string;
+
+  property_connection_confirmed_at:
+    string;
+
+  activation_materials_consent_at:
+    string;
+
+  auth_user_id:
+    string | null;
+
+  status:
+    AssignedLeadClaimantWorkcaseStatus;
+
+  linked_claim_id:
+    string | null;
+
+  linked_at:
+    string | null;
+
+  closed_at:
+    string | null;
+
+  created_at:
+    string;
+
+  updated_at:
+    string;
+}
+
+/* ========================================================================== */
+/* Mapping                                                                     */
+/* ========================================================================== */
+
+function mapWorkcase(
+  row:
+    AssignedLeadClaimantWorkcaseRow,
+): AssignedLeadClaimantWorkcase {
+  return {
+    id:
+      row.id,
+
+    claimantId:
+      row.claimant_id,
+
+    claimantReference:
+      row.claimant_reference,
+
+    discoveredRecordId:
+      row.discovered_record_id,
+
+    originatingAssignmentId:
+      row.originating_assignment_id,
+
+    originatingStaffUserId:
+      row.originating_staff_user_id,
+
+    assignedStaffUserId:
+      row.assigned_staff_user_id,
+
+    latestContactId:
+      row.latest_contact_id,
+
+    legalFirstName:
+      row.legal_first_name,
+
+    legalLastName:
+      row.legal_last_name,
+
+    email:
+      row.email,
+
+    mobilePhone:
+      row.mobile_phone,
+
+    propertyConnectionConfirmedAt:
+      row.property_connection_confirmed_at,
+
+    activationMaterialsConsentAt:
+      row.activation_materials_consent_at,
+
+    authUserId:
+      row.auth_user_id ??
+      undefined,
+
+    status:
+      row.status,
+
+    linkedClaimId:
+      row.linked_claim_id ??
+      undefined,
+
+    linkedAt:
+      row.linked_at ??
+      undefined,
+
+    closedAt:
+      row.closed_at ??
+      undefined,
+
+    createdAt:
+      row.created_at,
+
+    updatedAt:
+      row.updated_at,
+  };
+}
+
+/* ========================================================================== */
+/* Create / refresh from interested contact                                    */
+/* ========================================================================== */
+
+/**
+ * Creates the persistent pre-Claim claimant workcase after an interested
+ * contact has been verified and saved.
+ *
+ * The database function independently proves:
+ *
+ * - exact active lead assignment;
+ * - Stage 27 Admin work authorization;
+ * - interested operational contact;
+ * - legal first / last name;
+ * - confirmed email;
+ * - confirmed U.S. mobile;
+ * - property connection confirmation;
+ * - activation-material consent.
+ *
+ * No Opportunity, Claim, jurisdiction package, commercial quote or filing fact
+ * is fabricated here.
+ */
+export async function ensureAssignedLeadClaimantWorkcase({
+  session,
+  discoveredRecordId,
+  contactId,
+}: {
+  session:
+    StaffSession;
+
+  discoveredRecordId:
+    string;
+
+  contactId:
+    string;
+}): Promise<
+  AssignedLeadClaimantWorkcase
+> {
+  const normalizedRecordId =
+    discoveredRecordId
+      .trim();
+
+  const normalizedContactId =
+    contactId
+      .trim();
+
+  if (
+    !normalizedRecordId ||
+    !normalizedContactId
+  ) {
+    throw new Error(
+      "Assigned recovery record and verified claimant contact are required.",
+    );
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  const {
+    data,
+    error,
+  } =
+    await admin.rpc(
+      "ensure_assigned_lead_claimant_workcase",
+      {
+        p_discovered_record_id:
+          normalizedRecordId,
+
+        p_contact_id:
+          normalizedContactId,
+
+        p_staff_user_id:
+          session.user.id,
+      },
+    );
+
+  if (
+    error ||
+    !Array.isArray(
+      data,
+    ) ||
+    data.length !==
+      1
+  ) {
+    throw new Error(
+      error?.message ??
+      "DueQuity could not create the assigned claimant workcase.",
+    );
+  }
+
+  return mapWorkcase(
+    data[0] as
+      AssignedLeadClaimantWorkcaseRow,
+  );
+}
+
+/* ========================================================================== */
+/* Read one by Discovery record                                                */
+/* ========================================================================== */
+
+export async function getAssignedLeadClaimantWorkcase({
+  session,
+  discoveredRecordId,
+}: {
+  session:
+    StaffSession;
+
+  discoveredRecordId:
+    string;
+}): Promise<
+  AssignedLeadClaimantWorkcase | undefined
+> {
+  const normalizedRecordId =
+    discoveredRecordId
+      .trim();
+
+  if (
+    !normalizedRecordId
+  ) {
+    return undefined;
+  }
+
+  const admin =
+    getSupabaseAdmin();
+
+  let query =
+    admin
+      .from(
+        "assigned_lead_claimant_workcases",
+      )
+      .select(
+        "*",
+      )
+      .eq(
+        "discovered_record_id",
+        normalizedRecordId,
+      )
+      .neq(
+        "status",
+        "closed",
+      );
+
+  if (
+    session.user.role !==
+      "super_admin" &&
+    session.user.role !==
+      "administrator"
+  ) {
+    query =
+      query.eq(
+        "assigned_staff_user_id",
+        session.user.id,
+      );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await query
+      .maybeSingle();
+
+  if (error) {
+    throw new Error(
+      `Unable to load assigned claimant workcase: ${error.message}`,
+    );
+  }
+
+  return data
+    ? mapWorkcase(
+        data as
+          AssignedLeadClaimantWorkcaseRow,
+      )
+    : undefined;
+}
+
+/* ========================================================================== */
+/* Activation candidates                                                       */
+/* ========================================================================== */
+
+export async function listAssignedLeadClaimantActivationCandidates(
+  session:
+    StaffSession,
+): Promise<
+  AssignedLeadClaimantWorkcase[]
+> {
+  const admin =
+    getSupabaseAdmin();
+
+  let query =
+    admin
+      .from(
+        "assigned_lead_claimant_workcases",
+      )
+      .select(
+        "*",
+      )
+      .in(
+        "status",
+        [
+          "ready_for_activation",
+          "activation_sent",
+        ],
+      );
+
+  if (
+    session.user.role !==
+      "super_admin" &&
+    session.user.role !==
+      "administrator"
+  ) {
+    query =
+      query.eq(
+        "assigned_staff_user_id",
+        session.user.id,
+      );
+  }
+
+  const {
+    data,
+    error,
+  } =
+    await query
+      .order(
+        "updated_at",
+        {
+          ascending:
+            false,
+        },
+      );
+
+  if (error) {
+    throw new Error(
+      `Unable to load assigned-lead claimant activation candidates: ${error.message}`,
+    );
+  }
+
+  return (
+    data ??
+    []
+  ).map(
+    (
+      row,
+    ) =>
+      mapWorkcase(
+        row as
+          AssignedLeadClaimantWorkcaseRow,
+      ),
+  );
+}
+
+======================================================================
+CLAIMANT INVITE SERVICE IMPORT REFERENCES
+======================================================================
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\claimants\onboarding\actions.ts:18: } from "@/server/claimant-invite-service";
+C:\Users\Roger\OneDrive\Documents\WestForge Holdings Inc\duequity\src\app\pro\claimants\onboarding\page.tsx:49: } from "@/server/claimant-invite-service";
