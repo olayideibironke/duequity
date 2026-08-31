@@ -1,10 +1,10 @@
-import type {
-  Metadata,
-} from "next";
+import type { Metadata } from "next";
+
+import { Badge } from "@/components/ui/badge";
 
 import {
-  Badge,
-} from "@/components/ui/badge";
+  LeadWorkbookDistributionPanel,
+} from "@/components/pro/lead-workbook-distribution-panel";
 
 import {
   StaffAuthenticationRequired,
@@ -18,14 +18,16 @@ import {
   EmptyState,
 } from "@/components/ui/surface";
 
-import {
-  formatCents,
-} from "@/lib/format";
+import { formatCents } from "@/lib/format";
 
 import {
+  listLeadDistributionLedger,
   listLeadDistributionStaffOptions,
   searchLeadDistributionDiscoveryRecords,
   type LeadDistributionDiscoveryRecord,
+  type LeadDistributionLedger,
+  type LeadDistributionLedgerBatch,
+  type LeadDistributionLedgerLead,
   type LeadDistributionStaffOption,
 } from "@/server/lead-distribution-service";
 
@@ -35,48 +37,30 @@ import {
 
 import {
   assignDiscoveryLeadAction,
-  uploadAndAssignLeadWorkbookAction,
+  reassignDiscoveryLeadAction,
 } from "./actions";
 
 export const metadata: Metadata = {
-  title:
-    "Lead Distribution",
+  title: "Lead Distribution",
 };
 
 export const dynamic =
   "force-dynamic";
 
-/* ========================================================================== */
-/* Types                                                                       */
-/* ========================================================================== */
-
 interface LeadDistributionPageProps {
   searchParams: Promise<{
     q?: string;
+    staff?: string;
     status?: string;
     savedLead?: string;
-    batch?: string;
-    county?: string;
-    state?: string;
-    staff?: string;
-    rows?: string;
-    assigned?: string;
-    skipped?: string;
   }>;
 }
 
-/* ========================================================================== */
-/* Helpers                                                                     */
-/* ========================================================================== */
-
 function formatTimestamp(
-  value:
-    string,
+  value: string,
 ): string {
   const date =
-    new Date(
-      value,
-    );
+    new Date(value);
 
   if (
     Number.isNaN(
@@ -89,24 +73,13 @@ function formatTimestamp(
   return new Intl.DateTimeFormat(
     "en-US",
     {
-      month:
-        "short",
-
-      day:
-        "numeric",
-
-      year:
-        "numeric",
-
-      hour:
-        "numeric",
-
-      minute:
-        "2-digit",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
     },
-  ).format(
-    date,
-  );
+  ).format(date);
 }
 
 function propertyAddress(
@@ -119,253 +92,387 @@ function propertyAddress(
     record.stateCode,
     record.postalCode,
   ]
-    .filter(
-      Boolean,
-    )
-    .join(
-      ", ",
-    );
+    .filter(Boolean)
+    .join(", ");
 }
 
 function staffClearanceLabel(
   staff:
     LeadDistributionStaffOption,
 ): string {
-  if (
-    staff.statesCleared.length ===
+  return staff.statesCleared.length ===
     0
-  ) {
-    return "National";
+    ? "National"
+    : staff.statesCleared.join(", ");
+}
+
+function batchTone(
+  status:
+    LeadDistributionLedgerBatch["status"],
+):
+  | "positive"
+  | "neutral"
+  | "critical" {
+  switch (status) {
+    case "active":
+      return "positive";
+
+    case "cancelled":
+      return "critical";
+
+    default:
+      return "neutral";
+  }
+}
+
+function normalizeStaffSearch(
+  value: string,
+): string {
+  return value
+    .trim()
+    .toLowerCase();
+}
+
+function recipientMatchesStaff(
+  recipient: {
+    name: string;
+    email: string;
+  },
+  staffQuery: string,
+): boolean {
+  const query =
+    normalizeStaffSearch(
+      staffQuery,
+    );
+
+  if (!query) {
+    return true;
   }
 
-  return staff.statesCleared.join(
-    ", ",
+  return (
+    recipient.name
+      .toLowerCase()
+      .includes(query) ||
+    recipient.email
+      .toLowerCase()
+      .includes(query)
   );
 }
 
-/* ========================================================================== */
-/* Status messages                                                             */
-/* ========================================================================== */
-
-function UploadStatus({
-  status,
-  batch,
-  county,
-  state,
-  staff,
-  rows,
-  assigned,
-  skipped,
-}: {
-  status?:
-    string;
-
-  batch?:
-    string;
-
-  county?:
-    string;
-
-  state?:
-    string;
-
-  staff?:
-    string;
-
-  rows?:
-    string;
-
-  assigned?:
-    string;
-
-  skipped?:
-    string;
-}) {
+function batchMatchesStaff(
+  batch:
+    LeadDistributionLedgerBatch,
+  staffQuery: string,
+): boolean {
   if (
-    status ===
-    "upload-assigned"
+    !normalizeStaffSearch(
+      staffQuery,
+    )
   ) {
-    return (
-      <Callout
-        tone="positive"
-        title="County lead workbook assigned"
-        role="status"
-      >
-        {county}, {state} was uploaded and assigned to{" "}
-        <strong>
-          {staff}
-        </strong>
-        .{" "}
-        <strong>
-          {assigned}
-        </strong>{" "}
-        of{" "}
-        <strong>
-          {rows}
-        </strong>{" "}
-        workbook leads were assigned.
-        {Number(
-          skipped ??
-            "0",
-        ) >
-          0
-          ? ` ${skipped} record(s) were skipped because they are no longer assignable at the Discovery stage.`
-          : ""}{" "}
-        Batch reference:{" "}
-        <strong>
-          {batch}
-        </strong>
-        .
-      </Callout>
-    );
+    return true;
   }
 
-  if (
-    status ===
-    "upload-invalid"
-  ) {
-    return (
-      <Callout
-        tone="critical"
-        title="Workbook and staff member required"
-      >
-        Choose an Excel workbook and the staff member who should receive the leads.
-      </Callout>
-    );
-  }
-
-  if (
-    status ===
-    "upload-too-large"
-  ) {
-    return (
-      <Callout
-        tone="critical"
-        title="Workbook is too large"
-      >
-        Lead workbooks must be 15 MB or smaller.
-      </Callout>
-    );
-  }
-
-  if (
-    status ===
-    "upload-file-type"
-  ) {
-    return (
-      <Callout
-        tone="critical"
-        title="Excel workbook required"
-      >
-        DueQuity currently accepts .xlsx lead workbooks.
-      </Callout>
-    );
-  }
-
-  if (
-    status ===
-    "upload-columns"
-  ) {
-    return (
-      <Callout
-        tone="critical"
-        title="Required DueQuity columns were not found"
-      >
-        The workbook must contain DueQuity Record ID, County and State columns.
-      </Callout>
-    );
-  }
-
-  if (
-    status ===
-    "upload-mixed-county"
-  ) {
-    return (
-      <Callout
-        tone="critical"
-        title="One county per workbook"
-      >
-        Upload a workbook containing leads from one county and one state only.
-      </Callout>
-    );
-  }
-
-  if (
-    status ===
-    "upload-records-missing"
-  ) {
-    return (
-      <Callout
-        tone="critical"
-        title="Some recovery records could not be verified"
-      >
-        One or more DueQuity Record IDs in the workbook do not exist in the current Discovery database. The workbook was not distributed.
-      </Callout>
-    );
-  }
-
-  if (
-    status ===
-    "upload-duplicates"
-  ) {
-    return (
-      <Callout
-        tone="critical"
-        title="Duplicate recovery records detected"
-      >
-        The workbook contains duplicate DueQuity Record IDs. Remove the duplicate rows before distribution.
-      </Callout>
-    );
-  }
-
-  if (
-    status ===
-    "upload-state-not-cleared"
-  ) {
-    return (
-      <Callout
-        tone="critical"
-        title="Staff clearance does not permit this workbook"
-      >
-        The selected staff member is not cleared to work leads in the workbook&apos;s state.
-      </Callout>
-    );
-  }
-
-  if (
-    status ===
-    "upload-none-assignable"
-  ) {
-    return (
-      <Callout
-        tone="caution"
-        title="No Discovery leads available for assignment"
-      >
-        None of the workbook records are currently in an assignable Discovery stage.
-      </Callout>
-    );
-  }
-
-  if (
-    status ===
-    "upload-failed"
-  ) {
-    return (
-      <Callout
-        tone="critical"
-        title="Workbook could not be distributed"
-      >
-        DueQuity could not complete the workbook upload and assignment. No successful staff distribution was recorded.
-      </Callout>
-    );
-  }
-
-  return null;
+  return batch.assignedTo.some(
+    (recipient) =>
+      recipientMatchesStaff(
+        recipient,
+        staffQuery,
+      ),
+  );
 }
 
-/* ========================================================================== */
-/* Lead card                                                                   */
-/* ========================================================================== */
+function manualAssignmentMatchesStaff(
+  assignment:
+    LeadDistributionLedgerLead,
+  staffQuery: string,
+): boolean {
+  return recipientMatchesStaff(
+    {
+      name:
+        assignment.assignedToName,
+      email:
+        assignment.assignedToEmail,
+    },
+    staffQuery,
+  );
+}
+
+function batchLeadCountForStaff({
+  batch,
+  staffQuery,
+}: {
+  batch:
+    LeadDistributionLedgerBatch;
+  staffQuery: string;
+}): number {
+  const query =
+    normalizeStaffSearch(
+      staffQuery,
+    );
+
+  if (!query) {
+    return batch.sourceRecordCount;
+  }
+
+  return batch.assignedTo
+    .filter(
+      (recipient) =>
+        recipientMatchesStaff(
+          recipient,
+          staffQuery,
+        ),
+    )
+    .reduce(
+      (
+        total,
+        recipient,
+      ) =>
+        total +
+        recipient.count,
+      0,
+    );
+}
+
+function Metric({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: string | number;
+  note: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-white px-5 py-4 shadow-sm">
+      <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-ink-500">
+        {label}
+      </p>
+
+      <p className="mt-2 tnum text-2xl font-semibold text-ink-950">
+        {value}
+      </p>
+
+      <p className="mt-1 text-xs leading-relaxed text-ink-500">
+        {note}
+      </p>
+    </div>
+  );
+}
+
+function AssignmentStatus({
+  status,
+}: {
+  status?: string;
+}) {
+  switch (status) {
+    case "assigned":
+      return (
+        <Callout
+          tone="positive"
+          title="Lead assignment saved"
+          role="status"
+        >
+          The lead was assigned and stamped in the DueQuity assignment ledger.
+        </Callout>
+      );
+
+    case "reassigned":
+      return (
+        <Callout
+          tone="positive"
+          title="Lead reassignment completed"
+          role="status"
+        >
+          The prior assignment remains preserved in history and the new active owner is now stamped on the lead.
+        </Callout>
+      );
+
+    case "already-assigned":
+      return (
+        <Callout
+          tone="caution"
+          title="Lead is already assigned"
+          role="alert"
+        >
+          DueQuity blocked the ordinary assignment. Use the explicit Reassign Lead control on the stamped lead only if you intentionally want to transfer ownership.
+        </Callout>
+      );
+
+    case "reassign-confirmation-required":
+      return (
+        <Callout
+          tone="caution"
+          title="Reassignment confirmation required"
+          role="alert"
+        >
+          Select a replacement staff member and confirm that you intend to end the current active assignment.
+        </Callout>
+      );
+
+    case "reassign-stale":
+      return (
+        <Callout
+          tone="caution"
+          title="Assignment changed before reassignment"
+          role="alert"
+        >
+          DueQuity did not transfer the lead because the active assignment changed after this page loaded. Refresh and review the current stamp before trying again.
+        </Callout>
+      );
+
+    case "reassign-failed":
+      return (
+        <Callout
+          tone="critical"
+          title="Lead could not be reassigned"
+          role="alert"
+        >
+          No intentional reassignment was completed. Refresh the page and review the current assignment stamp.
+        </Callout>
+      );
+
+    case "invalid":
+      return (
+        <Callout
+          tone="critical"
+          title="Select a staff member"
+          role="alert"
+        >
+          Choose the staff member who should receive this lead.
+        </Callout>
+      );
+
+    case "state-not-cleared":
+      return (
+        <Callout
+          tone="critical"
+          title="Staff clearance does not permit assignment"
+          role="alert"
+        >
+          The selected staff member is not cleared to work leads in this state.
+        </Callout>
+      );
+
+    case "already-promoted":
+      return (
+        <Callout
+          tone="caution"
+          title="Lead already promoted"
+          role="alert"
+        >
+          This recovery has already moved to Opportunity. Manage its assignment through the Opportunity workflow.
+        </Callout>
+      );
+
+    case "not-authorized":
+      return (
+        <Callout
+          tone="critical"
+          title="Administrator access required"
+          role="alert"
+        >
+          Your account is not authorized to distribute DueQuity leads.
+        </Callout>
+      );
+
+    case "unavailable":
+      return (
+        <Callout
+          tone="critical"
+          title="Assignment could not be saved"
+          role="alert"
+        >
+          DueQuity could not complete the lead assignment. No access change was made.
+        </Callout>
+      );
+
+    default:
+      return null;
+  }
+}
+
+function ActiveAssignmentStamp({
+  record,
+}: {
+  record:
+    LeadDistributionDiscoveryRecord;
+}) {
+  const assignment =
+    record.activeAssignment;
+
+  if (!assignment) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border border-accent-200 bg-accent-50 px-4 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-2xs font-bold uppercase tracking-[0.16em] text-accent-800">
+            Assignment stamp
+          </p>
+
+          <p className="mt-1 text-base font-semibold text-ink-950">
+            ASSIGNED TO {assignment.staffName}
+          </p>
+
+          <p className="mt-0.5 text-xs text-ink-600">
+            {assignment.staffEmail}
+          </p>
+        </div>
+
+        <Badge tone="positive">
+          Active
+        </Badge>
+      </div>
+
+      <dl className="mt-4 grid gap-3 text-xs sm:grid-cols-2">
+        <div>
+          <dt className="font-medium text-ink-500">
+            Date sent
+          </dt>
+
+          <dd className="mt-1 font-semibold text-ink-900">
+            {formatTimestamp(
+              assignment.assignedAt,
+            )}
+          </dd>
+        </div>
+
+        <div>
+          <dt className="font-medium text-ink-500">
+            Sent by
+          </dt>
+
+          <dd className="mt-1 font-semibold text-ink-900">
+            {assignment.assignedByName ??
+              "DueQuity Administrator"}
+          </dd>
+
+          {assignment.assignedByEmail ? (
+            <dd className="mt-0.5 text-ink-500">
+              {assignment.assignedByEmail}
+            </dd>
+          ) : null}
+        </div>
+
+        <div className="sm:col-span-2">
+          <dt className="font-medium text-ink-500">
+            Staff receipt
+          </dt>
+
+          <dd className="mt-1 font-semibold text-ink-900">
+            {assignment.firstSeenAt
+              ? `Viewed ${formatTimestamp(
+                  assignment.firstSeenAt,
+                )}`
+              : "Not viewed yet"}
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+}
 
 function DistributionLeadCard({
   record,
@@ -375,16 +482,14 @@ function DistributionLeadCard({
 }: {
   record:
     LeadDistributionDiscoveryRecord;
-
   staffOptions:
     LeadDistributionStaffOption[];
-
-  query:
-    string;
-
-  recentlySaved:
-    boolean;
+  query: string;
+  recentlySaved: boolean;
 }) {
+  const assignment =
+    record.activeAssignment;
+
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
       <div className="border-b border-line-subtle px-5 py-5">
@@ -392,9 +497,7 @@ function DistributionLeadCard({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-md bg-ink-950 px-2.5 py-1 font-mono text-xs font-semibold text-white">
-                {
-                  record.id
-                }
+                {record.id}
               </span>
 
               <Badge
@@ -405,40 +508,36 @@ function DistributionLeadCard({
                     : "caution"
                 }
               >
-                {
-                  record.status ===
-                  "reviewed"
-                    ? "Reviewed"
-                    : "New"
-                }
+                {record.status ===
+                "reviewed"
+                  ? "Reviewed"
+                  : "New"}
               </Badge>
 
-              {record.activeAssignment ? (
-                <Badge tone="positive">
-                  Assigned
-                </Badge>
-              ) : (
-                <Badge tone="neutral">
-                  Unassigned
-                </Badge>
-              )}
+              <Badge
+                tone={
+                  assignment
+                    ? "positive"
+                    : "neutral"
+                }
+              >
+                {assignment
+                  ? "Assigned"
+                  : "Unassigned"}
+              </Badge>
             </div>
 
             <h3 className="mt-3 text-lg font-semibold text-ink-950">
-              {
-                record.formerOwnerName
-              }
+              {record.formerOwnerName}
             </h3>
 
             <p className="mt-1 text-sm leading-relaxed text-ink-600">
-              {propertyAddress(
-                record,
-              )}
+              {propertyAddress(record)}
             </p>
           </div>
 
           {record.sourceListedBalanceCents !==
-            undefined && (
+          undefined ? (
             <div className="text-right">
               <p className="text-2xs font-semibold uppercase tracking-[0.14em] text-ink-400">
                 Source-listed surplus
@@ -450,7 +549,7 @@ function DistributionLeadCard({
                 )}
               </p>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -467,9 +566,7 @@ function DistributionLeadCard({
               </dt>
 
               <dd className="mt-1 text-sm font-semibold text-ink-900">
-                {
-                  record.formerOwnerName
-                }
+                {record.formerOwnerName}
               </dd>
             </div>
 
@@ -479,12 +576,7 @@ function DistributionLeadCard({
               </dt>
 
               <dd className="mt-1 text-sm font-semibold text-ink-900">
-                {
-                  record.county
-                },{" "}
-                {
-                  record.stateCode
-                }
+                {record.county}, {record.stateCode}
               </dd>
             </div>
 
@@ -494,23 +586,19 @@ function DistributionLeadCard({
               </dt>
 
               <dd className="mt-1 text-sm text-ink-800">
-                {
-                  record.parcelNumber ??
-                  "Not recorded"
-                }
+                {record.parcelNumber ??
+                  "Not recorded"}
               </dd>
             </div>
 
             <div>
               <dt className="text-xs font-medium text-ink-500">
-                Case number
+                Case
               </dt>
 
               <dd className="mt-1 text-sm text-ink-800">
-                {
-                  record.caseNumber ??
-                  "Not recorded"
-                }
+                {record.caseNumber ??
+                  "Not recorded"}
               </dd>
             </div>
 
@@ -520,158 +608,505 @@ function DistributionLeadCard({
               </dt>
 
               <dd className="mt-1 text-sm text-ink-800">
-                {
-                  record.sourceName
-                }
+                {record.sourceName}
               </dd>
             </div>
           </dl>
         </div>
 
-        <div className="px-5 py-5">
-          <p className="eyebrow text-ink-500">
-            Staff assignment
-          </p>
+        <div className="space-y-4 px-5 py-5">
+          {assignment ? (
+            <>
+              <ActiveAssignmentStamp
+                record={record}
+              />
 
-          {record.activeAssignment ? (
-            <div className="mt-4">
               <Callout
-                tone="positive"
-                title="Currently assigned"
+                tone="caution"
+                title="Explicit reassignment only"
               >
-                This lead is assigned to{" "}
-                <strong>
-                  {
-                    record.activeAssignment.staffName
-                  }
-                </strong>{" "}
-                ({record.activeAssignment.staffEmail}).
+                This lead already has an active owner. Ordinary assignment is blocked. Use this control only when you deliberately intend to transfer the lead to another staff member.
               </Callout>
 
-              <p className="mt-3 text-xs text-ink-500">
-                Assigned{" "}
-                {formatTimestamp(
-                  record.activeAssignment.assignedAt,
-                )}
-              </p>
-
-              <p className="mt-4 text-xs leading-relaxed text-ink-500">
-                Selecting another staff member below will create a controlled reassignment. DueQuity preserves the previous assignment in permanent assignment history.
-              </p>
-            </div>
-          ) : (
-            <Callout
-              className="mt-4"
-              tone="neutral"
-              title="Not assigned"
-            >
-              No ordinary staff member currently has access to this lead through the assignment workflow.
-            </Callout>
-          )}
-
-          <form
-            action={
-              assignDiscoveryLeadAction
-            }
-            className="mt-5 space-y-4"
-          >
-            <input
-              type="hidden"
-              name="discoveredRecordId"
-              value={
-                record.id
-              }
-            />
-
-            <input
-              type="hidden"
-              name="q"
-              value={
-                query
-              }
-            />
-
-            <div className="space-y-2">
-              <label
-                htmlFor={`staff-${record.id}`}
-                className="block text-sm font-semibold text-ink-800"
-              >
-                Assign lead to
-              </label>
-
-              <select
-                id={`staff-${record.id}`}
-                name="staffUserId"
-                required
-                defaultValue={
-                  record.activeAssignment
-                    ?.staffUserId ??
-                  ""
+              <form
+                action={
+                  reassignDiscoveryLeadAction
                 }
-                className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                className="space-y-4"
               >
-                <option value="">
-                  Select staff member
-                </option>
+                <input
+                  type="hidden"
+                  name="discoveredRecordId"
+                  value={record.id}
+                />
 
-                {staffOptions.map(
-                  (
-                    staff,
-                  ) => (
-                    <option
-                      key={
-                        staff.id
-                      }
-                      value={
-                        staff.id
-                      }
-                    >
-                      {staff.name} · {staff.title} · {staffClearanceLabel(
-                        staff,
-                      )}
+                <input
+                  type="hidden"
+                  name="expectedCurrentAssignmentId"
+                  value={assignment.id}
+                />
+
+                <input
+                  type="hidden"
+                  name="q"
+                  value={query}
+                />
+
+                <div className="space-y-2">
+                  <label
+                    htmlFor={`reassign-${record.id}`}
+                    className="block text-sm font-medium text-ink-800"
+                  >
+                    Reassign to
+                  </label>
+
+                  <select
+                    id={`reassign-${record.id}`}
+                    name="staffUserId"
+                    required
+                    defaultValue=""
+                    className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+                  >
+                    <option value="">
+                      Select replacement staff member
                     </option>
-                  ),
-                )}
-              </select>
-            </div>
 
-            <Callout
-              tone="neutral"
-              title="Record-level access"
+                    {staffOptions
+                      .filter(
+                        (staff) =>
+                          staff.id !==
+                          assignment.staffUserId,
+                      )
+                      .map(
+                        (staff) => (
+                          <option
+                            key={staff.id}
+                            value={staff.id}
+                          >
+                            {staff.name} · {staff.title} · {staffClearanceLabel(
+                              staff,
+                            )}
+                          </option>
+                        ),
+                      )}
+                  </select>
+                </div>
+
+                <label className="flex items-start gap-3 rounded-xl border border-line bg-inset px-4 py-3 text-sm text-ink-700">
+                  <input
+                    type="checkbox"
+                    name="confirmReassign"
+                    value="yes"
+                    required
+                    className="mt-0.5 h-4 w-4"
+                  />
+
+                  <span>
+                    I understand this will end the current active assignment to{" "}
+                    <strong>
+                      {assignment.staffName}
+                    </strong>{" "}
+                    and create a new auditable assignment for the selected staff member.
+                  </span>
+                </label>
+
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="rounded-xl border border-critical-300 bg-white px-5 py-3 text-sm font-semibold text-critical-700 transition hover:bg-critical-50"
+                  >
+                    Reassign lead
+                  </button>
+                </div>
+              </form>
+            </>
+          ) : (
+            <form
+              action={
+                assignDiscoveryLeadAction
+              }
+              className="space-y-4"
             >
-              Assignment gives the selected staff member access to this specific recovery lead. It does not grant access to every lead in {record.county}.
-            </Callout>
+              <input
+                type="hidden"
+                name="discoveredRecordId"
+                value={record.id}
+              />
 
-            <div className="flex justify-end">
-              {recentlySaved ? (
-                <button
-                  type="button"
-                  disabled
-                  className="rounded-xl bg-accent-700 px-5 py-3 text-sm font-semibold text-white opacity-90"
+              <input
+                type="hidden"
+                name="q"
+                value={query}
+              />
+
+              <div className="space-y-2">
+                <label
+                  htmlFor={`assign-${record.id}`}
+                  className="block text-sm font-medium text-ink-800"
                 >
-                  ✓ Saved
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                  Assign to staff member
+                </label>
+
+                <select
+                  id={`assign-${record.id}`}
+                  name="staffUserId"
+                  required
+                  defaultValue=""
+                  className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
                 >
-                  {record.activeAssignment
-                    ? "Save assignment"
-                    : "Assign lead"}
-                </button>
-              )}
-            </div>
-          </form>
+                  <option value="">
+                    Select staff member
+                  </option>
+
+                  {staffOptions.map(
+                    (staff) => (
+                      <option
+                        key={staff.id}
+                        value={staff.id}
+                      >
+                        {staff.name} · {staff.title} · {staffClearanceLabel(
+                          staff,
+                        )}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </div>
+
+              <Callout
+                tone="neutral"
+                title="Record-level access"
+              >
+                Assignment gives the selected staff member access to this specific recovery lead. It does not grant access to every lead in {record.county}.
+              </Callout>
+
+              <div className="flex justify-end">
+                {recentlySaved ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="rounded-xl bg-accent-700 px-5 py-3 text-sm font-semibold text-white opacity-90"
+                  >
+                    ✓ Saved
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+                  >
+                    Assign lead
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-/* ========================================================================== */
-/* Page                                                                        */
-/* ========================================================================== */
+function BatchLedger({
+  batch,
+}: {
+  batch:
+    LeadDistributionLedgerBatch;
+}) {
+  const recipientLabel =
+    batch.assignedTo.length === 0
+      ? "No active recipient"
+      : batch.assignedTo
+          .map(
+            (recipient) =>
+              `${recipient.name} (${recipient.count})`,
+          )
+          .join(", ");
+
+  return (
+    <div className="rounded-2xl border border-line bg-white px-5 py-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-5">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge
+              tone={batchTone(
+                batch.status,
+              )}
+            >
+              {batch.status.toUpperCase()}
+            </Badge>
+
+            <span className="text-xs font-medium text-ink-500">
+              {batch.sourceRecordCount}{" "}
+              lead
+              {batch.sourceRecordCount === 1
+                ? ""
+                : "s"}
+            </span>
+          </div>
+
+          <h3 className="mt-3 text-lg font-semibold text-ink-950">
+            {batch.county}, {batch.stateCode}
+          </h3>
+
+          <p className="mt-2 break-all text-sm font-semibold text-ink-800">
+            {batch.sourceFileName ??
+              "Manual lead distribution"}
+          </p>
+
+          <p className="mt-2 text-sm text-ink-600">
+            Assigned to {recipientLabel}
+          </p>
+
+          <p className="mt-1 text-xs text-ink-500">
+            Sent{" "}
+            {formatTimestamp(
+              batch.firstAssignedAt ??
+                batch.createdAt,
+            )}{" "}
+            by {batch.uploadedByName}
+          </p>
+        </div>
+
+        <div className="grid min-w-[210px] grid-cols-2 gap-4 text-right">
+          <div className="rounded-xl bg-inset px-4 py-3">
+            <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-ink-400">
+              Active
+            </p>
+
+            <p className="mt-1 tnum text-xl font-semibold text-ink-950">
+              {batch.activeAssignmentCount}
+            </p>
+          </div>
+
+          <div className="rounded-xl bg-inset px-4 py-3">
+            <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-ink-400">
+              Viewed
+            </p>
+
+            <p className="mt-1 tnum text-xl font-semibold text-ink-950">
+              {batch.viewedAssignmentCount}/
+              {batch.activeAssignmentCount}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AssignmentLedger({
+  ledger,
+  staffQuery,
+}: {
+  ledger:
+    LeadDistributionLedger;
+  staffQuery: string;
+}) {
+  const normalizedQuery =
+    normalizeStaffSearch(
+      staffQuery,
+    );
+
+  const filteredBatches =
+    ledger.batches.filter(
+      (batch) =>
+        batchMatchesStaff(
+          batch,
+          staffQuery,
+        ),
+    );
+
+  const filteredManualAssignments =
+    ledger.manualAssignments.filter(
+      (assignment) =>
+        manualAssignmentMatchesStaff(
+          assignment,
+          staffQuery,
+        ),
+    );
+
+  const workbookLeadCount =
+    filteredBatches.reduce(
+      (
+        total,
+        batch,
+      ) =>
+        total +
+        batchLeadCountForStaff({
+          batch,
+          staffQuery,
+        }),
+      0,
+    );
+
+  const historicalAssignmentCount =
+    workbookLeadCount +
+    filteredManualAssignments.length;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Assignment ledger"
+        description="Compact distribution history by county and source workbook. Search a staff member to see every historical distribution tied to that person."
+        actions={
+          <Badge tone="info">
+            System of record
+          </Badge>
+        }
+      />
+
+      <CardBody>
+        <div className="rounded-2xl border border-line bg-inset p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-ink-950">
+                Search staff distribution history
+              </p>
+
+              <p className="mt-1 text-xs leading-relaxed text-ink-500">
+                Type a staff name or DueQuity email to find every county workbook historically assigned to that staff member.
+              </p>
+            </div>
+
+            {normalizedQuery ? (
+              <Badge tone="info">
+                Staff history filter
+              </Badge>
+            ) : null}
+          </div>
+
+          <form
+            method="get"
+            action="/pro/lead-distribution"
+            className="mt-4"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                name="staff"
+                type="search"
+                defaultValue={
+                  staffQuery
+                }
+                placeholder="Example: Tolulope Ladejebi"
+                className="min-w-0 flex-1 rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
+              />
+
+              <button
+                type="submit"
+                className="rounded-xl bg-ink-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-ink-800"
+              >
+                Search staff history
+              </button>
+
+              {normalizedQuery ? (
+                <a
+                  href="/pro/lead-distribution"
+                  className="rounded-xl border border-line bg-white px-5 py-3 text-center text-sm font-semibold text-ink-700 transition hover:bg-inset"
+                >
+                  Clear
+                </a>
+              ) : null}
+            </div>
+          </form>
+        </div>
+
+        <Callout
+          tone="neutral"
+          className="mt-5"
+          title="Duplicate-control visibility"
+        >
+          County workbook preflight still checks the full assignment history behind the scenes. The ledger intentionally shows county and file summaries instead of expanding every individual lead.
+        </Callout>
+
+        {normalizedQuery ? (
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-line bg-white px-4 py-3">
+              <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-ink-400">
+                Matching files
+              </p>
+
+              <p className="mt-1 tnum text-xl font-semibold text-ink-950">
+                {
+                  filteredBatches.length
+                }
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-line bg-white px-4 py-3">
+              <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-ink-400">
+                Historical lead assignments
+              </p>
+
+              <p className="mt-1 tnum text-xl font-semibold text-ink-950">
+                {
+                  historicalAssignmentCount
+                }
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-line bg-white px-4 py-3">
+              <p className="text-2xs font-semibold uppercase tracking-[0.12em] text-ink-400">
+                Staff search
+              </p>
+
+              <p className="mt-1 truncate text-sm font-semibold text-ink-950">
+                {staffQuery}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-5 space-y-4">
+          {filteredBatches.length >
+          0 ? (
+            filteredBatches.map(
+              (batch) => (
+                <BatchLedger
+                  key={batch.id}
+                  batch={batch}
+                />
+              ),
+            )
+          ) : normalizedQuery ? (
+            <EmptyState
+              title="No staff distribution history found"
+              description={`No county workbook assignment history matched "${staffQuery}". Try the staff member's full name or DueQuity email address.`}
+            />
+          ) : (
+            <EmptyState
+              title="No assignment batches yet"
+              description="County workbook distributions will appear here after they are confirmed."
+            />
+          )}
+        </div>
+
+        {filteredManualAssignments.length >
+        0 ? (
+          <div className="mt-5 rounded-2xl border border-line bg-inset px-5 py-4">
+            <p className="text-sm font-semibold text-ink-900">
+              Individual assignment history
+            </p>
+
+            <p className="mt-1 text-xs text-ink-500">
+              {
+                filteredManualAssignments.length
+              }{" "}
+              historical individual assignment
+              {filteredManualAssignments.length ===
+              1
+                ? ""
+                : "s"}{" "}
+              {normalizedQuery
+                ? `also tied to ${staffQuery}.`
+                : "recorded."}{" "}
+              Lead-level contents remain available through individual lead search rather than expanding inside the ledger.
+            </p>
+          </div>
+        ) : null}
+      </CardBody>
+    </Card>
+  );
+}
 
 export default async function LeadDistributionPage({
   searchParams,
@@ -720,10 +1155,13 @@ export default async function LeadDistributionPage({
   const query =
     params.q
       ?.trim()
-      .slice(
-        0,
-        200,
-      ) ??
+      .slice(0, 200) ??
+    "";
+
+  const staffQuery =
+    params.staff
+      ?.trim()
+      .slice(0, 200) ??
     "";
 
   const savedLead =
@@ -732,11 +1170,11 @@ export default async function LeadDistributionPage({
     "";
 
   const shouldSearch =
-    query.length >=
-      2;
+    query.length >= 2;
 
   const [
     staffOptions,
+    ledger,
     searchResult,
   ] =
     await Promise.all([
@@ -744,20 +1182,19 @@ export default async function LeadDistributionPage({
         session,
       ),
 
+      listLeadDistributionLedger(
+        session,
+      ),
+
       shouldSearch
         ? searchLeadDistributionDiscoveryRecords({
             session,
-
             query,
           })
         : Promise.resolve({
             query,
-
-            totalMatches:
-              0,
-
-            records:
-              [],
+            totalMatches: 0,
+            records: [],
           }),
     ]);
 
@@ -772,216 +1209,60 @@ export default async function LeadDistributionPage({
           Lead Distribution
         </h1>
 
-        <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-600">
-          Upload county lead workbooks or distribute individual recovery records. Staff access remains limited to the exact records assigned to them.
+        <p className="mt-1.5 max-w-4xl text-sm leading-relaxed text-ink-600">
+          Preflight county workbooks, prevent accidental duplicate distribution, stamp every active assignment, and review the complete staff distribution history from one controlled workspace.
         </p>
       </div>
 
-      <UploadStatus
-        status={
-          params.status
-        }
-        batch={
-          params.batch
-        }
-        county={
-          params.county
-        }
-        state={
-          params.state
-        }
-        staff={
-          params.staff
-        }
-        rows={
-          params.rows
-        }
-        assigned={
-          params.assigned
-        }
-        skipped={
-          params.skipped
-        }
+      <AssignmentStatus
+        status={params.status}
       />
 
-      {params.status ===
-        "assigned" && (
-        <Callout
-          tone="positive"
-          title="Lead assignment saved"
-          role="status"
-        >
-          The selected staff member now has controlled access to this recovery lead. Previous assignment history, if any, was preserved.
-        </Callout>
-      )}
-
-      {params.status ===
-        "invalid" && (
-        <Callout
-          tone="critical"
-          title="Select a staff member"
-          role="alert"
-        >
-          Choose the staff member who should receive this lead.
-        </Callout>
-      )}
-
-      {params.status ===
-        "state-not-cleared" && (
-        <Callout
-          tone="critical"
-          title="Staff clearance does not permit assignment"
-          role="alert"
-        >
-          The selected staff member is not cleared to work leads in this state.
-        </Callout>
-      )}
-
-      {params.status ===
-        "already-promoted" && (
-        <Callout
-          tone="caution"
-          title="Lead already promoted"
-          role="alert"
-        >
-          This recovery has already moved to Opportunity. Manage its assignment through the Opportunity workflow.
-        </Callout>
-      )}
-
-      {params.status ===
-        "not-authorized" && (
-        <Callout
-          tone="critical"
-          title="Administrator access required"
-          role="alert"
-        >
-          Your account is not authorized to distribute DueQuity leads.
-        </Callout>
-      )}
-
-      {params.status ===
-        "unavailable" && (
-        <Callout
-          tone="critical"
-          title="Assignment could not be saved"
-          role="alert"
-        >
-          DueQuity could not complete the lead assignment. No access change was made.
-        </Callout>
-      )}
-
-      {/* ================================================================== */}
-      {/* County workbook upload                                              */}
-      {/* ================================================================== */}
-
-      <Card>
-        <CardHeader
-          title="Upload county leads"
-          description="Upload a DueQuity .xlsx workbook for one county and assign its eligible Discovery records to one staff member."
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric
+          label="Active distributed leads"
+          value={
+            ledger.activeAssignmentRecords
+          }
+          note="Exactly one active owner is permitted per recovery lead."
         />
 
-        <CardBody>
-          <form
-            action={
-              uploadAndAssignLeadWorkbookAction
-            }
-            className="space-y-5"
-          >
-            <div className="grid gap-5 lg:grid-cols-2">
-              <div className="space-y-2">
-                <label
-                  htmlFor="leadWorkbook"
-                  className="block text-sm font-semibold text-ink-800"
-                >
-                  County lead workbook
-                </label>
+        <Metric
+          label="Viewed by staff"
+          value={`${ledger.viewedActiveAssignments}/${ledger.activeAssignmentRecords}`}
+          note="First-view receipts recorded by My Leads."
+        />
 
-                <input
-                  id="leadWorkbook"
-                  name="leadWorkbook"
-                  type="file"
-                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                  required
-                  className="block w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-800 file:mr-4 file:rounded-lg file:border-0 file:bg-ink-950 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-white"
-                />
+        <Metric
+          label="Assignment batches"
+          value={ledger.batchCount}
+          note="County workbook batches preserved with file fingerprints."
+        />
 
-                <p className="text-xs leading-relaxed text-ink-500">
-                  Maximum 15 MB. Workbook must include DueQuity Record ID, County and State. One county per workbook.
-                </p>
-              </div>
+        <Metric
+          label="Historical assignments"
+          value={
+            ledger.totalAssignmentRecords
+          }
+          note="Active and ended assignment records remain auditable."
+        />
+      </div>
 
-              <div className="space-y-2">
-                <label
-                  htmlFor="uploadStaffUserId"
-                  className="block text-sm font-semibold text-ink-800"
-                >
-                  Assign workbook to
-                </label>
+      <LeadWorkbookDistributionPanel
+        staffOptions={staffOptions}
+      />
 
-                <select
-                  id="uploadStaffUserId"
-                  name="staffUserId"
-                  required
-                  defaultValue=""
-                  className="w-full rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
-                >
-                  <option value="">
-                    Select staff member
-                  </option>
-
-                  {staffOptions.map(
-                    (
-                      staff,
-                    ) => (
-                      <option
-                        key={
-                          staff.id
-                        }
-                        value={
-                          staff.id
-                        }
-                      >
-                        {staff.name} · {staff.title} · {staffClearanceLabel(
-                          staff,
-                        )}
-                      </option>
-                    ),
-                  )}
-                </select>
-
-                <p className="text-xs leading-relaxed text-ink-500">
-                  The selected staff member receives exact record-level access to the eligible leads inside this workbook.
-                </p>
-              </div>
-            </div>
-
-            <Callout
-              tone="neutral"
-              title="Assignment-scoped staff download"
-            >
-              DueQuity preserves each uploaded row with its assignment batch. Staff download access will contain only the recovery leads currently assigned to that staff member, never an unrelated county-wide workbook.
-            </Callout>
-
-            <div className="flex justify-end">
-              <button
-                type="submit"
-                className="rounded-xl bg-accent-700 px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-              >
-                Upload &amp; assign workbook
-              </button>
-            </div>
-          </form>
-        </CardBody>
-      </Card>
-
-      {/* ================================================================== */}
-      {/* Manual individual assignment                                       */}
-      {/* ================================================================== */}
+      <AssignmentLedger
+        ledger={ledger}
+        staffQuery={
+          staffQuery
+        }
+      />
 
       <Card>
         <CardHeader
           title="Find individual recovery lead"
-          description="Search an existing Discovery record when you need to assign or reassign one specific lead."
+          description="Search an existing Discovery record to see its assignment stamp, assign it if unowned, or explicitly reassign it when a deliberate transfer is required."
         />
 
         <CardBody>
@@ -993,9 +1274,7 @@ export default async function LeadDistributionPage({
               <input
                 name="q"
                 type="search"
-                defaultValue={
-                  query
-                }
+                defaultValue={query}
                 placeholder="Example: Charles Cooper"
                 className="min-w-0 flex-1 rounded-xl border border-line bg-white px-4 py-3 text-sm text-ink-900 outline-none transition focus:border-accent-400 focus:ring-2 focus:ring-accent-100"
               />
@@ -1011,34 +1290,29 @@ export default async function LeadDistributionPage({
         </CardBody>
       </Card>
 
-      {query.length ===
-        1 && (
+      {query.length === 1 ? (
         <Callout
           tone="caution"
           title="Enter more information"
         >
           Enter at least two characters to search recovery leads.
         </Callout>
-      )}
+      ) : null}
 
       {shouldSearch &&
-        searchResult.totalMatches ===
-          0 && (
-          <EmptyState
-            title="No matching Discovery lead"
-            description="No active Discovery-stage recovery record matched this search."
-          />
-        )}
+      searchResult.totalMatches === 0 ? (
+        <EmptyState
+          title="No matching Discovery lead"
+          description="No active Discovery-stage recovery record matched this search."
+        />
+      ) : null}
 
-      {searchResult.totalMatches >
-        0 && (
+      {searchResult.totalMatches > 0 ? (
         <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-ink-900">
-                {
-                  searchResult.totalMatches
-                }{" "}
+                {searchResult.totalMatches}{" "}
                 matching{" "}
                 {searchResult.totalMatches ===
                 1
@@ -1047,7 +1321,7 @@ export default async function LeadDistributionPage({
               </p>
 
               <p className="mt-0.5 text-xs text-ink-500">
-                Assign only the exact recovery records the staff member should work.
+                Every currently assigned record carries its staff, date and view stamp. Ordinary assignment cannot overwrite it.
               </p>
             </div>
 
@@ -1057,33 +1331,26 @@ export default async function LeadDistributionPage({
           </div>
 
           {searchResult.records.map(
-            (
-              record,
-            ) => (
+            (record) => (
               <DistributionLeadCard
-                key={
-                  record.id
-                }
-                record={
-                  record
-                }
+                key={record.id}
+                record={record}
                 staffOptions={
                   staffOptions
                 }
-                query={
-                  query
-                }
+                query={query}
                 recentlySaved={
-                  params.status ===
-                    "assigned" &&
-                  savedLead ===
-                    record.id
+                  (params.status ===
+                    "assigned" ||
+                    params.status ===
+                      "reassigned") &&
+                  savedLead === record.id
                 }
               />
             ),
           )}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -1,15 +1,23 @@
 "use server";
 
 import {
+  revalidatePath,
+} from "next/cache";
+
+import {
   redirect,
 } from "next/navigation";
 
 import {
   assignDiscoveryLeadFromDistribution,
+  reassignDiscoveryLeadFromDistribution,
 } from "@/server/lead-distribution-service";
 
 import {
+  preflightLeadWorkbook,
   uploadAndAssignLeadWorkbook,
+  type LeadWorkbookPreflight,
+  type LeadWorkbookUploadResult,
 } from "@/server/lead-upload-service";
 
 import {
@@ -17,19 +25,39 @@ import {
 } from "@/server/staff-session";
 
 /* ========================================================================== */
-/* Helpers                                                                     */
+/* Public action results                                                      */
+/* ========================================================================== */
+
+export type LeadWorkbookPreflightActionResult =
+  | {
+      ok: true;
+      preflight: LeadWorkbookPreflight;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+export type LeadWorkbookAssignmentActionResult =
+  | {
+      ok: true;
+      result: LeadWorkbookUploadResult;
+    }
+  | {
+      ok: false;
+      error: string;
+    };
+
+/* ========================================================================== */
+/* Helpers                                                                    */
 /* ========================================================================== */
 
 function formText(
-  formData:
-    FormData,
-  key:
-    string,
+  formData: FormData,
+  key: string,
 ): string {
   const value =
-    formData.get(
-      key,
-    );
+    formData.get(key);
 
   return typeof value ===
     "string"
@@ -37,103 +65,172 @@ function formText(
     : "";
 }
 
-function uploadErrorStatus(
-  error:
-    unknown,
+function actionError(
+  error: unknown,
+  fallback: string,
 ): string {
-  const message =
-    error instanceof Error
-      ? error.message
-      : "";
-
-  if (
-    message.includes(
-      "15 MB",
-    )
-  ) {
-    return "upload-too-large";
-  }
-
-  if (
-    message.includes(
-      ".xlsx",
-    )
-  ) {
-    return "upload-file-type";
-  }
-
-  if (
-    message.includes(
-      "required workbook headers",
-    ) ||
-    message.includes(
-      "missing required DueQuity lead columns",
-    )
-  ) {
-    return "upload-columns";
-  }
-
-  if (
-    message.includes(
-      "exactly one county and one state",
-    )
-  ) {
-    return "upload-mixed-county";
-  }
-
-  if (
-    message.includes(
-      "do not exist in the current recovery database",
-    )
-  ) {
-    return "upload-records-missing";
-  }
-
-  if (
-    message.includes(
-      "duplicate DueQuity Record IDs",
-    )
-  ) {
-    return "upload-duplicates";
-  }
-
-  if (
-    message.includes(
-      "not currently cleared",
-    )
-  ) {
-    return "upload-state-not-cleared";
-  }
-
-  if (
-    message.includes(
-      "None of the workbook leads are currently assignable",
-    )
-  ) {
-    return "upload-none-assignable";
-  }
-
-  if (
-    message.includes(
-      "Administrator",
-    ) ||
-    message.includes(
-      "administrator",
-    )
-  ) {
-    return "not-authorized";
-  }
-
-  return "upload-failed";
+  return error instanceof Error &&
+    error.message.trim()
+    ? error.message
+    : fallback;
 }
 
 /* ========================================================================== */
-/* Manual single-lead assignment                                               */
+/* Workbook preflight                                                         */
+/* ========================================================================== */
+
+export async function preflightLeadWorkbookAction(
+  formData: FormData,
+): Promise<
+  LeadWorkbookPreflightActionResult
+> {
+  const session =
+    await resolveStaffSession();
+
+  if (!session) {
+    return {
+      ok: false,
+      error:
+        "Your staff session has expired. Sign in again before distributing leads.",
+    };
+  }
+
+  const staffUserId =
+    formText(
+      formData,
+      "staffUserId",
+    );
+
+  const fileEntry =
+    formData.get(
+      "leadWorkbook",
+    );
+
+  if (
+    !staffUserId ||
+    !(fileEntry instanceof File) ||
+    fileEntry.size <= 0
+  ) {
+    return {
+      ok: false,
+      error:
+        "Choose an Excel workbook and the staff member who should receive it.",
+    };
+  }
+
+  try {
+    const preflight =
+      await preflightLeadWorkbook({
+        session,
+        file: fileEntry,
+        staffUserId,
+      });
+
+    return {
+      ok: true,
+      preflight,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        actionError(
+          error,
+          "DueQuity could not inspect this workbook.",
+        ),
+    };
+  }
+}
+
+/* ========================================================================== */
+/* Confirm workbook assignment                                                */
+/* ========================================================================== */
+
+export async function confirmLeadWorkbookAssignmentAction(
+  formData: FormData,
+): Promise<
+  LeadWorkbookAssignmentActionResult
+> {
+  const session =
+    await resolveStaffSession();
+
+  if (!session) {
+    return {
+      ok: false,
+      error:
+        "Your staff session has expired. Sign in again before distributing leads.",
+    };
+  }
+
+  const staffUserId =
+    formText(
+      formData,
+      "staffUserId",
+    );
+
+  const confirmationKey =
+    formText(
+      formData,
+      "confirmationKey",
+    );
+
+  const fileEntry =
+    formData.get(
+      "leadWorkbook",
+    );
+
+  if (
+    !staffUserId ||
+    !confirmationKey ||
+    !(fileEntry instanceof File) ||
+    fileEntry.size <= 0
+  ) {
+    return {
+      ok: false,
+      error:
+        "Run Check workbook before confirming the assignment.",
+    };
+  }
+
+  try {
+    const result =
+      await uploadAndAssignLeadWorkbook({
+        session,
+        file: fileEntry,
+        staffUserId,
+        confirmationKey,
+      });
+
+    revalidatePath(
+      "/pro/lead-distribution",
+    );
+
+    revalidatePath(
+      "/pro/my-leads",
+    );
+
+    return {
+      ok: true,
+      result,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        actionError(
+          error,
+          "DueQuity could not distribute this workbook.",
+        ),
+    };
+  }
+}
+
+/* ========================================================================== */
+/* Manual single-lead assignment                                              */
 /* ========================================================================== */
 
 export async function assignDiscoveryLeadAction(
-  formData:
-    FormData,
+  formData: FormData,
 ): Promise<void> {
   const session =
     await resolveStaffSession();
@@ -179,18 +276,25 @@ export async function assignDiscoveryLeadAction(
   try {
     await assignDiscoveryLeadFromDistribution({
       session,
-
       discoveredRecordId,
-
       staffUserId,
     });
-  } catch (
-    error
-  ) {
+  } catch (error) {
     const message =
-      error instanceof Error
-        ? error.message
-        : "";
+      actionError(
+        error,
+        "",
+      );
+
+    if (
+      message.includes(
+        "already actively assigned",
+      )
+    ) {
+      redirect(
+        `${returnUrl}&status=already-assigned`,
+      );
+    }
 
     if (
       message.includes(
@@ -238,12 +342,11 @@ export async function assignDiscoveryLeadAction(
 }
 
 /* ========================================================================== */
-/* County workbook upload + assignment                                         */
+/* Explicit single-lead reassignment                                          */
 /* ========================================================================== */
 
-export async function uploadAndAssignLeadWorkbookAction(
-  formData:
-    FormData,
+export async function reassignDiscoveryLeadAction(
+  formData: FormData,
 ): Promise<void> {
   const session =
     await resolveStaffSession();
@@ -254,116 +357,100 @@ export async function uploadAndAssignLeadWorkbookAction(
     );
   }
 
+  const discoveredRecordId =
+    formText(
+      formData,
+      "discoveredRecordId",
+    );
+
   const staffUserId =
     formText(
       formData,
       "staffUserId",
     );
 
-  const fileEntry =
-    formData.get(
-      "leadWorkbook",
+  const expectedCurrentAssignmentId =
+    formText(
+      formData,
+      "expectedCurrentAssignmentId",
     );
 
+  const confirmation =
+    formText(
+      formData,
+      "confirmReassign",
+    );
+
+  const query =
+    formText(
+      formData,
+      "q",
+    );
+
+  const returnUrl =
+    `/pro/lead-distribution?q=${encodeURIComponent(
+      query,
+    )}`;
+
   if (
+    !discoveredRecordId ||
     !staffUserId ||
-    !(fileEntry instanceof File) ||
-    fileEntry.size <=
-      0
+    !expectedCurrentAssignmentId ||
+    confirmation !== "yes"
   ) {
     redirect(
-      "/pro/lead-distribution?status=upload-invalid",
+      `${returnUrl}&status=reassign-confirmation-required`,
     );
   }
 
   try {
-    const result =
-      await uploadAndAssignLeadWorkbook({
-        session,
-
-        file:
-          fileEntry,
-
-        staffUserId,
-      });
-
-    const params =
-      new URLSearchParams({
-        status:
-          "upload-assigned",
-
-        batch:
-          result.batchReference,
-
-        county:
-          result.county,
-
-        state:
-          result.stateCode,
-
-        staff:
-          result.assignedStaffName,
-
-        rows:
-          String(
-            result.sourceRowCount,
-          ),
-
-        assigned:
-          String(
-            result.assignedRowCount,
-          ),
-
-        skipped:
-          String(
-            result.skippedRowCount,
-          ),
-      });
-
-    redirect(
-      `/pro/lead-distribution?${params.toString()}`,
-    );
-  } catch (
-    error
-  ) {
-    /*
-     * Next.js redirect() throws internally, so successful redirects must
-     * never be swallowed by this catch block.
-     */
-    if (
-      error &&
-      typeof error ===
-        "object" &&
-      "digest" in
-        error &&
-      typeof (
-        error as {
-          digest?:
-            unknown;
-        }
-      ).digest ===
-        "string" &&
-      (
-        error as {
-          digest:
-            string;
-        }
-      ).digest.startsWith(
-        "NEXT_REDIRECT",
-      )
-    ) {
-      throw error;
-    }
-
-    const status =
-      uploadErrorStatus(
+    await reassignDiscoveryLeadFromDistribution({
+      session,
+      discoveredRecordId,
+      staffUserId,
+      expectedCurrentAssignmentId,
+    });
+  } catch (error) {
+    const message =
+      actionError(
         error,
+        "",
       );
 
+    if (
+      message.includes(
+        "lead assignment changed",
+      ) ||
+      message.includes(
+        "active lead assignment no longer exists",
+      ) ||
+      message.includes(
+        "no longer has the active assignment",
+      )
+    ) {
+      redirect(
+        `${returnUrl}&status=reassign-stale`,
+      );
+    }
+
+    if (
+      message.includes(
+        "not currently cleared",
+      )
+    ) {
+      redirect(
+        `${returnUrl}&status=state-not-cleared`,
+      );
+    }
+
     redirect(
-      `/pro/lead-distribution?status=${encodeURIComponent(
-        status,
-      )}`,
+      `${returnUrl}&status=reassign-failed`,
     );
   }
+
+  redirect(
+    `${returnUrl}&status=reassigned&savedLead=${encodeURIComponent(
+      discoveredRecordId,
+    )}`,
+  );
 }

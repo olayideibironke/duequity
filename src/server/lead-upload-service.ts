@@ -19,6 +19,55 @@ import {
 /* Public types                                                               */
 /* ========================================================================== */
 
+export interface LeadWorkbookConflict {
+  recordId: string;
+  formerOwnerName: string;
+  county: string;
+  stateCode: string;
+  assignedStaffUserId: string;
+  assignedStaffName: string;
+  assignedStaffEmail: string;
+  assignedAt: string;
+}
+
+export interface LeadWorkbookUnavailableRow {
+  recordId: string;
+  formerOwnerName: string;
+  status: string;
+  reason: string;
+}
+
+export interface LeadWorkbookDuplicateBatch {
+  batchId: string;
+  batchReference: string;
+  county: string;
+  stateCode: string;
+  sourceFileName?: string;
+  createdAt: string;
+  uploadedByName: string;
+  uploadedByEmail: string;
+}
+
+export interface LeadWorkbookPreflight {
+  fileName: string;
+  fileSha256: string;
+  sheetName: string;
+  county: string;
+  stateCode: string;
+  staffUserId: string;
+  staffName: string;
+  staffEmail: string;
+  sourceRowCount: number;
+  availableRowCount: number;
+  alreadyAssignedRowCount: number;
+  unavailableRowCount: number;
+  duplicateWorkbook?: LeadWorkbookDuplicateBatch;
+  conflicts: LeadWorkbookConflict[];
+  unavailableRows: LeadWorkbookUnavailableRow[];
+  canAssign: boolean;
+  confirmationKey: string;
+}
+
 export interface LeadWorkbookUploadResult {
   batchId: string;
   batchReference: string;
@@ -50,6 +99,7 @@ interface ParsedWorkbookRow {
 interface DiscoveredRecordRow {
   id: string;
   status: string;
+  former_owner_name: string;
   county: string;
   state_code: string;
   promoted_opportunity_id:
@@ -59,15 +109,55 @@ interface DiscoveredRecordRow {
 interface StaffUserRow {
   id: string;
   name: string;
+  email: string;
   role: string;
   status: string;
   states_cleared:
     string[] | null;
 }
 
+interface ExistingAssignmentRow {
+  id: string;
+  discovered_record_id: string | null;
+  assigned_to_staff_user_id: string;
+  assigned_at: string;
+}
+
+interface ExistingBatchRow {
+  id: string;
+  reference: string;
+  source_file_name: string | null;
+  state_code: string;
+  county_name: string;
+  uploaded_by_staff_user_id: string;
+  created_at: string;
+}
+
 interface CreatedBatchRow {
   id: string;
   reference: string;
+}
+
+interface WorkbookInspection {
+  fileName: string;
+  fileSha256: string;
+  sheetName: string;
+  headerRowNumber: number;
+  headers: string[];
+  parsedRows: ParsedWorkbookRow[];
+  stateCode: string;
+  county: string;
+  staff: StaffUserRow;
+  discoveredById:
+    Map<string, DiscoveredRecordRow>;
+  availableRows: ParsedWorkbookRow[];
+  unavailableRows:
+    LeadWorkbookUnavailableRow[];
+  conflicts:
+    LeadWorkbookConflict[];
+  duplicateWorkbook?:
+    LeadWorkbookDuplicateBatch;
+  confirmationKey: string;
 }
 
 /* ========================================================================== */
@@ -216,6 +306,59 @@ function buildBatchReference({
       .slice(0, 8)
       .toUpperCase(),
   ].join("-");
+}
+
+function confirmationKeyFor({
+  fileSha256,
+  staffUserId,
+  availableRows,
+  conflicts,
+  unavailableRows,
+  duplicateBatchId,
+}: {
+  fileSha256: string;
+  staffUserId: string;
+  availableRows: ParsedWorkbookRow[];
+  conflicts: LeadWorkbookConflict[];
+  unavailableRows:
+    LeadWorkbookUnavailableRow[];
+  duplicateBatchId?: string;
+}): string {
+  const snapshot = {
+    fileSha256,
+    staffUserId,
+    availableRecordIds:
+      availableRows
+        .map(
+          (row) =>
+            row.discoveredRecordId,
+        )
+        .sort(),
+    conflictingRecordIds:
+      conflicts
+        .map(
+          (row) =>
+            `${row.recordId}:${row.assignedStaffUserId}`,
+        )
+        .sort(),
+    unavailableRecordIds:
+      unavailableRows
+        .map(
+          (row) =>
+            `${row.recordId}:${row.status}`,
+        )
+        .sort(),
+    duplicateBatchId:
+      duplicateBatchId ??
+      null,
+  };
+
+  return createHash("sha256")
+    .update(
+      JSON.stringify(snapshot),
+      "utf8",
+    )
+    .digest("hex");
 }
 
 /* ========================================================================== */
@@ -448,10 +591,129 @@ function parseWorkbookRows({
 }
 
 /* ========================================================================== */
-/* Upload + assign                                                            */
+/* Chunked reads                                                              */
 /* ========================================================================== */
 
-export async function uploadAndAssignLeadWorkbook({
+async function loadDiscoveredRecords(
+  recordIds: string[],
+): Promise<DiscoveredRecordRow[]> {
+  const admin =
+    getSupabaseAdmin();
+
+  let rows:
+    DiscoveredRecordRow[] = [];
+
+  for (
+    let index = 0;
+    index < recordIds.length;
+    index += 200
+  ) {
+    const chunk =
+      recordIds.slice(
+        index,
+        index + 200,
+      );
+
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from("discovered_records")
+        .select(
+          [
+            "id",
+            "status",
+            "former_owner_name",
+            "county",
+            "state_code",
+            "promoted_opportunity_id",
+          ].join(", "),
+        )
+        .in(
+          "id",
+          chunk,
+        );
+
+    if (error) {
+      throw new Error(
+        `Unable to verify workbook recovery records: ${error.message}`,
+      );
+    }
+
+    rows =
+      rows.concat(
+        (data ?? []) as unknown as
+          DiscoveredRecordRow[],
+      );
+  }
+
+  return rows;
+}
+
+async function loadActiveAssignments(
+  recordIds: string[],
+): Promise<ExistingAssignmentRow[]> {
+  const admin =
+    getSupabaseAdmin();
+
+  let rows:
+    ExistingAssignmentRow[] = [];
+
+  for (
+    let index = 0;
+    index < recordIds.length;
+    index += 200
+  ) {
+    const chunk =
+      recordIds.slice(
+        index,
+        index + 200,
+      );
+
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from("lead_assignments")
+        .select(
+          "id, discovered_record_id, assigned_to_staff_user_id, assigned_at",
+        )
+        .eq(
+          "subject_type",
+          "discovered_record",
+        )
+        .eq(
+          "status",
+          "active",
+        )
+        .in(
+          "discovered_record_id",
+          chunk,
+        );
+
+    if (error) {
+      throw new Error(
+        `Unable to verify existing lead assignments: ${error.message}`,
+      );
+    }
+
+    rows =
+      rows.concat(
+        (data ?? []) as unknown as
+          ExistingAssignmentRow[],
+      );
+  }
+
+  return rows;
+}
+
+/* ========================================================================== */
+/* Inspection core                                                            */
+/* ========================================================================== */
+
+async function inspectLeadWorkbook({
   session,
   file,
   staffUserId,
@@ -459,9 +721,7 @@ export async function uploadAndAssignLeadWorkbook({
   session: StaffSession;
   file: File;
   staffUserId: string;
-}): Promise<
-  LeadWorkbookUploadResult
-> {
+}): Promise<WorkbookInspection> {
   requireDistributionAdmin(session);
 
   const normalizedStaffUserId =
@@ -495,10 +755,6 @@ export async function uploadAndAssignLeadWorkbook({
     );
   }
 
-  /*
-   * Keep the browser-style ArrayBuffer for ExcelJS.
-   * Node Buffer is created separately for SHA-256 hashing.
-   */
   const arrayBuffer =
     await file.arrayBuffer();
 
@@ -584,76 +840,6 @@ export async function uploadAndAssignLeadWorkbook({
       .county
       .trim();
 
-  const admin =
-    getSupabaseAdmin();
-
-  const {
-    data:
-      staffData,
-    error:
-      staffError,
-  } =
-    await admin
-      .from("staff_users")
-      .select(
-        [
-          "id",
-          "name",
-          "role",
-          "status",
-          "states_cleared",
-        ].join(", "),
-      )
-      .eq(
-        "id",
-        normalizedStaffUserId,
-      )
-      .maybeSingle();
-
-  if (
-    staffError ||
-    !staffData
-  ) {
-    throw new Error(
-      "The selected DueQuity staff member could not be resolved.",
-    );
-  }
-
-  const staff =
-    staffData as unknown as
-      StaffUserRow;
-
-  if (
-    staff.status !== "active"
-  ) {
-    throw new Error(
-      "Lead workbooks may only be assigned to an active staff member.",
-    );
-  }
-
-  /*
-   * Super Admin remains excluded from ordinary county/workbook assignment.
-   * An active Administrator is intentionally allowed to receive assigned work.
-   */
-  if (
-    staff.role === "super_admin"
-  ) {
-    throw new Error(
-      "The Super Admin account is not an ordinary lead-workbook assignment target.",
-    );
-  }
-
-  if (
-    !staffClearedForState({
-      staff,
-      stateCode,
-    })
-  ) {
-    throw new Error(
-      `${staff.name} is not currently cleared to work ${stateCode} leads.`,
-    );
-  }
-
   const recordIds =
     Array.from(
       new Set(
@@ -673,46 +859,118 @@ export async function uploadAndAssignLeadWorkbook({
     );
   }
 
-  const {
-    data:
-      recordData,
-    error:
-      recordError,
-  } =
-    await admin
-      .from("discovered_records")
-      .select(
-        [
-          "id",
-          "status",
-          "county",
-          "state_code",
-          "promoted_opportunity_id",
-        ].join(", "),
-      )
-      .in(
-        "id",
-        recordIds,
-      );
+  const admin =
+    getSupabaseAdmin();
 
-  if (recordError) {
+  const [
+    staffResult,
+    discoveredRowsRaw,
+    activeAssignmentsRaw,
+    duplicateBatchResult,
+  ] =
+    await Promise.all([
+      admin
+        .from("staff_users")
+        .select(
+          "id, name, email, role, status, states_cleared",
+        )
+        .eq(
+          "id",
+          normalizedStaffUserId,
+        )
+        .maybeSingle(),
+
+      loadDiscoveredRecords(
+        recordIds,
+      ),
+
+      loadActiveAssignments(
+        recordIds,
+      ),
+
+      admin
+        .from("lead_assignment_batches")
+        .select(
+          "id, reference, source_file_name, state_code, county_name, uploaded_by_staff_user_id, created_at",
+        )
+        .eq(
+          "source_file_sha256",
+          fileSha256,
+        )
+        .neq(
+          "status",
+          "cancelled",
+        )
+        .order(
+          "created_at",
+          {
+            ascending: false,
+          },
+        )
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  const discoveredRows =
+    discoveredRowsRaw as
+      DiscoveredRecordRow[];
+
+  const activeAssignments =
+    activeAssignmentsRaw as
+      ExistingAssignmentRow[];
+
+  if (
+    staffResult.error ||
+    !staffResult.data
+  ) {
     throw new Error(
-      `Unable to verify workbook recovery records: ${recordError.message}`,
+      "The selected DueQuity staff member could not be resolved.",
     );
   }
 
-  const discoveredRows =
-    (
-      recordData ?? []
-    ) as unknown as
-      DiscoveredRecordRow[];
+  if (duplicateBatchResult.error) {
+    throw new Error(
+      `Unable to verify prior workbook history: ${duplicateBatchResult.error.message}`,
+    );
+  }
+
+  const staff =
+    staffResult.data as unknown as
+      StaffUserRow;
+
+  if (
+    staff.status !== "active"
+  ) {
+    throw new Error(
+      "Lead workbooks may only be assigned to an active staff member.",
+    );
+  }
+
+  if (
+    staff.role === "super_admin"
+  ) {
+    throw new Error(
+      "The Super Admin account is not an ordinary lead-workbook assignment target.",
+    );
+  }
+
+  if (
+    !staffClearedForState({
+      staff,
+      stateCode,
+    })
+  ) {
+    throw new Error(
+      `${staff.name} is not currently cleared to work ${stateCode} leads.`,
+    );
+  }
 
   const discoveredById =
     new Map(
       discoveredRows.map(
-        (row) => [
-          row.id,
-          row,
+        (record) => [
+          record.id,
+          record,
         ],
       ),
     );
@@ -734,12 +992,6 @@ export async function uploadAndAssignLeadWorkbook({
       } that do not exist in the current recovery database.`,
     );
   }
-
-  const assignableRows:
-    ParsedWorkbookRow[] = [];
-
-  const skippedRecordIds:
-    string[] = [];
 
   for (
     const parsedRow
@@ -768,38 +1020,407 @@ export async function uploadAndAssignLeadWorkbook({
         `DueQuity record ${record.id} does not match the county/state shown in the uploaded workbook.`,
       );
     }
+  }
 
-    if (
-      (
-        record.status !== "new" &&
-        record.status !== "reviewed"
-      ) ||
-      record
-        .promoted_opportunity_id
-    ) {
-      skippedRecordIds.push(
-        record.id,
+  const staffIds =
+    [
+      ...new Set(
+        activeAssignments.map(
+          (assignment) =>
+            assignment
+              .assigned_to_staff_user_id,
+        ),
+      ),
+    ];
+
+  const staffById =
+    new Map<string, {
+      name: string;
+      email: string;
+    }>();
+
+  if (
+    staffIds.length > 0
+  ) {
+    const {
+      data,
+      error,
+    } =
+      await admin
+        .from("staff_users")
+        .select(
+          "id, name, email",
+        )
+        .in(
+          "id",
+          staffIds,
+        );
+
+    if (error) {
+      throw new Error(
+        `Unable to resolve existing lead owners: ${error.message}`,
       );
+    }
+
+    for (
+      const row
+      of data ?? []
+    ) {
+      staffById.set(
+        String(row.id),
+        {
+          name:
+            String(row.name),
+          email:
+            String(row.email),
+        },
+      );
+    }
+  }
+
+  const assignmentByRecordId =
+    new Map(
+      activeAssignments
+        .filter(
+          (assignment) =>
+            Boolean(
+              assignment
+                .discovered_record_id,
+            ),
+        )
+        .map(
+          (assignment) => [
+            assignment
+              .discovered_record_id as string,
+            assignment,
+          ],
+        ),
+    );
+
+  const conflicts:
+    LeadWorkbookConflict[] = [];
+
+  const unavailableRows:
+    LeadWorkbookUnavailableRow[] = [];
+
+  const availableRows:
+    ParsedWorkbookRow[] = [];
+
+  for (
+    const parsedRow
+    of parsedRows
+  ) {
+    const record =
+      discoveredById.get(
+        parsedRow
+          .discoveredRecordId,
+      );
+
+    if (!record) {
       continue;
     }
 
-    assignableRows.push(
+    const existingAssignment =
+      assignmentByRecordId.get(
+        record.id,
+      );
+
+    if (existingAssignment) {
+      const owner =
+        staffById.get(
+          existingAssignment
+            .assigned_to_staff_user_id,
+        );
+
+      conflicts.push({
+        recordId:
+          record.id,
+        formerOwnerName:
+          record.former_owner_name,
+        county:
+          record.county,
+        stateCode:
+          record.state_code,
+        assignedStaffUserId:
+          existingAssignment
+            .assigned_to_staff_user_id,
+        assignedStaffName:
+          owner?.name ??
+          "Unknown staff",
+        assignedStaffEmail:
+          owner?.email ??
+          "Unknown",
+        assignedAt:
+          existingAssignment
+            .assigned_at,
+      });
+
+      continue;
+    }
+
+    if (
+      record.status !== "new" &&
+      record.status !== "reviewed"
+    ) {
+      unavailableRows.push({
+        recordId:
+          record.id,
+        formerOwnerName:
+          record.former_owner_name,
+        status:
+          record.status,
+        reason:
+          "Record is no longer in an assignable Discovery stage.",
+      });
+
+      continue;
+    }
+
+    if (
+      record
+        .promoted_opportunity_id
+    ) {
+      unavailableRows.push({
+        recordId:
+          record.id,
+        formerOwnerName:
+          record.former_owner_name,
+        status:
+          "promoted",
+        reason:
+          "Record has already been promoted to an Opportunity.",
+      });
+
+      continue;
+    }
+
+    availableRows.push(
       parsedRow,
     );
   }
 
+  let duplicateWorkbook:
+    LeadWorkbookDuplicateBatch |
+    undefined;
+
   if (
-    assignableRows.length === 0
+    duplicateBatchResult.data
+  ) {
+    const batch =
+      duplicateBatchResult.data as unknown as
+        ExistingBatchRow;
+
+    const uploaderResult =
+      await admin
+        .from("staff_users")
+        .select(
+          "id, name, email",
+        )
+        .eq(
+          "id",
+          batch
+            .uploaded_by_staff_user_id,
+        )
+        .maybeSingle();
+
+    duplicateWorkbook = {
+      batchId:
+        batch.id,
+      batchReference:
+        batch.reference,
+      county:
+        batch.county_name,
+      stateCode:
+        batch.state_code,
+      sourceFileName:
+        batch.source_file_name ??
+        undefined,
+      createdAt:
+        batch.created_at,
+      uploadedByName:
+        uploaderResult.data?.name ??
+        "Unknown staff",
+      uploadedByEmail:
+        uploaderResult.data?.email ??
+        "Unknown",
+    };
+  }
+
+  const confirmationKey =
+    confirmationKeyFor({
+      fileSha256,
+      staffUserId:
+        staff.id,
+      availableRows,
+      conflicts,
+      unavailableRows,
+      duplicateBatchId:
+        duplicateWorkbook
+          ?.batchId,
+    });
+
+  return {
+    fileName,
+    fileSha256,
+    sheetName:
+      worksheet.name,
+    headerRowNumber,
+    headers,
+    parsedRows,
+    stateCode,
+    county,
+    staff,
+    discoveredById,
+    availableRows,
+    unavailableRows,
+    conflicts,
+    duplicateWorkbook,
+    confirmationKey,
+  };
+}
+
+/* ========================================================================== */
+/* Public preflight                                                           */
+/* ========================================================================== */
+
+export async function preflightLeadWorkbook({
+  session,
+  file,
+  staffUserId,
+}: {
+  session: StaffSession;
+  file: File;
+  staffUserId: string;
+}): Promise<LeadWorkbookPreflight> {
+  const inspection =
+    await inspectLeadWorkbook({
+      session,
+      file,
+      staffUserId,
+    });
+
+  const canAssign =
+    !inspection
+      .duplicateWorkbook &&
+    inspection
+      .conflicts.length === 0 &&
+    inspection
+      .availableRows.length > 0;
+
+  return {
+    fileName:
+      inspection.fileName,
+    fileSha256:
+      inspection.fileSha256,
+    sheetName:
+      inspection.sheetName,
+    county:
+      inspection.county,
+    stateCode:
+      inspection.stateCode,
+    staffUserId:
+      inspection.staff.id,
+    staffName:
+      inspection.staff.name,
+    staffEmail:
+      inspection.staff.email,
+    sourceRowCount:
+      inspection.parsedRows.length,
+    availableRowCount:
+      inspection.availableRows.length,
+    alreadyAssignedRowCount:
+      inspection.conflicts.length,
+    unavailableRowCount:
+      inspection
+        .unavailableRows.length,
+    duplicateWorkbook:
+      inspection
+        .duplicateWorkbook,
+    conflicts:
+      inspection.conflicts,
+    unavailableRows:
+      inspection
+        .unavailableRows,
+    canAssign,
+    confirmationKey:
+      inspection
+        .confirmationKey,
+  };
+}
+
+/* ========================================================================== */
+/* Confirmed upload + assignment                                              */
+/* ========================================================================== */
+
+export async function uploadAndAssignLeadWorkbook({
+  session,
+  file,
+  staffUserId,
+  confirmationKey,
+}: {
+  session: StaffSession;
+  file: File;
+  staffUserId: string;
+  confirmationKey: string;
+}): Promise<
+  LeadWorkbookUploadResult
+> {
+  const inspection =
+    await inspectLeadWorkbook({
+      session,
+      file,
+      staffUserId,
+    });
+
+  const suppliedKey =
+    confirmationKey.trim();
+
+  if (
+    !suppliedKey ||
+    suppliedKey !==
+      inspection.confirmationKey
+  ) {
+    throw new Error(
+      "Workbook preflight is stale. Run Check workbook again before assigning leads.",
+    );
+  }
+
+  if (
+    inspection
+      .duplicateWorkbook
+  ) {
+    throw new Error(
+      `This exact workbook was already distributed as batch ${inspection.duplicateWorkbook.batchReference}.`,
+    );
+  }
+
+  if (
+    inspection.conflicts.length >
+    0
+  ) {
+    throw new Error(
+      `${inspection.conflicts.length} workbook lead(s) are already actively assigned. No workbook reassignment is permitted.`,
+    );
+  }
+
+  if (
+    inspection.availableRows.length ===
+    0
   ) {
     throw new Error(
       "None of the workbook leads are currently assignable at the Discovery stage.",
     );
   }
 
+  const admin =
+    getSupabaseAdmin();
+
   const batchReference =
     buildBatchReference({
-      stateCode,
-      county,
+      stateCode:
+        inspection.stateCode,
+      county:
+        inspection.county,
     });
 
   const {
@@ -814,43 +1435,63 @@ export async function uploadAndAssignLeadWorkbook({
         p_reference:
           batchReference,
         p_name:
-          `${county}, ${stateCode} · ${fileName}`,
+          `${inspection.county}, ${inspection.stateCode} · ${inspection.fileName}`,
         p_source_file_name:
-          fileName,
+          inspection.fileName,
         p_source_file_sha256:
-          fileSha256,
+          inspection.fileSha256,
         p_state_code:
-          stateCode,
+          inspection.stateCode,
         p_county_geoid:
           null,
         p_county_name:
-          county,
+          inspection.county,
         p_actor_staff_user_id:
           session.user.id,
         p_metadata: {
           sheetName:
-            worksheet.name,
-          headerRowNumber,
-          headers,
+            inspection.sheetName,
+          headerRowNumber:
+            inspection
+              .headerRowNumber,
+          headers:
+            inspection.headers,
           originalRowCount:
-            parsedRows.length,
+            inspection
+              .parsedRows.length,
           assignableRowCount:
-            assignableRows.length,
+            inspection
+              .availableRows.length,
           skippedRowCount:
-            skippedRecordIds.length,
-          skippedRecordIds,
+            inspection
+              .unavailableRows.length,
+          skippedRecordIds:
+            inspection
+              .unavailableRows.map(
+                (row) =>
+                  row.recordId,
+              ),
+          preflightConfirmationKey:
+            inspection
+              .confirmationKey,
+          preflightConfirmedAt:
+            new Date()
+              .toISOString(),
+          duplicateProtection:
+            "exact-file-sha256-and-active-assignment-guard",
         },
         p_rows:
-          assignableRows.map(
-            (row) => ({
-              rowNumber:
-                row.rowNumber,
-              discoveredRecordId:
-                row.discoveredRecordId,
-              sourceRowSnapshot:
-                row.sourceRowSnapshot,
-            }),
-          ),
+          inspection
+            .availableRows.map(
+              (row) => ({
+                rowNumber:
+                  row.rowNumber,
+                discoveredRecordId:
+                  row.discoveredRecordId,
+                sourceRowSnapshot:
+                  row.sourceRowSnapshot,
+              }),
+            ),
       },
     );
 
@@ -859,10 +1500,24 @@ export async function uploadAndAssignLeadWorkbook({
     !Array.isArray(batchData) ||
     batchData.length !== 1
   ) {
-    throw new Error(
+    const message =
       batchError?.message ??
-      "DueQuity could not create the uploaded lead batch.",
-    );
+      "DueQuity could not create the uploaded lead batch.";
+
+    if (
+      message
+        .toLowerCase()
+        .includes("source_file_sha256") ||
+      message
+        .toLowerCase()
+        .includes("unique")
+    ) {
+      throw new Error(
+        "This exact workbook has already been recorded in the DueQuity distribution ledger.",
+      );
+    }
+
+    throw new Error(message);
   }
 
   const createdBatch =
@@ -881,11 +1536,11 @@ export async function uploadAndAssignLeadWorkbook({
         p_batch_id:
           createdBatch.id,
         p_staff_user_id:
-          staff.id,
+          inspection.staff.id,
         p_actor_staff_user_id:
           session.user.id,
         p_note:
-          `Assigned from uploaded workbook ${fileName}`,
+          `Assigned from preflight-approved workbook ${inspection.fileName}`,
       },
     );
 
@@ -904,8 +1559,24 @@ export async function uploadAndAssignLeadWorkbook({
       },
     );
 
+    const message =
+      assignmentError.message;
+
+    if (
+      message.includes(
+        "already actively assigned",
+      ) ||
+      message.includes(
+        "batch assignment blocked",
+      )
+    ) {
+      throw new Error(
+        "A lead assignment changed after preflight. The workbook was blocked and no duplicate assignment was created. Run Check workbook again.",
+      );
+    }
+
     throw new Error(
-      `DueQuity created the upload batch but could not assign it: ${assignmentError.message}`,
+      `DueQuity created the upload batch but could not assign it: ${message}`,
     );
   }
 
@@ -914,27 +1585,37 @@ export async function uploadAndAssignLeadWorkbook({
       assignmentData,
     )
       ? assignmentData.length
-      : assignableRows.length;
+      : inspection
+          .availableRows.length;
 
   return {
     batchId:
       createdBatch.id,
     batchReference:
       createdBatch.reference,
-    fileName,
+    fileName:
+      inspection.fileName,
     sheetName:
-      worksheet.name,
-    county,
-    stateCode,
+      inspection.sheetName,
+    county:
+      inspection.county,
+    stateCode:
+      inspection.stateCode,
     assignedStaffUserId:
-      staff.id,
+      inspection.staff.id,
     assignedStaffName:
-      staff.name,
+      inspection.staff.name,
     sourceRowCount:
-      parsedRows.length,
+      inspection.parsedRows.length,
     assignedRowCount,
     skippedRowCount:
-      skippedRecordIds.length,
-    skippedRecordIds,
+      inspection
+        .unavailableRows.length,
+    skippedRecordIds:
+      inspection
+        .unavailableRows.map(
+          (row) =>
+            row.recordId,
+        ),
   };
 }
