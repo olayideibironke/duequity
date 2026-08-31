@@ -5,7 +5,7 @@ import {
   randomUUID,
 } from "node:crypto";
 
-import ExcelJS from "exceljs";
+import readExcelFile from "read-excel-file/node";
 
 import type {
   StaffSession,
@@ -138,6 +138,11 @@ interface CreatedBatchRow {
   reference: string;
 }
 
+interface WorkbookSheet {
+  sheet: string;
+  data: unknown[][];
+}
+
 interface WorkbookInspection {
   fileName: string;
   fileSha256: string;
@@ -206,10 +211,38 @@ function normalizeCounty(
     .replace(/\s+/g, " ");
 }
 
-function cellText(
-  cell: ExcelJS.Cell,
+function sheetCellText(
+  value: unknown,
 ): string {
-  return cell.text
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  if (
+    value instanceof Date
+  ) {
+    return value.toISOString();
+  }
+
+  if (
+    typeof value === "string"
+  ) {
+    return value
+      .trim()
+      .replace(/\s+/g, " ");
+  }
+
+  if (
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+
+  return String(value)
     .trim()
     .replace(/\s+/g, " ");
 }
@@ -366,43 +399,33 @@ function confirmationKeyFor({
 /* ========================================================================== */
 
 function findHeaderRow(
-  worksheet:
-    ExcelJS.Worksheet,
+  rows: unknown[][],
 ): {
+  rowIndex: number;
   rowNumber: number;
   headers: string[];
 } {
   const scanLimit =
     Math.min(
-      worksheet.rowCount,
+      rows.length,
       25,
     );
 
   for (
-    let rowNumber = 1;
-    rowNumber <= scanLimit;
-    rowNumber += 1
+    let rowIndex = 0;
+    rowIndex < scanLimit;
+    rowIndex += 1
   ) {
     const row =
-      worksheet.getRow(rowNumber);
+      rows[rowIndex] ?? [];
 
-    const headers:
-      string[] = [];
-
-    for (
-      let column = 1;
-      column <=
-        worksheet.columnCount;
-      column += 1
-    ) {
-      headers.push(
-        normalizeHeader(
-          cellText(
-            row.getCell(column),
+    const headers =
+      row.map(
+        (value) =>
+          normalizeHeader(
+            sheetCellText(value),
           ),
-        ),
       );
-    }
 
     const normalized =
       new Set(
@@ -416,11 +439,17 @@ function findHeaderRow(
       normalized.has(
         "duequity record id",
       ) &&
-      normalized.has("county") &&
-      normalized.has("state")
+      normalized.has(
+        "county",
+      ) &&
+      normalized.has(
+        "state",
+      )
     ) {
       return {
-        rowNumber,
+        rowIndex,
+        rowNumber:
+          rowIndex + 1,
         headers,
       };
     }
@@ -432,24 +461,26 @@ function findHeaderRow(
 }
 
 function parseWorkbookRows({
-  worksheet,
-  headerRowNumber,
+  rows,
+  headerRowIndex,
   headers,
 }: {
-  worksheet:
-    ExcelJS.Worksheet;
-  headerRowNumber: number;
+  rows: unknown[][];
+  headerRowIndex: number;
   headers: string[];
 }): ParsedWorkbookRow[] {
   const headerIndex =
     new Map<string, number>();
 
   headers.forEach(
-    (header, index) => {
+    (
+      header,
+      index,
+    ) => {
       if (header) {
         headerIndex.set(
           header.toLowerCase(),
-          index + 1,
+          index,
         );
       }
     },
@@ -461,64 +492,65 @@ function parseWorkbookRows({
     );
 
   const countyColumn =
-    headerIndex.get("county");
+    headerIndex.get(
+      "county",
+    );
 
   const stateColumn =
-    headerIndex.get("state");
+    headerIndex.get(
+      "state",
+    );
 
   if (
-    !idColumn ||
-    !countyColumn ||
-    !stateColumn
+    idColumn === undefined ||
+    countyColumn === undefined ||
+    stateColumn === undefined
   ) {
     throw new Error(
       "The uploaded workbook is missing required DueQuity lead columns.",
     );
   }
 
-  const rows:
+  const parsedRows:
     ParsedWorkbookRow[] = [];
 
   for (
-    let rowNumber =
-      headerRowNumber + 1;
-    rowNumber <=
-      worksheet.rowCount;
-    rowNumber += 1
+    let rowIndex =
+      headerRowIndex + 1;
+    rowIndex <
+      rows.length;
+    rowIndex += 1
   ) {
     const row =
-      worksheet.getRow(rowNumber);
+      rows[rowIndex] ?? [];
 
     const discoveredRecordId =
-      cellText(
-        row.getCell(idColumn),
+      sheetCellText(
+        row[idColumn],
       );
 
     const county =
-      cellText(
-        row.getCell(
-          countyColumn,
-        ),
+      sheetCellText(
+        row[countyColumn],
       );
 
     const stateCode =
       normalizeState(
-        cellText(
-          row.getCell(
-            stateColumn,
-          ),
+        sheetCellText(
+          row[stateColumn],
         ),
       );
 
     const anyContent =
       headers.some(
-        (header, index) =>
+        (
+          header,
+          index,
+        ) =>
           Boolean(
             header &&
-            cellText(
-              row.getCell(
-                index + 1,
-              ),
+            sheetCellText(
+              row[index],
             ),
           ),
       );
@@ -527,15 +559,20 @@ function parseWorkbookRows({
       continue;
     }
 
-    if (!discoveredRecordId) {
+    const excelRowNumber =
+      rowIndex + 1;
+
+    if (
+      !discoveredRecordId
+    ) {
       throw new Error(
-        `Excel row ${rowNumber} contains lead data but no DueQuity Record ID.`,
+        `Excel row ${excelRowNumber} contains lead data but no DueQuity Record ID.`,
       );
     }
 
     if (!county) {
       throw new Error(
-        `Excel row ${rowNumber} is missing County.`,
+        `Excel row ${excelRowNumber} is missing County.`,
       );
     }
 
@@ -545,7 +582,7 @@ function parseWorkbookRows({
       )
     ) {
       throw new Error(
-        `Excel row ${rowNumber} has an invalid State value.`,
+        `Excel row ${excelRowNumber} has an invalid State value.`,
       );
     }
 
@@ -554,7 +591,10 @@ function parseWorkbookRows({
       {};
 
     headers.forEach(
-      (header, index) => {
+      (
+        header,
+        index,
+      ) => {
         if (!header) {
           return;
         }
@@ -562,16 +602,15 @@ function parseWorkbookRows({
         sourceRowSnapshot[
           header
         ] =
-          cellText(
-            row.getCell(
-              index + 1,
-            ),
+          sheetCellText(
+            row[index],
           );
       },
     );
 
-    rows.push({
-      rowNumber,
+    parsedRows.push({
+      rowNumber:
+        excelRowNumber,
       discoveredRecordId,
       county,
       stateCode,
@@ -580,32 +619,82 @@ function parseWorkbookRows({
   }
 
   if (
-    rows.length === 0
+    parsedRows.length ===
+    0
   ) {
     throw new Error(
       "The uploaded workbook contains no lead rows.",
     );
   }
 
-  return rows;
+  return parsedRows;
+}
+
+async function readWorkbookSheets(
+  bytes: Buffer,
+): Promise<
+  WorkbookSheet[]
+> {
+  try {
+    const sheets =
+      await readExcelFile(
+        bytes,
+      );
+
+    if (
+      !Array.isArray(
+        sheets,
+      ) ||
+      sheets.length === 0
+    ) {
+      throw new Error(
+        "No worksheets were found.",
+      );
+    }
+
+    return sheets.map(
+      (sheet) => ({
+        sheet:
+          String(
+            sheet.sheet,
+          ),
+        data:
+          sheet.data as unknown[][],
+      }),
+    );
+  } catch (error) {
+    const message =
+      error instanceof Error &&
+      error.message.trim()
+        ? error.message
+        : "Unknown XLSX parsing error.";
+
+    throw new Error(
+      `DueQuity could not read this Excel workbook: ${message}`,
+    );
+  }
 }
 
 /* ========================================================================== */
-/* Chunked reads                                                              */
+/* Chunked database reads                                                     */
 /* ========================================================================== */
 
 async function loadDiscoveredRecords(
   recordIds: string[],
-): Promise<DiscoveredRecordRow[]> {
+): Promise<
+  DiscoveredRecordRow[]
+> {
   const admin =
     getSupabaseAdmin();
 
   let rows:
-    DiscoveredRecordRow[] = [];
+    DiscoveredRecordRow[] =
+    [];
 
   for (
     let index = 0;
-    index < recordIds.length;
+    index <
+      recordIds.length;
     index += 200
   ) {
     const chunk =
@@ -619,7 +708,9 @@ async function loadDiscoveredRecords(
       error,
     } =
       await admin
-        .from("discovered_records")
+        .from(
+          "discovered_records",
+        )
         .select(
           [
             "id",
@@ -643,7 +734,8 @@ async function loadDiscoveredRecords(
 
     rows =
       rows.concat(
-        (data ?? []) as unknown as
+        (data ??
+          []) as unknown as
           DiscoveredRecordRow[],
       );
   }
@@ -653,16 +745,20 @@ async function loadDiscoveredRecords(
 
 async function loadActiveAssignments(
   recordIds: string[],
-): Promise<ExistingAssignmentRow[]> {
+): Promise<
+  ExistingAssignmentRow[]
+> {
   const admin =
     getSupabaseAdmin();
 
   let rows:
-    ExistingAssignmentRow[] = [];
+    ExistingAssignmentRow[] =
+    [];
 
   for (
     let index = 0;
-    index < recordIds.length;
+    index <
+      recordIds.length;
     index += 200
   ) {
     const chunk =
@@ -676,7 +772,9 @@ async function loadActiveAssignments(
       error,
     } =
       await admin
-        .from("lead_assignments")
+        .from(
+          "lead_assignments",
+        )
         .select(
           "id, discovered_record_id, assigned_to_staff_user_id, assigned_at",
         )
@@ -701,7 +799,8 @@ async function loadActiveAssignments(
 
     rows =
       rows.concat(
-        (data ?? []) as unknown as
+        (data ??
+          []) as unknown as
           ExistingAssignmentRow[],
       );
   }
@@ -721,8 +820,12 @@ async function inspectLeadWorkbook({
   session: StaffSession;
   file: File;
   staffUserId: string;
-}): Promise<WorkbookInspection> {
-  requireDistributionAdmin(session);
+}): Promise<
+  WorkbookInspection
+> {
+  requireDistributionAdmin(
+    session,
+  );
 
   const normalizedStaffUserId =
     staffUserId.trim();
@@ -736,7 +839,9 @@ async function inspectLeadWorkbook({
   }
 
   const fileName =
-    fileNameFromUpload(file);
+    fileNameFromUpload(
+      file,
+    );
 
   if (
     file.size <= 0
@@ -759,25 +864,29 @@ async function inspectLeadWorkbook({
     await file.arrayBuffer();
 
   const bytes =
-    Buffer.from(arrayBuffer);
+    Buffer.from(
+      arrayBuffer,
+    );
 
   const fileSha256 =
-    createHash("sha256")
+    createHash(
+      "sha256",
+    )
       .update(bytes)
       .digest("hex");
 
-  const workbook =
-    new ExcelJS.Workbook();
-
-  await workbook.xlsx.load(
-    arrayBuffer,
-  );
+  const workbookSheets =
+    await readWorkbookSheets(
+      bytes,
+    );
 
   const worksheet =
-    workbook.getWorksheet(
-      "Surplus Records",
+    workbookSheets.find(
+      (sheet) =>
+        sheet.sheet ===
+        "Surplus Records",
     ) ??
-    workbook.worksheets[0];
+    workbookSheets[0];
 
   if (!worksheet) {
     throw new Error(
@@ -786,16 +895,21 @@ async function inspectLeadWorkbook({
   }
 
   const {
+    rowIndex:
+      headerRowIndex,
     rowNumber:
       headerRowNumber,
     headers,
   } =
-    findHeaderRow(worksheet);
+    findHeaderRow(
+      worksheet.data,
+    );
 
   const parsedRows =
     parseWorkbookRows({
-      worksheet,
-      headerRowNumber,
+      rows:
+        worksheet.data,
+      headerRowIndex,
       headers,
     });
 
@@ -824,7 +938,8 @@ async function inspectLeadWorkbook({
     );
 
   if (
-    stateCodes.length !== 1 ||
+    stateCodes.length !==
+      1 ||
     counties.length !== 1
   ) {
     throw new Error(
@@ -870,7 +985,9 @@ async function inspectLeadWorkbook({
   ] =
     await Promise.all([
       admin
-        .from("staff_users")
+        .from(
+          "staff_users",
+        )
         .select(
           "id, name, email, role, status, states_cleared",
         )
@@ -889,7 +1006,9 @@ async function inspectLeadWorkbook({
       ),
 
       admin
-        .from("lead_assignment_batches")
+        .from(
+          "lead_assignment_batches",
+        )
         .select(
           "id, reference, source_file_name, state_code, county_name, uploaded_by_staff_user_id, created_at",
         )
@@ -904,7 +1023,8 @@ async function inspectLeadWorkbook({
         .order(
           "created_at",
           {
-            ascending: false,
+            ascending:
+              false,
           },
         )
         .limit(1)
@@ -928,7 +1048,9 @@ async function inspectLeadWorkbook({
     );
   }
 
-  if (duplicateBatchResult.error) {
+  if (
+    duplicateBatchResult.error
+  ) {
     throw new Error(
       `Unable to verify prior workbook history: ${duplicateBatchResult.error.message}`,
     );
@@ -939,7 +1061,8 @@ async function inspectLeadWorkbook({
       StaffUserRow;
 
   if (
-    staff.status !== "active"
+    staff.status !==
+    "active"
   ) {
     throw new Error(
       "Lead workbooks may only be assigned to an active staff member.",
@@ -947,7 +1070,8 @@ async function inspectLeadWorkbook({
   }
 
   if (
-    staff.role === "super_admin"
+    staff.role ===
+    "super_admin"
   ) {
     throw new Error(
       "The Super Admin account is not an ordinary lead-workbook assignment target.",
@@ -978,15 +1102,19 @@ async function inspectLeadWorkbook({
   const missingRecordIds =
     recordIds.filter(
       (id) =>
-        !discoveredById.has(id),
+        !discoveredById.has(
+          id,
+        ),
     );
 
   if (
-    missingRecordIds.length > 0
+    missingRecordIds.length >
+    0
   ) {
     throw new Error(
       `Workbook contains ${missingRecordIds.length} DueQuity Record ID${
-        missingRecordIds.length === 1
+        missingRecordIds.length ===
+        1
           ? ""
           : "s"
       } that do not exist in the current recovery database.`,
@@ -1014,7 +1142,9 @@ async function inspectLeadWorkbook({
       normalizeCounty(
         record.county,
       ) !==
-        normalizeCounty(county)
+        normalizeCounty(
+          county,
+        )
     ) {
       throw new Error(
         `DueQuity record ${record.id} does not match the county/state shown in the uploaded workbook.`,
@@ -1034,10 +1164,13 @@ async function inspectLeadWorkbook({
     ];
 
   const staffById =
-    new Map<string, {
-      name: string;
-      email: string;
-    }>();
+    new Map<
+      string,
+      {
+        name: string;
+        email: string;
+      }
+    >();
 
   if (
     staffIds.length > 0
@@ -1047,7 +1180,9 @@ async function inspectLeadWorkbook({
       error,
     } =
       await admin
-        .from("staff_users")
+        .from(
+          "staff_users",
+        )
         .select(
           "id, name, email",
         )
@@ -1067,12 +1202,18 @@ async function inspectLeadWorkbook({
       of data ?? []
     ) {
       staffById.set(
-        String(row.id),
+        String(
+          row.id,
+        ),
         {
           name:
-            String(row.name),
+            String(
+              row.name,
+            ),
           email:
-            String(row.email),
+            String(
+              row.email,
+            ),
         },
       );
     }
@@ -1098,13 +1239,16 @@ async function inspectLeadWorkbook({
     );
 
   const conflicts:
-    LeadWorkbookConflict[] = [];
+    LeadWorkbookConflict[] =
+    [];
 
   const unavailableRows:
-    LeadWorkbookUnavailableRow[] = [];
+    LeadWorkbookUnavailableRow[] =
+    [];
 
   const availableRows:
-    ParsedWorkbookRow[] = [];
+    ParsedWorkbookRow[] =
+    [];
 
   for (
     const parsedRow
@@ -1125,7 +1269,9 @@ async function inspectLeadWorkbook({
         record.id,
       );
 
-    if (existingAssignment) {
+    if (
+      existingAssignment
+    ) {
       const owner =
         staffById.get(
           existingAssignment
@@ -1136,7 +1282,8 @@ async function inspectLeadWorkbook({
         recordId:
           record.id,
         formerOwnerName:
-          record.former_owner_name,
+          record
+            .former_owner_name,
         county:
           record.county,
         stateCode:
@@ -1159,14 +1306,17 @@ async function inspectLeadWorkbook({
     }
 
     if (
-      record.status !== "new" &&
-      record.status !== "reviewed"
+      record.status !==
+        "new" &&
+      record.status !==
+        "reviewed"
     ) {
       unavailableRows.push({
         recordId:
           record.id,
         formerOwnerName:
-          record.former_owner_name,
+          record
+            .former_owner_name,
         status:
           record.status,
         reason:
@@ -1184,7 +1334,8 @@ async function inspectLeadWorkbook({
         recordId:
           record.id,
         formerOwnerName:
-          record.former_owner_name,
+          record
+            .former_owner_name,
         status:
           "promoted",
         reason:
@@ -1212,7 +1363,9 @@ async function inspectLeadWorkbook({
 
     const uploaderResult =
       await admin
-        .from("staff_users")
+        .from(
+          "staff_users",
+        )
         .select(
           "id, name, email",
         )
@@ -1238,10 +1391,12 @@ async function inspectLeadWorkbook({
       createdAt:
         batch.created_at,
       uploadedByName:
-        uploaderResult.data?.name ??
+        uploaderResult
+          .data?.name ??
         "Unknown staff",
       uploadedByEmail:
-        uploaderResult.data?.email ??
+        uploaderResult
+          .data?.email ??
         "Unknown",
     };
   }
@@ -1263,7 +1418,7 @@ async function inspectLeadWorkbook({
     fileName,
     fileSha256,
     sheetName:
-      worksheet.name,
+      worksheet.sheet,
     headerRowNumber,
     headers,
     parsedRows,
@@ -1291,7 +1446,9 @@ export async function preflightLeadWorkbook({
   session: StaffSession;
   file: File;
   staffUserId: string;
-}): Promise<LeadWorkbookPreflight> {
+}): Promise<
+  LeadWorkbookPreflight
+> {
   const inspection =
     await inspectLeadWorkbook({
       session,
@@ -1303,9 +1460,11 @@ export async function preflightLeadWorkbook({
     !inspection
       .duplicateWorkbook &&
     inspection
-      .conflicts.length === 0 &&
+      .conflicts.length ===
+      0 &&
     inspection
-      .availableRows.length > 0;
+      .availableRows.length >
+      0;
 
   return {
     fileName:
@@ -1325,11 +1484,14 @@ export async function preflightLeadWorkbook({
     staffEmail:
       inspection.staff.email,
     sourceRowCount:
-      inspection.parsedRows.length,
+      inspection
+        .parsedRows.length,
     availableRowCount:
-      inspection.availableRows.length,
+      inspection
+        .availableRows.length,
     alreadyAssignedRowCount:
-      inspection.conflicts.length,
+      inspection
+        .conflicts.length,
     unavailableRowCount:
       inspection
         .unavailableRows.length,
@@ -1378,7 +1540,8 @@ export async function uploadAndAssignLeadWorkbook({
   if (
     !suppliedKey ||
     suppliedKey !==
-      inspection.confirmationKey
+      inspection
+        .confirmationKey
   ) {
     throw new Error(
       "Workbook preflight is stale. Run Check workbook again before assigning leads.",
@@ -1395,7 +1558,8 @@ export async function uploadAndAssignLeadWorkbook({
   }
 
   if (
-    inspection.conflicts.length >
+    inspection
+      .conflicts.length >
     0
   ) {
     throw new Error(
@@ -1404,7 +1568,8 @@ export async function uploadAndAssignLeadWorkbook({
   }
 
   if (
-    inspection.availableRows.length ===
+    inspection
+      .availableRows.length ===
     0
   ) {
     throw new Error(
@@ -1434,60 +1599,83 @@ export async function uploadAndAssignLeadWorkbook({
       {
         p_reference:
           batchReference,
+
         p_name:
           `${inspection.county}, ${inspection.stateCode} · ${inspection.fileName}`,
+
         p_source_file_name:
           inspection.fileName,
+
         p_source_file_sha256:
           inspection.fileSha256,
+
         p_state_code:
           inspection.stateCode,
+
         p_county_geoid:
           null,
+
         p_county_name:
           inspection.county,
+
         p_actor_staff_user_id:
           session.user.id,
+
         p_metadata: {
           sheetName:
-            inspection.sheetName,
+            inspection
+              .sheetName,
+
           headerRowNumber:
             inspection
               .headerRowNumber,
+
           headers:
             inspection.headers,
+
           originalRowCount:
             inspection
               .parsedRows.length,
+
           assignableRowCount:
             inspection
               .availableRows.length,
+
           skippedRowCount:
             inspection
               .unavailableRows.length,
+
           skippedRecordIds:
             inspection
-              .unavailableRows.map(
+              .unavailableRows
+              .map(
                 (row) =>
                   row.recordId,
               ),
+
           preflightConfirmationKey:
             inspection
               .confirmationKey,
+
           preflightConfirmedAt:
             new Date()
               .toISOString(),
+
           duplicateProtection:
             "exact-file-sha256-and-active-assignment-guard",
         },
+
         p_rows:
           inspection
-            .availableRows.map(
+            .availableRows
+            .map(
               (row) => ({
                 rowNumber:
                   row.rowNumber,
+
                 discoveredRecordId:
                   row.discoveredRecordId,
+
                 sourceRowSnapshot:
                   row.sourceRowSnapshot,
               }),
@@ -1497,7 +1685,9 @@ export async function uploadAndAssignLeadWorkbook({
 
   if (
     batchError ||
-    !Array.isArray(batchData) ||
+    !Array.isArray(
+      batchData,
+    ) ||
     batchData.length !== 1
   ) {
     const message =
@@ -1507,17 +1697,23 @@ export async function uploadAndAssignLeadWorkbook({
     if (
       message
         .toLowerCase()
-        .includes("source_file_sha256") ||
+        .includes(
+          "source_file_sha256",
+        ) ||
       message
         .toLowerCase()
-        .includes("unique")
+        .includes(
+          "unique",
+        )
     ) {
       throw new Error(
         "This exact workbook has already been recorded in the DueQuity distribution ledger.",
       );
     }
 
-    throw new Error(message);
+    throw new Error(
+      message,
+    );
   }
 
   const createdBatch =
@@ -1535,25 +1731,33 @@ export async function uploadAndAssignLeadWorkbook({
       {
         p_batch_id:
           createdBatch.id,
+
         p_staff_user_id:
           inspection.staff.id,
+
         p_actor_staff_user_id:
           session.user.id,
+
         p_note:
           `Assigned from preflight-approved workbook ${inspection.fileName}`,
       },
     );
 
-  if (assignmentError) {
+  if (
+    assignmentError
+  ) {
     await admin.rpc(
       "close_lead_assignment_batch",
       {
         p_batch_id:
           createdBatch.id,
+
         p_actor_staff_user_id:
           session.user.id,
+
         p_status:
           "cancelled",
+
         p_closed_at:
           null,
       },
@@ -1591,29 +1795,42 @@ export async function uploadAndAssignLeadWorkbook({
   return {
     batchId:
       createdBatch.id,
+
     batchReference:
       createdBatch.reference,
+
     fileName:
       inspection.fileName,
+
     sheetName:
       inspection.sheetName,
+
     county:
       inspection.county,
+
     stateCode:
       inspection.stateCode,
+
     assignedStaffUserId:
       inspection.staff.id,
+
     assignedStaffName:
       inspection.staff.name,
+
     sourceRowCount:
-      inspection.parsedRows.length,
+      inspection
+        .parsedRows.length,
+
     assignedRowCount,
+
     skippedRowCount:
       inspection
         .unavailableRows.length,
+
     skippedRecordIds:
       inspection
-        .unavailableRows.map(
+        .unavailableRows
+        .map(
           (row) =>
             row.recordId,
         ),

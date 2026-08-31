@@ -24,6 +24,7 @@
     "pdfjs-dist": "4.7.76",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "read-excel-file": "^9.3.4",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.6.0",
     "unpdf": "^1.8.1"
